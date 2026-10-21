@@ -65,14 +65,14 @@ object Notifications {
         val n = Notification.Builder(context, CH_WAKE)
             .setSmallIcon(R.drawable.ic_jarvis)
             .setContentTitle(if (heard == null) "Hey Jimi?" else "You said: $heard")
-            .setContentText("Was that you calling? (score ${"%.2f".format(score)})")
+            .setContentText("Did you call \"Hey Jimi\"? (score ${"%.2f".format(score)}) — not about the text")
             .setOnlyAlertOnce(true)   // updated with the heard text: no second pop-up
             .setContentIntent(openApp(context))
             .setVisibility(Notification.VISIBILITY_PUBLIC)
             .setTimeoutAfter(FEEDBACK_TIMEOUT_MS)
             .setAutoCancel(true)
-            .addAction(Notification.Action.Builder(null, "✓ Yes", answer(WakeEvent.VERDICT_YES, 1)).build())
-            .addAction(Notification.Action.Builder(null, "✗ No", answer(WakeEvent.VERDICT_NO, 2)).build())
+            .addAction(Notification.Action.Builder(null, "✓ I called", answer(WakeEvent.VERDICT_YES, 1)).build())
+            .addAction(Notification.Action.Builder(null, "✗ I didn't call", answer(WakeEvent.VERDICT_NO, 2)).build())
             .build()
         context.getSystemService(NotificationManager::class.java).notify(wakeId(eventId), n)
     }

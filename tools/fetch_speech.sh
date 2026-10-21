@@ -3,7 +3,7 @@
 #   tools/fetch_speech.sh
 # Result:
 #   app/libs/sherpa-onnx-static-link-onnxruntime-<ver>.aar
-#   models/speech/app-assets/stt/{encoder,decoder,joiner}.int8.onnx, tokens.txt   (streaming zipformer en 20M)
+#   models/speech/app-assets/stt/{encoder,decoder,joiner}.onnx, tokens.txt   (Kroko streaming zipformer en, D-026)
 #   models/speech/app-assets/tts/en_GB-alan-medium.onnx, tokens.txt, espeak-ng-data/  (Piper voice "alan")
 # Already-downloaded files are kept.
 set -euo pipefail
@@ -13,7 +13,7 @@ REL=https://github.com/k2-fsa/sherpa-onnx/releases/download
 AAR=app/libs/sherpa-onnx-static-link-onnxruntime-$VER.aar
 DL=models/dl
 OUT=models/speech/app-assets
-STT=sherpa-onnx-streaming-zipformer-en-20M-2023-02-17
+STT=sherpa-onnx-streaming-zipformer-en-kroko-2025-08-06
 TTS=vits-piper-en_GB-alan-medium
 mkdir -p app/libs "$DL" "$OUT/stt" "$OUT/tts"
 
@@ -23,7 +23,7 @@ mkdir -p app/libs "$DL" "$OUT/stt" "$OUT/tts"
 
 if [ ! -f "$OUT/stt/tokens.txt" ]; then
   tar xjf "$DL/$STT.tar.bz2" -C "$DL"
-  for p in encoder decoder joiner; do cp "$DL/$STT/$p-epoch-99-avg-1.int8.onnx" "$OUT/stt/$p.int8.onnx"; done
+  for p in encoder decoder joiner; do cp "$DL/$STT/$p.onnx" "$OUT/stt/"; done
   cp "$DL/$STT/tokens.txt" "$OUT/stt/"
 fi
 if [ ! -f "$OUT/tts/tokens.txt" ]; then

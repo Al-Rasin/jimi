@@ -21,6 +21,7 @@ import com.alrasin.jarvis.data.WakeEventDao
 import com.alrasin.jarvis.voice.AudioRing
 import com.alrasin.jarvis.voice.SpeechToText
 import com.alrasin.jarvis.voice.TextToSpeech
+import com.alrasin.jarvis.voice.WakePhrase
 import com.alrasin.jarvis.voice.Wav
 import com.alrasin.jarvis.voice.WakeModels
 import com.alrasin.jarvis.voice.WakeWordDetector
@@ -35,6 +36,10 @@ import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.async
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import java.io.File
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 import javax.inject.Inject
 
 /**
@@ -98,7 +103,8 @@ class JarvisCoreService : LifecycleService() {
         JarvisLog.i("wake model: ${models.wakeName}")
         _modelName.value = models.wakeName
         val detector = WakeWordDetector(models.mel, models.embedding, models.wake)
-        val stt = runCatching { SpeechToText(assets) }
+        val stt = runCatching { SpeechToText(this) }
+            .onSuccess { JarvisLog.i("speech-to-text: ${it.modelName}") }
             .onFailure { JarvisLog.e("speech-to-text not loaded (run tools/fetch_speech.sh)", it) }
             .getOrNull()
         tts = lifecycleScope.async(Dispatchers.IO) {
@@ -108,6 +114,7 @@ class JarvisCoreService : LifecycleService() {
         }
         var command: SpeechToText.Session? = null
         var commandChunks = 0
+        val commandAudio = ArrayList<ShortArray>()
         var wasBusy = false
         val chunk = ShortArray(WakeWordDetector.CHUNK)
         val ring = AudioRing(WakeWordDetector.SAMPLE_RATE * RING_SECONDS)
@@ -137,11 +144,13 @@ class JarvisCoreService : LifecycleService() {
                 if (cmd != null) {
                     clips.onChunk(0f, threshold, ring, tone)   // only finishes the pending wake clip
                     cmd.accept(chunk)
-                    _heard.value = cmd.text
+                    commandAudio.add(chunk.copyOf())
+                    _heard.value = WakePhrase.strip(cmd.text)
                     if (cmd.done || ++commandChunks >= COMMAND_MAX_CHUNKS) {
                         command = null
                         cmd.close()
-                        onCommand(cmd.text, clips.lastWakeId, clips.lastWakePeak, tone)
+                        saveCommand(commandAudio, cmd.text)
+                        onCommand(WakePhrase.strip(cmd.text), clips.lastWakeId, clips.lastWakePeak, tone)
                     }
                     continue
                 }
@@ -150,7 +159,10 @@ class JarvisCoreService : LifecycleService() {
                 val score = detector.process(chunk)
                 _lastScore.value = score
                 if (clips.onChunk(score, threshold, ring, tone) && stt != null) {
-                    command = stt.session()
+                    val preRoll = ring.last(PRE_ROLL_SAMPLES)
+                    command = stt.session(preRoll)
+                    commandAudio.clear()
+                    commandAudio.add(preRoll)
                     commandChunks = 0
                     wasBusy = true
                     _heard.value = ""
@@ -167,6 +179,19 @@ class JarvisCoreService : LifecycleService() {
             _running.value = false
             _phase.value = PHASE_WAKE
         }
+    }
+
+    /** Keeps each command's audio + raw STT text, to test better STT models on the user's real voice. */
+    private fun saveCommand(parts: List<ShortArray>, rawText: String) {
+        runCatching {
+            val audio = ShortArray(parts.sumOf { it.size })
+            var pos = 0
+            for (p in parts) { p.copyInto(audio, pos); pos += p.size }
+            val dir = File(getExternalFilesDir(null), "commands").apply { mkdirs() }
+            val name = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.US).format(Date())
+            Wav.write(File(dir, "$name.wav"), audio)
+            File(dir, "$name.txt").writeText(rawText + "\n")
+        }.onFailure { JarvisLog.e("could not save command audio", it) }
     }
 
     /** Echo loop (PLAN 3.4): show what was heard (app + notification, lock screen ok) and say it back. */
@@ -277,6 +302,7 @@ class JarvisCoreService : LifecycleService() {
         private const val WAKE_COOLDOWN_MS = 2_000L
         private const val NEAR_MIN = 0.2f
         private const val NEAR_COOLDOWN_MS = 30_000L
+        private const val PRE_ROLL_SAMPLES = 16_000   // 1 s before the wake: "…jimi turn" → "turn" is kept
         private const val COMMAND_MAX_CHUNKS = 150   // ~12 s safety stop (STT also stops itself at 10 s)
 
         const val PHASE_WAKE = "Say \"Hey Jimi\""

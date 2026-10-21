@@ -109,3 +109,11 @@ Note: rec1/rec2 were also used in training, so real-life numbers will be lower. 
 | alan-medium int8 | 3.21 s | 3.07 s | 6.9 s |
 | alan-low int8 | 2.73 s | 2.19 s | 7.5 s |
 First call without warm-up is ~4× slower → app warms up at load. Speaker ID still pending (Phase 12).
+
+**STT on the user's real voice (2026-10-22, D-026)** — user's "Hey Jimi" wake clips, phone timings (2 threads):
+| Model | Text on user clips | rtf | load |
+|---|---|---|---|
+| zipformer en 20M int8 (old) | nothing on all clips | 0.1–0.2 | 3 s |
+| zipformer en 2023-06-26 int8 (Mac only) | "hazy me", "has jimmy" | — | — |
+| NeMo fast-conformer transducer 480ms int8 | "hi jimmy", "hi jamie" | 0.4 | 5 s |
+| **Kroko zipformer en 2025-08-06 (in app)** | "hey jimmy" ×3, "state heijamin" | 0.2 | 11 s |

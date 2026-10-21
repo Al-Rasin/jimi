@@ -12,6 +12,7 @@ import com.alrasin.jarvis.service.WakeFeedback
 import com.alrasin.jarvis.voice.SpeechToText
 import com.alrasin.jarvis.voice.TextToSpeech
 import com.alrasin.jarvis.voice.Wav
+import com.alrasin.jarvis.voice.WakePhrase
 import com.alrasin.jarvis.voice.WakeModels
 import com.alrasin.jarvis.voice.WakeWordDetector
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -103,11 +104,11 @@ class HomeViewModel @Inject constructor(
      * Debug: speech-to-text on every 16 kHz WAV in [dir], then say the first result. Logs speed.
      * `adb shell am start -n com.alrasin.jarvis/.ui.MainActivity --es stt_dir <dir>`
      */
-    fun speechTest(dir: String) = viewModelScope.launch(Dispatchers.Default) {
+    fun speechTest(dir: String, model: String? = null, speak: Boolean = true) = viewModelScope.launch(Dispatchers.Default) {
         runCatching {
             var t0 = System.nanoTime()
-            val texts = SpeechToText(app.assets).use { stt ->
-                JarvisLog.i("STT loaded in ${(System.nanoTime() - t0) / 1_000_000} ms")
+            val texts = SpeechToText(app, model?.let(::File)).use { stt ->
+                JarvisLog.i("STT ${stt.modelName} loaded in ${(System.nanoTime() - t0) / 1_000_000} ms")
                 val files = File(dir).listFiles { f -> f.name.endsWith(".wav") }.orEmpty().sortedBy { it.name }
                 files.map { f ->
                     val audio = Wav.read(f)
@@ -123,10 +124,11 @@ class HomeViewModel @Inject constructor(
                         s.text
                     }
                     val rtf = (System.nanoTime() - t0) / 1e9f / (audio.size / 16000f)
-                    JarvisLog.i("STT ${f.name} rtf=${"%.2f".format(rtf)} \"$text\"")
+                    JarvisLog.i("STT ${f.name} rtf=${"%.2f".format(rtf)} \"$text\" → \"${WakePhrase.strip(text)}\"")
                     text
                 }
             }
+            if (!speak) { JarvisLog.i("STT test done"); return@runCatching }
             t0 = System.nanoTime()
             TextToSpeech(app).use { tts ->
                 JarvisLog.i("TTS loaded in ${(System.nanoTime() - t0) / 1_000_000} ms")
