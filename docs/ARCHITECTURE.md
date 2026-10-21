@@ -4,7 +4,7 @@
 ```
                  ┌──────────── JarvisCoreService (foreground, always on, root-protected) ────────────┐
  Mic ──► Wake word ──► VAD ──► STT (streaming) ──► Router ──► Tool executor ──► Result
-  ▲      "Hey Jarvis"                               │  ▲            │              │
+  ▲      "Hey Jimi"                                 │  ▲            │              │
   │                                                 ▼  │            ▼              ▼
   │                                   Brain levels:    │      Security gate   Reply builder
   │                                   1 Rule matcher   │      (risk + voice ID)    │
