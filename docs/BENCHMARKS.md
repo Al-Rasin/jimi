@@ -79,5 +79,13 @@ Test them one at a time.
 - Verdict: too weak for always-on wake word. Do not use this model for "Hey Jarvis".
 - Next try: openWakeWord pretrained `hey_jarvis` model (trained only on this phrase), test on user's recorded voice.
 
+### Wake word — openWakeWord `hey_jarvis_v0.1` (2026-10-21) ⚠️ PARTIAL
+- Test: user recorded 86 s on phone (MIUI Sound Recorder, AAC → 16 kHz mono WAV):
+  5x "Hey Jarvis" close, 5x at ~2 m, ~60 s normal talk. Scored on Mac (openwakeword + onnxruntime).
+- Threshold 0.5: close **4/5** (scores 0.76–0.99), far **1/5**, normal talk **0 false triggers**.
+- Software volume boost (x3, x6) did not help far speech (clips close speech).
+- Verdict: much better than sherpa KWS; good when close, weak at 2 m. Options: lower threshold + VAD,
+  openWakeWord custom verifier trained on user's voice, or train a custom model.
+
 ### TTS / ASR / Speaker ID
 _results pending — needs user to speak to the phone_
