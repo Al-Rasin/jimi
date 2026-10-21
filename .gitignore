@@ -15,6 +15,7 @@ models/
 *.onnx
 *.zim
 *.bin
+*.aar
 training/data/
 training/outputs/
 

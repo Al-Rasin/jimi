@@ -19,21 +19,27 @@ import com.alrasin.jarvis.data.Settings
 import com.alrasin.jarvis.data.WakeEvent
 import com.alrasin.jarvis.data.WakeEventDao
 import com.alrasin.jarvis.voice.AudioRing
+import com.alrasin.jarvis.voice.SpeechToText
+import com.alrasin.jarvis.voice.TextToSpeech
 import com.alrasin.jarvis.voice.Wav
 import com.alrasin.jarvis.voice.WakeModels
 import com.alrasin.jarvis.voice.WakeWordDetector
 import dagger.hilt.android.AndroidEntryPoint
+import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.async
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
 /**
- * Always-on core (PLAN 2.1) — for now: listens for "Hey Jimi" (3.1) and asks "Was that you?" (3.6, D-023).
+ * Always-on core (PLAN 2.1) — for now: listens for "Hey Jimi" (3.1), asks "Was that you?" (3.6, D-023),
+ * then hears the command, shows it and says "You said …" (3.2–3.4 echo loop).
  */
 @AndroidEntryPoint
 class JarvisCoreService : LifecycleService() {
@@ -42,6 +48,8 @@ class JarvisCoreService : LifecycleService() {
 
     @Volatile private var threshold = Settings.DEFAULT_THRESHOLD
     @Volatile private var missedRequested = false
+    @Volatile private var speaking = false
+    private var tts: Deferred<TextToSpeech?>? = null
     private var listenJob: Job? = null
     private var wakeLock: PowerManager.WakeLock? = null
 
@@ -90,6 +98,17 @@ class JarvisCoreService : LifecycleService() {
         JarvisLog.i("wake model: ${models.wakeName}")
         _modelName.value = models.wakeName
         val detector = WakeWordDetector(models.mel, models.embedding, models.wake)
+        val stt = runCatching { SpeechToText(assets) }
+            .onFailure { JarvisLog.e("speech-to-text not loaded (run tools/fetch_speech.sh)", it) }
+            .getOrNull()
+        tts = lifecycleScope.async(Dispatchers.IO) {
+            runCatching { TextToSpeech(this@JarvisCoreService) }
+                .onFailure { JarvisLog.e("voice not loaded (run tools/fetch_speech.sh)", it) }
+                .getOrNull()
+        }
+        var command: SpeechToText.Session? = null
+        var commandChunks = 0
+        var wasBusy = false
         val chunk = ShortArray(WakeWordDetector.CHUNK)
         val ring = AudioRing(WakeWordDetector.SAMPLE_RATE * RING_SECONDS)
         val minBuf = AudioRecord.getMinBufferSize(
@@ -98,7 +117,7 @@ class JarvisCoreService : LifecycleService() {
         val rec = AudioRecord(
             MediaRecorder.AudioSource.VOICE_RECOGNITION, WakeWordDetector.SAMPLE_RATE,
             AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT,
-            maxOf(minBuf, WakeWordDetector.CHUNK * 2 * 4),
+            maxOf(minBuf, WakeWordDetector.SAMPLE_RATE * 2),   // 1 s: room for slow STT decode steps
         )
         val tone = ToneGenerator(AudioManager.STREAM_NOTIFICATION, 80)
         val clips = ClipCollector()
@@ -114,16 +133,63 @@ class JarvisCoreService : LifecycleService() {
                     got += n
                 }
                 ring.write(chunk)
+                val cmd = command
+                if (cmd != null) {
+                    clips.onChunk(0f, threshold, ring, tone)   // only finishes the pending wake clip
+                    cmd.accept(chunk)
+                    _heard.value = cmd.text
+                    if (cmd.done || ++commandChunks >= COMMAND_MAX_CHUNKS) {
+                        command = null
+                        cmd.close()
+                        onCommand(cmd.text, clips.lastWakeId, clips.lastWakePeak, tone)
+                    }
+                    continue
+                }
+                if (speaking) { wasBusy = true; continue }
+                if (wasBusy) { wasBusy = false; detector.reset() }   // drop audio from before the command
                 val score = detector.process(chunk)
                 _lastScore.value = score
-                clips.onChunk(score, threshold, ring, tone)
+                if (clips.onChunk(score, threshold, ring, tone) && stt != null) {
+                    command = stt.session()
+                    commandChunks = 0
+                    wasBusy = true
+                    _heard.value = ""
+                    _phase.value = PHASE_HEARING
+                }
             }
         } finally {
+            command?.close()
+            stt?.close()
             rec.stop()
             rec.release()
             tone.release()
             detector.close()
             _running.value = false
+            _phase.value = PHASE_WAKE
+        }
+    }
+
+    /** Echo loop (PLAN 3.4): show what was heard (app + notification, lock screen ok) and say it back. */
+    private fun onCommand(text: String, wakeId: Long?, wakeScore: Float, tone: ToneGenerator) {
+        JarvisLog.i("heard: \"$text\"")
+        _heard.value = text.ifEmpty { "(nothing heard)" }
+        if (wakeId != null) Notifications.showWakeCheck(this, wakeId, wakeScore, heard = text.ifEmpty { "(nothing)" })
+        if (text.isEmpty()) {
+            tone.startTone(ToneGenerator.TONE_PROP_NACK, 200)
+            _phase.value = PHASE_WAKE
+            return
+        }
+        speaking = true
+        _phase.value = PHASE_SPEAKING
+        lifecycleScope.launch(Dispatchers.IO) {
+            try {
+                tts?.await()?.speak("You said: $text")
+            } catch (t: Throwable) {
+                JarvisLog.e("speak failed", t)
+            } finally {
+                speaking = false
+                _phase.value = PHASE_WAKE
+            }
         }
     }
 
@@ -134,13 +200,18 @@ class JarvisCoreService : LifecycleService() {
         private var pendingKind: String? = null
         private var pendingPeak = 0f
         private var pendingChunks = 0
+        var lastWakeId: Long? = null
+            private set
+        var lastWakePeak = 0f
+            private set
 
-        suspend fun onChunk(score: Float, thr: Float, ring: AudioRing, tone: ToneGenerator) {
+        /** Returns true when the wake word was just heard. */
+        suspend fun onChunk(score: Float, thr: Float, ring: AudioRing, tone: ToneGenerator): Boolean {
             val now = System.currentTimeMillis()
             if (missedRequested) {
                 missedRequested = false
                 save(WakeEvent.VERDICT_MISSED, 0f, thr, ring.last(WakeWordDetector.SAMPLE_RATE * MISSED_SECONDS))
-                return
+                return false
             }
             if (score >= thr && now - lastWakeMs > WAKE_COOLDOWN_MS) {
                 lastWakeMs = now
@@ -148,7 +219,8 @@ class JarvisCoreService : LifecycleService() {
                 pendingKind = WakeEvent.VERDICT_NONE
                 pendingPeak = score
                 pendingChunks = AFTER_CHUNKS
-                return
+                lastWakeId = null
+                return true
             }
             if (pendingKind == null && score >= NEAR_MIN && score < thr &&
                 now - lastNearMs > NEAR_COOLDOWN_MS && now - lastWakeMs > WAKE_COOLDOWN_MS
@@ -156,19 +228,24 @@ class JarvisCoreService : LifecycleService() {
                 pendingKind = WakeEvent.VERDICT_NEAR
                 pendingPeak = score
                 pendingChunks = AFTER_CHUNKS
-                return
+                return false
             }
-            val kind = pendingKind ?: return
+            val kind = pendingKind ?: return false
             pendingPeak = maxOf(pendingPeak, score)
             if (kind == WakeEvent.VERDICT_NEAR && pendingPeak >= thr) {
                 pendingKind = null   // turned into a real wake; next chunk handles it
-                return
+                return false
             }
-            if (--pendingChunks > 0) return
+            if (--pendingChunks > 0) return false
             pendingKind = null
             if (kind == WakeEvent.VERDICT_NEAR) lastNearMs = now
             val id = save(kind, pendingPeak, thr, ring.last(CLIP_SAMPLES))
-            if (kind == WakeEvent.VERDICT_NONE) Notifications.showWakeCheck(this@JarvisCoreService, id, pendingPeak)
+            if (kind == WakeEvent.VERDICT_NONE) {
+                lastWakeId = id
+                lastWakePeak = pendingPeak
+                Notifications.showWakeCheck(this@JarvisCoreService, id, pendingPeak)
+            }
+            return false
         }
 
         private suspend fun save(verdict: String, score: Float, thr: Float, audio: ShortArray): Long {
@@ -181,8 +258,10 @@ class JarvisCoreService : LifecycleService() {
         }
     }
 
+    @OptIn(ExperimentalCoroutinesApi::class)
     override fun onDestroy() {
         listenJob?.cancel()
+        tts?.let { d -> if (d.isCompleted && !speaking) d.getCompleted()?.close() else d.cancel() }
         wakeLock?.takeIf { it.isHeld }?.release()
         _running.value = false
         super.onDestroy()
@@ -198,6 +277,11 @@ class JarvisCoreService : LifecycleService() {
         private const val WAKE_COOLDOWN_MS = 2_000L
         private const val NEAR_MIN = 0.2f
         private const val NEAR_COOLDOWN_MS = 30_000L
+        private const val COMMAND_MAX_CHUNKS = 150   // ~12 s safety stop (STT also stops itself at 10 s)
+
+        const val PHASE_WAKE = "Say \"Hey Jimi\""
+        const val PHASE_HEARING = "Listening to you…"
+        const val PHASE_SPEAKING = "Speaking…"
 
         private val _running = MutableStateFlow(false)
         val running: StateFlow<Boolean> = _running
@@ -205,6 +289,11 @@ class JarvisCoreService : LifecycleService() {
         val modelName: StateFlow<String> = _modelName
         private val _lastScore = MutableStateFlow(0f)
         val lastScore: StateFlow<Float> = _lastScore
+        private val _phase = MutableStateFlow(PHASE_WAKE)
+        val phase: StateFlow<String> = _phase
+        private val _heard = MutableStateFlow("")
+        /** Live (partial) text while hearing a command, then the final text. */
+        val heard: StateFlow<String> = _heard
 
         fun start(context: Context) =
             context.startForegroundService(Intent(context, JarvisCoreService::class.java))

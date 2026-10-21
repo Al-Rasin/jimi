@@ -16,6 +16,8 @@ android {
         targetSdk = 35
         versionCode = 1
         versionName = "0.1.0"
+        // Only the Redmi (arm64): smaller APK.
+        ndk { abiFilters += "arm64-v8a" }
     }
 
     buildTypes {
@@ -36,8 +38,14 @@ android {
     // Wake word ONNX models are not in git. Put them in
     // models/wakeword/app-assets/wakeword/ — see training/wakeword/README.md.
     sourceSets["main"].assets.srcDir(rootProject.file("models/wakeword/app-assets"))
+    // Speech-to-text + voice models (D-025), from tools/fetch_speech.sh: models/speech/app-assets/{stt,tts}/
+    sourceSets["main"].assets.srcDir(rootProject.file("models/speech/app-assets"))
     androidResources {
         noCompress += "onnx"
+    }
+    packaging {
+        // sherpa AAR and onnxruntime-android both have lib/x86/libonnxruntime.so; x86 is not shipped anyway
+        jniLibs.excludes += "lib/x86/libonnxruntime.so"
     }
 }
 
@@ -58,6 +66,9 @@ dependencies {
     implementation(libs.hilt.android)
     ksp(libs.hilt.compiler)
     implementation(libs.onnxruntime.android)
+    // sherpa-onnx (D-006) with onnxruntime linked inside, so it does not clash with onnxruntime-android.
+    // Not in git (big binary): tools/fetch_speech.sh downloads it.
+    implementation(files("libs/sherpa-onnx-static-link-onnxruntime-${libs.versions.sherpa.onnx.get()}.aar"))
     implementation(libs.kotlinx.coroutines.android)
 
     testImplementation(libs.junit)

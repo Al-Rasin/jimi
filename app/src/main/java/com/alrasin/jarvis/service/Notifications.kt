@@ -54,7 +54,7 @@ object Notifications {
     }
 
     /** "Was that you?" prompt after a voice wake (D-023). */
-    fun showWakeCheck(context: Context, eventId: Long, score: Float) {
+    fun showWakeCheck(context: Context, eventId: Long, score: Float, heard: String? = null) {
         fun answer(verdict: String, req: Int) = PendingIntent.getBroadcast(
             context, (eventId * 10 + req).toInt(),
             Intent(context, WakeFeedbackReceiver::class.java)
@@ -64,8 +64,9 @@ object Notifications {
         )
         val n = Notification.Builder(context, CH_WAKE)
             .setSmallIcon(R.drawable.ic_jarvis)
-            .setContentTitle("Hey Jimi?")
+            .setContentTitle(if (heard == null) "Hey Jimi?" else "You said: $heard")
             .setContentText("Was that you calling? (score ${"%.2f".format(score)})")
+            .setOnlyAlertOnce(true)   // updated with the heard text: no second pop-up
             .setContentIntent(openApp(context))
             .setVisibility(Notification.VISIBILITY_PUBLIC)
             .setTimeoutAfter(FEEDBACK_TIMEOUT_MS)

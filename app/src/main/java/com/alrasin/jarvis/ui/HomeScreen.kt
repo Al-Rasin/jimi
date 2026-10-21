@@ -40,12 +40,14 @@ fun HomeScreen(vm: HomeViewModel) {
     val counts by vm.counts.collectAsStateWithLifecycle()
     val log by vm.log.collectAsStateWithLifecycle()
     val model by vm.modelName.collectAsStateWithLifecycle()
+    val phase by vm.phase.collectAsStateWithLifecycle()
+    val heard by vm.heard.collectAsStateWithLifecycle()
 
     Surface(Modifier.fillMaxSize()) {
         LazyColumn(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             item {
                 Text("Jarvis", style = MaterialTheme.typography.headlineMedium)
-                Text(if (running) "Listening" else "Not listening")
+                Text(if (running) "Listening — $phase" else "Not listening")
                 if (model.isNotEmpty()) {
                     val jimi = model.startsWith("hey_jimi")
                     Text(
@@ -58,6 +60,14 @@ fun HomeScreen(vm: HomeViewModel) {
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     Button(onClick = vm::start, enabled = !running) { Text("Start") }
                     OutlinedButton(onClick = vm::stop, enabled = running) { Text("Stop") }
+                }
+            }
+            item {
+                Card(Modifier.fillMaxWidth()) {
+                    Column(Modifier.padding(12.dp)) {
+                        Text("You said", style = MaterialTheme.typography.labelMedium)
+                        Text(heard.ifEmpty { "—" }, style = MaterialTheme.typography.titleLarge)
+                    }
                 }
             }
             item {

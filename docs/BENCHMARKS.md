@@ -97,4 +97,15 @@ Test them one at a time.
 Note: rec1/rec2 were also used in training, so real-life numbers will be lower. Feedback loop (D-023) will measure real use.
 
 ### TTS / ASR / Speaker ID
-_results pending — needs user to speak to the phone_
+**2026-10-22, inside the app (sherpa-onnx 1.13.8 AAR, D-025):**
+- STT streaming zipformer en 20M int8 (2 threads): load ~3 s; test WAVs 0.07–0.17× realtime; text correct.
+  Needs ~0.5 s silence before speech, else first words are lost (same on Mac).
+- Voice "alan" (Piper), sentence = 3.7–3.8 s of audio, after one warm-up call:
+
+| Voice | 2 threads gen | 4 threads gen | load |
+|---|---|---|---|
+| **alan-medium fp32 (in app)** | 1.47 s | 1.25 s | 4.6 s |
+| alan-low fp32 | 1.09 s | 1.29 s | 6.0 s |
+| alan-medium int8 | 3.21 s | 3.07 s | 6.9 s |
+| alan-low int8 | 2.73 s | 2.19 s | 7.5 s |
+First call without warm-up is ~4× slower → app warms up at load. Speaker ID still pending (Phase 12).

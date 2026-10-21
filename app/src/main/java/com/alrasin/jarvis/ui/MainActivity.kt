@@ -21,6 +21,8 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         askPermissions.launch(arrayOf(Manifest.permission.RECORD_AUDIO, Manifest.permission.POST_NOTIFICATIONS))
         intent.getStringExtra("test_dir")?.let { vm.scoreDir(it) }
+        intent.getStringExtra("stt_dir")?.let { vm.speechTest(it) }
+        intent.getStringExtra("tts_dir")?.let { vm.voiceBench(it) }
         setContent {
             MaterialTheme(colorScheme = darkColorScheme()) {
                 HomeScreen(vm)
