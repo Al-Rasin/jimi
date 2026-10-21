@@ -36,3 +36,18 @@ PY=.venv-ww/bin/python training/wakeword/train.sh all   # or: generate | user | 
 ```
 `generate_samples.py` replaces piper-sample-generator (Linux-only) with piper-tts.
 Config: `hey_jimi.yml`. openWakeWord `train.py` is pinned to a commit inside `train.sh`.
+
+## 4. Use in the app
+Copy the 3 models the app needs into `models/wakeword/app-assets/wakeword/` (git-ignored, packed into the APK):
+`melspectrogram.onnx`, `embedding_model.onnx` (from the openwakeword package `resources/models/`) and `hey_jimi.onnx`
+(from `models/wakeword/out/`). If `hey_jimi.onnx` is missing the app falls back to `hey_jarvis_v0.1.onnx`.
+New model without rebuilding the app: `adb push hey_jimi.onnx /sdcard/Android/data/com.alrasin.jarvis/files/models/wakeword/`
+then Stop/Start in the app.
+
+Check the Kotlin detector matches Python: put 16 kHz mono WAVs in `/sdcard/Android/data/com.alrasin.jarvis/files/test/`,
+run `adb shell am start -n com.alrasin.jarvis/.ui.MainActivity --es test_dir <that dir>`, read `adb logcat -s Jarvis | grep TEST`.
+
+## 5. Feedback loop (D-023)
+Every voice wake asks "Was that you?" (✓/✗). Clips are saved on the phone with the answer in the file name.
+After some days: `training/wakeword/pull_feedback.sh` → `models/wakeword/feedback/{yes,no,missed,near,none}/`.
+Retrain (PLAN 3.7): `yes` + `missed` → extra positives, `no` → extra negatives (listen to `near`/`none` first).
