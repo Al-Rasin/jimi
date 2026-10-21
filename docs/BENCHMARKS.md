@@ -72,4 +72,12 @@ Demo APKs (sherpa-onnx, from huggingface.co/csukuangfj/sherpa-onnx-apk), files i
 ⚠️ KWS and both ASR demos use the same package `com.k2fsa.sherpa.onnx` → installing one replaces the other.
 Test them one at a time.
 
+### Wake word — sherpa-onnx KWS gigaspeech 3.3M (2026-10-21) ❌ FAIL
+- Demo needs BPE tokens in `keywords.txt` (typing "Hey Jarvis" gives `Cannot find ID for token Hey`).
+  Patched APK assets with `▁HE Y ▁JA R VI S` etc., boost `:2.0–2.5`, threshold `#0.08–0.12`, re-signed with debug key.
+- Result: user said "Hey Jarvis" 30+ times → detected only a few times, only very close to the phone.
+- Verdict: too weak for always-on wake word. Do not use this model for "Hey Jarvis".
+- Next try: openWakeWord pretrained `hey_jarvis` model (trained only on this phrase), test on user's recorded voice.
+
+### TTS / ASR / Speaker ID
 _results pending — needs user to speak to the phone_
