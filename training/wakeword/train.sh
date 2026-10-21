@@ -19,7 +19,7 @@ USER_NEG_COPIES=5
 step="${1:-all}"
 
 if [[ $step == generate || $step == all ]]; then
-  "$PY" "$TRAIN" --training_config "$CFG" --generate_clips
+  "$PY" training/wakeword/run_oww_train.py "$TRAIN" --training_config "$CFG" --generate_clips
 fi
 
 if [[ $step == user || $step == all ]]; then
@@ -36,10 +36,10 @@ if [[ $step == user || $step == all ]]; then
 fi
 
 if [[ $step == augment || $step == all ]]; then
-  "$PY" "$TRAIN" --training_config "$CFG" --augment_clips
+  "$PY" training/wakeword/run_oww_train.py "$TRAIN" --training_config "$CFG" --augment_clips
 fi
 
 if [[ $step == train || $step == all ]]; then
-  "$PY" "$TRAIN" --training_config "$CFG" --train_model
+  "$PY" training/wakeword/run_oww_train.py "$TRAIN" --training_config "$CFG" --train_model
   ls -la "$WW/out/hey_jimi.onnx"
 fi
