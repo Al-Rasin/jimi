@@ -2,7 +2,7 @@
 
 ## 1. Big picture
 ```
-                 ┌──────────── SathiCoreService (foreground, always on, root-protected) ────────────┐
+                 ┌──────────── JarvisCoreService (foreground, always on, root-protected) ────────────┐
  Mic ──► Wake word ──► VAD ──► STT (streaming) ──► Router ──► Tool executor ──► Result
   ▲      "Hey Jarvis"                               │  ▲            │              │
   │                                                 ▼  │            ▼              ▼
@@ -19,15 +19,15 @@
 | Module | Job | Depends on |
 |---|---|---|
 | `:app` | Compose UI (chat, history, notifications log, notes, settings, debug), Hilt setup | all |
-| `:core` | Shared models: `Tool`, `ToolCall`, `ToolResult`, `Risk`, `Reply`, `SathiLog`, utils | — |
+| `:core` | Shared models: `Tool`, `ToolCall`, `ToolResult`, `Risk`, `Reply`, `JarvisLog`, utils | — |
 | `:data` | Room DB + repositories (history, notes, reminders, notifications, memory facts), DataStore settings, encrypted secrets | `:core` |
 | `:voice` | sherpa-onnx wrappers: `WakeWordDetector`, `Vad`, `SpeechToText`, `TextToSpeech`, `SpeakerVerifier`; audio focus | `:core` |
 | `:llm` | llama.cpp JNI (`LlamaEngine`), model loading/unloading, streaming tokens, GBNF grammar for JSON | `:core` |
 | `:brain` | `Router`, `RuleMatcher`, `ToolCaller` (FunctionGemma), `ChatResponder`, prompts, persona, memory retrieval, cloud providers | `:core`, `:llm`, `:data`, `:knowledge` |
-| `:actions` | Tool implementations: `RootShell` (libsu), `IntentActions`, `SathiAccessibilityService`, `SystemActions`, `ScreenReader` | `:core`, `:data` |
-| `:notify` | `SathiNotificationListener`, `NotificationClassifier`, triage rules, auto-clear + log | `:core`, `:data`, `:llm` |
+| `:actions` | Tool implementations: `RootShell` (libsu), `IntentActions`, `JarvisAccessibilityService`, `SystemActions`, `ScreenReader` | `:core`, `:data` |
+| `:notify` | `JarvisNotificationListener`, `NotificationClassifier`, triage rules, auto-clear + log | `:core`, `:data`, `:llm` |
 | `:knowledge` | `WebSearch`, `PageReader` (jsoup), `WikiOffline` (Kiwix ZIM), `Embedder` + chunk ranking (RAG) | `:core` |
-| `:service` | `SathiCoreService`, boot receiver, proactive engine, routines engine, lock-screen overlay | most modules |
+| `:service` | `JarvisCoreService`, boot receiver, proactive engine, routines engine, lock-screen overlay | most modules |
 | `training/` (not Gradle) | Python: dataset tools, fine-tune notebooks, eval, export GGUF | — |
 
 If a module feels too heavy early, it is OK to start inside `:app` with the same package names
