@@ -8,9 +8,9 @@ All data lives in `models/wakeword/` (git-ignored).
 uv venv -p 3.11 .venv-ww && uv pip install -p .venv-ww/bin/python \
   openwakeword onnxruntime piper-tts 'torch==2.5.1' 'torchaudio==2.5.1' 'numpy<2' 'scipy==1.14.1' \
   'speechbrain==0.5.16' audiomentations torch-audiomentations torchinfo torchmetrics pronouncing \
-  mutagen acoustics datasets pyyaml tqdm pyarrow soundfile
+  mutagen acoustics datasets pyyaml tqdm 'pyarrow<20' soundfile
 ```
-Pins matter: newer scipy breaks `acoustics`, newer torchaudio needs torchcodec.
+Pins matter: newer scipy breaks `acoustics`, newer torchaudio needs torchcodec, pyarrow 20+ needs numpy 2.
 
 ## 2. Data (in `models/wakeword/`)
 | What | Where | Source |
