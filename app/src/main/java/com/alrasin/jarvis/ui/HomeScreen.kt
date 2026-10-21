@@ -61,6 +61,13 @@ fun HomeScreen(vm: HomeViewModel) {
                 }
             }
             item {
+                Button(
+                    onClick = vm::missed,
+                    enabled = running,
+                    modifier = Modifier.fillMaxWidth(),
+                ) { Text("Missed it — I said \"Hey Jimi\" (tap within 3 s)") }
+            }
+            item {
                 Text("Live score ${"%.2f".format(score)}")
                 LinearProgressIndicator(progress = { score }, modifier = Modifier.fillMaxWidth())
                 Text("Wake threshold ${"%.2f".format(threshold)} (lower = wakes easier, more false wakes)")

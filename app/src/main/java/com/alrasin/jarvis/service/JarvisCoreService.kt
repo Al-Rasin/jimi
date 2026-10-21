@@ -209,6 +209,11 @@ class JarvisCoreService : LifecycleService() {
         fun start(context: Context) =
             context.startForegroundService(Intent(context, JarvisCoreService::class.java))
 
+        /** Save the last 3 s as a "missed" clip (wake word was said but not detected). */
+        fun missed(context: Context) = context.startService(
+            Intent(context, JarvisCoreService::class.java).setAction(ACTION_MISSED)
+        )
+
         fun stop(context: Context) = context.startService(
             Intent(context, JarvisCoreService::class.java).setAction(ACTION_STOP)
         )

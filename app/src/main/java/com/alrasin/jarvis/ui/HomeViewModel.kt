@@ -40,6 +40,11 @@ class HomeViewModel @Inject constructor(
         JarvisCoreService.start(app)
     }
 
+    fun missed() {
+        JarvisCoreService.missed(app)
+        JarvisLog.i("missed: saving last 3 s")
+    }
+
     fun stop() {
         JarvisCoreService.stop(app)
     }
