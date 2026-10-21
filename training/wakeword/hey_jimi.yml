@@ -1,0 +1,47 @@
+# openWakeWord training config for "Hey Jimi" (D-020). Paths are relative to the repo root.
+# Run with training/wakeword/train.sh — see README.md in this folder.
+model_name: "hey_jimi"
+target_phrase:
+  - "hey jimi"
+  - "hey jimmy"   # same sound; second spelling gives TTS more variety
+# Similar-sounding phrases that must NOT wake (auto adversarial phrases are added too)
+custom_negative_phrases:
+  - "hey gimme"
+  - "gimme"
+  - "hey jamie"
+  - "hey jenny"
+  - "hey ginny"
+  - "hey timmy"
+  - "hey kimmy"
+  - "hey jim"
+  - "hey jane"
+  - "hey siri"
+  - "hey google"
+  - "hey jarvis"
+  - "hey mimi"
+  - "hey jimbo"
+n_samples: 20000
+n_samples_val: 2000
+tts_batch_size: 50
+augmentation_batch_size: 16
+piper_sample_generator_path: "./training/wakeword"   # our generate_samples.py (piper-tts, works on macOS)
+output_dir: "./models/wakeword/out"
+rir_paths:
+  - "./models/wakeword/rirs"
+background_paths:
+  - "./models/wakeword/noise/wav"
+background_paths_duplication_rate:
+  - 1
+false_positive_validation_data_path: "./models/wakeword/data/validation_set_features.npy"
+augmentation_rounds: 1
+feature_data_files:
+  "ACAV100M_sample": "./models/wakeword/data/acav_part.npy"
+batch_n_per_class:
+  "ACAV100M_sample": 1024
+  "adversarial_negative": 50
+  "positive": 50
+model_type: "dnn"
+layer_size: 32
+steps: 30000
+max_negative_weight: 1500
+target_false_positives_per_hour: 0.2
