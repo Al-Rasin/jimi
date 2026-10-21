@@ -96,7 +96,7 @@ Total target while idle: **< 1.2 GB**. Real numbers go in DECISIONS after Phase 
 
 ## 6. Data (Room tables)
 `conversation_turn`, `notification_log` (+ label: kept/cleared/auto), `note`, `reminder`,
-`memory_fact`, `routine`, `routine_step`, `tool_call_log` (for retraining data), `settings` (DataStore).
+`memory_fact`, `routine`, `routine_step`, `tool_call_log` (for retraining data), `wake_event` (wake-word feedback, D-023), `settings` (DataStore).
 Secrets (API keys, PIN) → EncryptedSharedPreferences / Android Keystore only.
 
 ## 7. Lock screen & always-on
@@ -108,3 +108,5 @@ Secrets (API keys, PIN) → EncryptedSharedPreferences / Android Keystore only.
 ## 8. Training data loop
 `tool_call_log` stores (text heard → tool call → user corrected? → result). Export to
 `training/data/*.jsonl` for retraining FunctionGemma. Notification labels feed the notification classifier.
+Wake word (D-023): each wake → `wake_event` row (time, score, clip file, verdict ✓/✗/missed/none) + WAV in
+app files `wake/`. `training/wakeword/pull_feedback.sh` copies them to `models/wakeword/feedback/` for retraining.
