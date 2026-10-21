@@ -87,5 +87,14 @@ Test them one at a time.
 - Verdict: much better than sherpa KWS; good when close, weak at 2 m. Options: lower threshold + VAD,
   openWakeWord custom verifier trained on user's voice, or train a custom model.
 
+**"Hey Jimi" custom model (2026-10-22, D-024)** — tested on Mac (Python, same scores as phone):
+| Model | Synthetic test recall @0.5 | False wakes/h (11 h val set) | rec1: 29× "Hey Jimi" | rec2: 3 min talk/TV | "Hey Jarvis" ×10 |
+|---|---|---|---|---|---|
+| openWakeWord auto_train (weight 1500→×2) | 26% | ~0 | 3 | 0 | 0 |
+| train_fast weight 1000 | 78% | 146 | 30 (1 extra) | 3 ❌ | 4 ❌ |
+| **train_fast weight 5000 (in app)** | 53% | 3.4 | **22** | **0** | **0** |
+| train_fast weight 20000 | 25% | 0.2 | — | — | — |
+Note: rec1/rec2 were also used in training, so real-life numbers will be lower. Feedback loop (D-023) will measure real use.
+
 ### TTS / ASR / Speaker ID
 _results pending — needs user to speak to the phone_
