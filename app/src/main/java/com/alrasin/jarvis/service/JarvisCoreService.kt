@@ -88,6 +88,7 @@ class JarvisCoreService : LifecycleService() {
         }
         val models = WakeModels.load(this)
         JarvisLog.i("wake model: ${models.wakeName}")
+        _modelName.value = models.wakeName
         val detector = WakeWordDetector(models.mel, models.embedding, models.wake)
         val chunk = ShortArray(WakeWordDetector.CHUNK)
         val ring = AudioRing(WakeWordDetector.SAMPLE_RATE * RING_SECONDS)
@@ -200,6 +201,8 @@ class JarvisCoreService : LifecycleService() {
 
         private val _running = MutableStateFlow(false)
         val running: StateFlow<Boolean> = _running
+        private val _modelName = MutableStateFlow("")
+        val modelName: StateFlow<String> = _modelName
         private val _lastScore = MutableStateFlow(0f)
         val lastScore: StateFlow<Float> = _lastScore
 

@@ -28,6 +28,7 @@ class HomeViewModel @Inject constructor(
 ) : AndroidViewModel(app) {
     val running = JarvisCoreService.running
     val lastScore = JarvisCoreService.lastScore
+    val modelName = JarvisCoreService.modelName
     val events = dao.recent().stateIn(viewModelScope, SharingStarted.Lazily, emptyList())
     val counts = dao.counts().stateIn(viewModelScope, SharingStarted.Lazily, emptyList())
     val threshold = settings.wakeThreshold.stateIn(viewModelScope, SharingStarted.Eagerly, Settings.DEFAULT_THRESHOLD)

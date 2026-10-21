@@ -39,12 +39,20 @@ fun HomeScreen(vm: HomeViewModel) {
     val events by vm.events.collectAsStateWithLifecycle()
     val counts by vm.counts.collectAsStateWithLifecycle()
     val log by vm.log.collectAsStateWithLifecycle()
+    val model by vm.modelName.collectAsStateWithLifecycle()
 
     Surface(Modifier.fillMaxSize()) {
         LazyColumn(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             item {
                 Text("Jarvis", style = MaterialTheme.typography.headlineMedium)
-                Text(if (running) "Listening for \"Hey Jimi\"" else "Not listening")
+                Text(if (running) "Listening" else "Not listening")
+                if (model.isNotEmpty()) {
+                    val jimi = model.startsWith("hey_jimi")
+                    Text(
+                        if (jimi) "Model: Hey Jimi ($model)" else "Model: OLD fallback \"Hey Jarvis\" ($model) — Hey Jimi model missing",
+                        color = if (jimi) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.error,
+                    )
+                }
             }
             item {
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
