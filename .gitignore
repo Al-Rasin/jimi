@@ -1,0 +1,27 @@
+# Android / Gradle
+.gradle/
+build/
+local.properties
+.idea/
+*.iml
+captures/
+.externalNativeBuild/
+.cxx/
+
+# Models & big data (never commit)
+models/
+*.gguf
+*.onnx
+*.zim
+*.bin
+training/data/
+training/outputs/
+
+# Secrets
+*.jks
+*.keystore
+.env
+secrets.properties
+
+# OS
+.DS_Store
