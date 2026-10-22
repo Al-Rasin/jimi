@@ -22,9 +22,7 @@ import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material3.Icon
-import androidx.compose.material3.NavigationBarItemDefaults
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.unit.sp
 import com.alrasin.jarvis.voice.Engine
@@ -47,8 +45,6 @@ import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.NavigationBar
-import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
@@ -67,7 +63,6 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.font.FontWeight
@@ -94,7 +89,7 @@ fun AppShell(vm: AppViewModel, home: HomeViewModel) {
         containerColor = MaterialTheme.colorScheme.background,
         topBar = {
             Row(
-                Modifier.fillMaxWidth().statusBarsPadding().padding(horizontal = 16.dp, vertical = 10.dp),
+                Modifier.fillMaxWidth().statusBarsPadding().padding(horizontal = 20.dp, vertical = 12.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Orb(if (running) moodOf(phase) else OrbMood.IDLE, 0f, size = 40.dp)
@@ -108,29 +103,17 @@ fun AppShell(vm: AppViewModel, home: HomeViewModel) {
                 }
                 Text(
                     if (running) "On" else "Off",
-                    color = if (running) Color.White else MaterialTheme.colorScheme.onSurfaceVariant,
+                    color = if (running) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant,
                     style = MaterialTheme.typography.labelLarge,
                     modifier = Modifier.clip(RoundedCornerShape(50))
-                        .background(if (running) EnergyBrush else SolidColor(MaterialTheme.colorScheme.surfaceVariant))
+                        .background(if (running) PanelColors.Cyan else MaterialTheme.colorScheme.surfaceVariant)
                         .clickable { if (running) home.stop() else home.start() }
                         .padding(horizontal = 18.dp, vertical = 8.dp),
                 )
             }
         },
         bottomBar = {
-            NavigationBar(containerColor = MaterialTheme.colorScheme.surfaceContainer) {
-                TABS.forEachIndexed { i, (t, icon) ->
-                    NavigationBarItem(
-                        selected = tab == i, onClick = { tab = i },
-                        icon = { Icon(icon, contentDescription = t) },
-                        label = { Text(t, style = MaterialTheme.typography.labelSmall) },
-                        colors = NavigationBarItemDefaults.colors(
-                            selectedIconColor = PanelColors.Cyan, selectedTextColor = PanelColors.Cyan,
-                            indicatorColor = PanelColors.Cyan.copy(alpha = 0.12f),
-                        ),
-                    )
-                }
-            }
+            ArcDial(items = TABS, selectedIndex = tab, onSelected = { tab = it })
         },
     ) { pad ->
         Box(Modifier.padding(pad).fillMaxSize()) {
@@ -154,7 +137,7 @@ private fun time(ms: Long) = timeFmt.format(Date(ms))
 private fun ChatTab(vm: AppViewModel) {
     val turns by vm.turnList.collectAsStateWithLifecycle()
     var text by remember { mutableStateOf("") }
-    Column(Modifier.fillMaxSize().padding(horizontal = 12.dp).imePadding()) {
+    Column(Modifier.fillMaxSize().padding(horizontal = 20.dp).imePadding()) {
         if (turns.isEmpty()) {
             Column(
                 Modifier.weight(1f).fillMaxWidth(),
@@ -162,7 +145,7 @@ private fun ChatTab(vm: AppViewModel) {
                 verticalArrangement = Arrangement.Center,
             ) {
                 Orb(OrbMood.IDLE, 0f, size = 160.dp)
-                GradientTitle("Hi Boss", 28, Modifier.padding(top = 8.dp))
+                GradientTitle("Hi Boss", 34, Modifier.padding(top = 8.dp))
                 Text("Say \"Hey Jimi\" or type below.", color = MaterialTheme.colorScheme.onSurfaceVariant)
                 FlowRow(
                     Modifier.padding(top = 20.dp),
@@ -173,10 +156,10 @@ private fun ChatTab(vm: AppViewModel) {
         } else {
             LazyColumn(
                 Modifier.weight(1f), reverseLayout = true,
-                verticalArrangement = Arrangement.spacedBy(10.dp), contentPadding = PaddingValues(vertical = 12.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp), contentPadding = PaddingValues(vertical = 12.dp),
             ) {
                 items(turns.take(60), key = { it.id }) { t ->
-                    Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
                         Bubble(t.heard, mine = true)
                         Bubble(t.reply, mine = false)
                     }
@@ -189,7 +172,7 @@ private fun ChatTab(vm: AppViewModel) {
     }
 }
 
-/** Chat bubble: the user's words on the right with a gradient edge, Jimi's answer on the left next to a small orb. */
+/** User messages align right; assistant messages align left. */
 @Composable
 fun Bubble(text: String, mine: Boolean) {
     if (text.isBlank()) return
@@ -202,15 +185,15 @@ fun Bubble(text: String, mine: Boolean) {
             modifier = Modifier.widthIn(max = 300.dp)
                 .clip(RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp, bottomStart = if (mine) 20.dp else 6.dp, bottomEnd = if (mine) 6.dp else 20.dp))
                 .then(
-                    if (mine) Modifier.background(Brush.linearGradient(listOf(Color(0xFF173247), Color(0xFF2A1F4A))))
-                    else Modifier.background(PanelColors.Field),
+                    if (mine) Modifier.background(MaterialTheme.colorScheme.surfaceContainerHigh)
+                    else Modifier.background(MaterialTheme.colorScheme.surfaceContainerLow),
                 )
-                .padding(horizontal = 14.dp, vertical = 10.dp),
+                .padding(16.dp),
         )
     }
 }
 
-/** Rounded text field with the gradient mic / send button. */
+/** Rounded text field with the mic / send button. */
 @Composable
 fun InputPill(text: String, onText: (String) -> Unit, modifier: Modifier = Modifier, onGo: () -> Unit) {
     Row(
@@ -228,11 +211,11 @@ fun InputPill(text: String, onText: (String) -> Unit, modifier: Modifier = Modif
             },
         )
         Box(
-            Modifier.size(44.dp).clip(CircleShape).background(EnergyBrush).clickable(onClick = onGo),
+            Modifier.size(48.dp).clip(CircleShape).background(PanelColors.Cyan).clickable(onClick = onGo),
             contentAlignment = Alignment.Center,
         ) {
             if (text.isBlank()) Text("🎤", fontSize = 18.sp)
-            else Icon(Icons.AutoMirrored.Filled.Send, contentDescription = "Send", tint = Color.White)
+            else Icon(Icons.AutoMirrored.Filled.Send, contentDescription = "Send", tint = MaterialTheme.colorScheme.onPrimary)
         }
     }
 }
@@ -243,8 +226,8 @@ fun Pill(text: String, selected: Boolean = false, onClick: () -> Unit) {
         text,
         color = if (selected) PanelColors.Cyan else PanelColors.Text,
         style = MaterialTheme.typography.labelLarge,
-        modifier = Modifier.clip(RoundedCornerShape(50))
-            .border(1.dp, if (selected) PanelColors.Cyan.copy(alpha = 0.6f) else PanelColors.Dim.copy(alpha = 0.35f), RoundedCornerShape(50))
+        modifier = Modifier.clip(RoundedCornerShape(12.dp))
+            .border(1.dp, if (selected) PanelColors.Cyan else MaterialTheme.colorScheme.outline, RoundedCornerShape(12.dp))
             .clickable(onClick = onClick)
             .padding(horizontal = 14.dp, vertical = 8.dp),
     )
@@ -253,7 +236,7 @@ fun Pill(text: String, selected: Boolean = false, onClick: () -> Unit) {
 @Composable
 private fun HistoryTab(vm: AppViewModel) {
     val turns by vm.turnList.collectAsStateWithLifecycle()
-    LazyColumn(Modifier.fillMaxSize().padding(12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+    LazyColumn(Modifier.fillMaxSize().padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         item { Text("Fix wrong text here. Fixes are saved for training.", style = MaterialTheme.typography.bodySmall) }
         items(turns, key = { it.id }) { TurnCard(it, vm) }
     }
@@ -265,7 +248,7 @@ private fun TurnCard(t: ConversationTurn, vm: AppViewModel) {
     var fix by remember { mutableStateOf(t.heard) }
     GlassCard {
         Column {
-            Text("${time(t.timeMs)} · ${t.source}${t.tool?.let { " · $it" } ?: ""}", style = MaterialTheme.typography.labelSmall)
+            Text("${time(t.timeMs)} · ${t.source}${t.tool?.let { " · $it" } ?: ""}", style = MaterialTheme.typography.labelSmall.copy(fontFamily = JimiMono))
             Text("“${t.heard}”", color = PanelColors.Cyan)
             if (t.rawText.isNotBlank() && t.rawText != t.heard) Text("raw: ${t.rawText}", style = MaterialTheme.typography.bodySmall)
             Text(t.reply)
@@ -292,25 +275,26 @@ private fun AlertsTab(vm: AppViewModel) {
     val list by vm.notificationList.collectAsStateWithLifecycle()
     val rules by vm.rules.collectAsStateWithLifecycle()
     val ruleOf = rules.associate { it.pkg to it.mode }
-    LazyColumn(Modifier.fillMaxSize().padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+    LazyColumn(Modifier.fillMaxSize().padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         item { Text("Tap Important / Noise to teach Jimi. Rules apply to the whole app.", style = MaterialTheme.typography.bodySmall) }
         items(list, key = { it.id }) { NotificationCard(it, ruleOf[it.pkg], vm) }
     }
 }
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun NotificationCard(n: NotificationLog, rule: String?, vm: AppViewModel) {
     val important = n.label?.let { it == "important" } ?: n.important
     Card(
         Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(18.dp),
-        colors = CardDefaults.cardColors(containerColor = if (important) Color(0xFF13202E) else Color(0xFF0E121B)),
+        shape = RoundedCornerShape(20.dp),
+        colors = CardDefaults.cardColors(containerColor = if (important) MaterialTheme.colorScheme.surfaceContainer else MaterialTheme.colorScheme.surfaceContainerLow),
     ) {
-        Column(Modifier.padding(10.dp)) {
-            Text("${time(n.timeMs)} · ${n.appName} · ${n.status} · ${n.reason}", style = MaterialTheme.typography.labelSmall)
+        Column(Modifier.padding(16.dp)) {
+            Text("${time(n.timeMs)} · ${n.appName} · ${n.status} · ${n.reason}", style = MaterialTheme.typography.labelSmall.copy(fontFamily = JimiMono))
             Text(n.title, maxLines = 1, overflow = TextOverflow.Ellipsis)
             Text(n.text, maxLines = 2, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.bodySmall)
-            Row {
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                 TextButton(onClick = { vm.label(n.id, true) }) { Text(if (important) "• Important" else "Important") }
                 TextButton(onClick = { vm.label(n.id, false) }) { Text(if (!important) "• Noise" else "Noise") }
                 TextButton(onClick = { vm.setRule(n.pkg, if (rule == "keep") null else "keep") }) {
@@ -329,7 +313,7 @@ private fun NotesTab(vm: AppViewModel) {
     val notes by vm.noteList.collectAsStateWithLifecycle()
     val reminders by vm.reminderList.collectAsStateWithLifecycle()
     val facts by vm.facts.collectAsStateWithLifecycle()
-    LazyColumn(Modifier.fillMaxSize().padding(12.dp), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+    LazyColumn(Modifier.fillMaxSize().padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         item { Header("Reminders") }
         items(reminders, key = { "r${it.id}" }) { r ->
             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -358,7 +342,7 @@ private fun NotesTab(vm: AppViewModel) {
 }
 
 @Composable
-private fun Header(t: String) = GradientTitle(t, 17, Modifier.padding(top = 10.dp))
+private fun Header(t: String) = GradientTitle(t, 22, Modifier.padding(top = 12.dp))
 
 @Composable
 private fun SettingsTab(vm: AppViewModel) {
@@ -384,7 +368,7 @@ private fun SettingsTab(vm: AppViewModel) {
     var tool by remember { mutableStateOf("device_status") }
     var args by remember { mutableStateOf("{\"what\":\"battery\"}") }
 
-    Column(Modifier.fillMaxSize().padding(12.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+    Column(Modifier.fillMaxSize().padding(20.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         GlassCard(title = "Setup") {
             Text("Gives all permissions with root, turns on screen + notification access, stops MIUI killing Jimi.", style = MaterialTheme.typography.bodySmall)
             Button(onClick = vm::rootSetup) { Text("Set up with root") }

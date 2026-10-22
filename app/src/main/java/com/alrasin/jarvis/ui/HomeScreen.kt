@@ -44,7 +44,7 @@ fun HomeScreen(vm: HomeViewModel) {
     val heard by vm.heard.collectAsStateWithLifecycle()
 
     Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
-        LazyColumn(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        LazyColumn(Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
             item {
                 GradientTitle("Wake word", 22)
                 Text(if (running) "Listening — $phase" else "Not listening")
@@ -64,7 +64,7 @@ fun HomeScreen(vm: HomeViewModel) {
             }
             item {
                 Card(Modifier.fillMaxWidth()) {
-                    Column(Modifier.padding(12.dp)) {
+                    Column(Modifier.padding(16.dp)) {
                         Text("You said", style = MaterialTheme.typography.labelMedium)
                         Text(heard.ifEmpty { "—" }, style = MaterialTheme.typography.titleLarge)
                     }
@@ -95,7 +95,7 @@ fun HomeScreen(vm: HomeViewModel) {
             items(events, key = { it.id }) { e -> EventRow(e, vm) }
             item {
                 Text("Log", style = MaterialTheme.typography.titleSmall)
-                log.takeLast(30).reversed().forEach { Text(it, style = MaterialTheme.typography.bodySmall) }
+                log.takeLast(30).reversed().forEach { Text(it, style = MaterialTheme.typography.bodySmall.copy(fontFamily = JimiMono)) }
             }
         }
     }
@@ -104,10 +104,10 @@ fun HomeScreen(vm: HomeViewModel) {
 @Composable
 private fun EventRow(e: WakeEvent, vm: HomeViewModel) {
     Card(Modifier.fillMaxWidth()) {
-        Column(Modifier.padding(8.dp)) {
+        Column(Modifier.padding(16.dp)) {
             Text(
                 "${timeFormat.format(Date(e.timeMs))}  score ${"%.2f".format(e.score)}  — ${WakeFeedback.label(e.verdict)}",
-                style = MaterialTheme.typography.bodyMedium,
+                style = MaterialTheme.typography.bodyMedium.copy(fontFamily = JimiMono),
             )
             Row(verticalAlignment = Alignment.CenterVertically) {
                 TextButton(onClick = { vm.play(e.clipPath) }) { Text("▶ Play") }
