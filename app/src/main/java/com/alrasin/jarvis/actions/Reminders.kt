@@ -17,6 +17,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import java.time.Instant
 import java.time.ZoneId
+import java.time.temporal.ChronoUnit
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -52,14 +53,22 @@ class ReminderScheduler @Inject constructor(@ApplicationContext private val cont
     )
 
     companion object {
-        fun next(r: Reminder): Long? {
-            val z = ZoneId.systemDefault()
-            val at = Instant.ofEpochMilli(r.dueMs).atZone(z)
-            return when (r.repeat) {
-                "daily" -> at.plusDays(1)
-                "weekly" -> at.plusWeeks(1)
+        fun next(r: Reminder, nowMs: Long = System.currentTimeMillis(), zone: ZoneId = ZoneId.systemDefault()): Long? {
+            val days = when (r.repeat) {
+                "daily" -> 1L
+                "weekly" -> 7L
                 else -> null
-            }?.toInstant()?.toEpochMilli()
+            } ?: return null
+            val at = Instant.ofEpochMilli(r.dueMs).atZone(zone).toLocalDateTime()
+            val today = Instant.ofEpochMilli(nowMs).atZone(zone).toLocalDate()
+            var periods = (ChronoUnit.DAYS.between(at.toLocalDate(), today) / days).coerceAtLeast(1)
+            var next = at.plusDays(periods * days).atZone(zone).toInstant().toEpochMilli()
+            // Deliver one overdue reminder after reboot, then skip missed repeats.
+            while (next <= nowMs) {
+                periods++
+                next = at.plusDays(periods * days).atZone(zone).toInstant().toEpochMilli()
+            }
+            return next
         }
     }
 }

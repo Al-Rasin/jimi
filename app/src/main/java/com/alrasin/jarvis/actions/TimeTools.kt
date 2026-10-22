@@ -6,7 +6,12 @@ import android.provider.AlarmClock
 import com.alrasin.jarvis.core.Tool
 import com.alrasin.jarvis.core.ToolResult
 import java.time.DayOfWeek
+import java.time.LocalDate
+import java.time.LocalDateTime
+import java.time.LocalTime
+import java.time.format.DateTimeFormatter
 import java.util.Calendar
+import java.util.Locale
 
 /** Alarms and timers through the phone's Clock app (no UI shown). */
 fun timeTools(context: Context): List<Tool> = listOf(
@@ -20,21 +25,22 @@ fun timeTools(context: Context): List<Tool> = listOf(
         ),
     ) { c, _ ->
         val time = c.arg("time") ?: return@SimpleTool ToolResult.fail("For what time?")
-        val (h, m) = time.split(":").map { it.toInt() }
+        val plan = try {
+            resolveAlarm(time, c.arg("date"), c.arg("repeat"), LocalDateTime.now())
+        } catch (e: IllegalArgumentException) {
+            return@SimpleTool ToolResult.fail(e.message ?: "I couldn't resolve that alarm time.")
+        }
+        val h = plan.at.hour
+        val m = plan.at.minute
         val i = Intent(AlarmClock.ACTION_SET_ALARM)
             .putExtra(AlarmClock.EXTRA_HOUR, h)
             .putExtra(AlarmClock.EXTRA_MINUTES, m)
             .putExtra(AlarmClock.EXTRA_SKIP_UI, true)
         c.arg("label")?.let { i.putExtra(AlarmClock.EXTRA_MESSAGE, it) }
-        val days = when (val r = c.arg("repeat")) {
-            null -> null
-            "daily" -> (1..7).toList()
-            else -> runCatching { listOf(calendarDay(DayOfWeek.valueOf(r.uppercase()))) }.getOrNull()
-        }
+        val days = plan.days
         if (days != null) i.putExtra(AlarmClock.EXTRA_DAYS, ArrayList(days))
         if (!context.launch(i)) return@SimpleTool ToolResult.fail("The clock app didn't take the alarm.")
-        val spoken = speakTime(h, m)
-        ToolResult.ok("Alarm set for $spoken${if (c.arg("repeat") != null) ", ${c.arg("repeat")}" else ""}.")
+        ToolResult.ok("Alarm requested for ${plan.at.format(ALARM_DATE_FORMAT)}${plan.repeatText}. Check the Clock app to confirm.")
     },
     SimpleTool("set_timer", "Start a countdown timer", listOf(arg("seconds", "length in seconds"), arg("label", "name", required = false))) { c, _ ->
         val secs = c.arg("seconds")?.toDoubleOrNull()?.toInt() ?: return@SimpleTool ToolResult.fail("For how long?")
@@ -50,6 +56,45 @@ fun timeTools(context: Context): List<Tool> = listOf(
         ToolResult.ok("Okay, I asked the clock to turn them off.")
     },
 )
+
+private val ALARM_DATE_FORMAT = DateTimeFormatter.ofPattern("EEEE d MMMM, h:mm a", Locale.ENGLISH)
+
+internal data class AlarmPlan(val at: LocalDateTime, val days: List<Int>?, val repeatText: String)
+
+internal fun resolveAlarm(time: String, date: String?, repeat: String?, now: LocalDateTime): AlarmPlan {
+    val clock = runCatching { LocalTime.parse(time) }.getOrNull()
+    require(clock != null && clock.second == 0 && clock.nano == 0) { "Use an alarm time like 07:00." }
+    val requestedDate = date?.let {
+        runCatching { LocalDate.parse(it) }.getOrNull()
+            ?: throw IllegalArgumentException("Use an alarm date like 2026-10-23.")
+    }
+    val repetition = repeat?.trim()?.lowercase(Locale.ROOT)?.takeUnless { it == "none" || it.isEmpty() }
+    val weekday = if (repetition != null && repetition != "daily") {
+        runCatching { DayOfWeek.valueOf(repetition.uppercase(Locale.ROOT)) }.getOrNull()
+            ?: throw IllegalArgumentException("Alarm repeat must be daily or a weekday name.")
+    } else null
+    require(requestedDate == null || repetition == null) { "I can't combine a start date with a repeating Clock alarm. No alarm was set." }
+    var at = now.toLocalDate().atTime(clock)
+    if (!at.isAfter(now)) at = at.plusDays(1)
+    if (weekday != null) {
+        while (at.dayOfWeek != weekday) at = at.plusDays(1)
+    }
+    if (requestedDate != null && requestedDate != at.toLocalDate()) {
+        val requested = requestedDate.atTime(clock).format(ALARM_DATE_FORMAT)
+        throw IllegalArgumentException("I can't set a one-time Clock alarm for $requested. No alarm was set. Ask for a reminder on that date instead.")
+    }
+    val days = when {
+        repetition == "daily" -> (1..7).toList()
+        weekday != null -> listOf(calendarDay(weekday))
+        else -> null
+    }
+    val suffix = when {
+        repetition == "daily" -> ", repeating daily"
+        weekday != null -> ", repeating every ${weekday.name.lowercase(Locale.ROOT)}"
+        else -> ""
+    }
+    return AlarmPlan(at, days, suffix)
+}
 
 private fun calendarDay(d: DayOfWeek) = when (d) {
     DayOfWeek.SUNDAY -> Calendar.SUNDAY
