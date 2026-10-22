@@ -4,33 +4,47 @@ import kotlin.coroutines.AbstractCoroutineContextElement
 import kotlin.coroutines.CoroutineContext
 
 /** Only the debug source set creates this context; it never enables a dangerous tool. */
-class SmokeSession(val readOnly: Boolean) : AbstractCoroutineContextElement(Key) {
+class SmokeSession(val readOnly: Boolean, val forceDryRun: Boolean = false) : AbstractCoroutineContextElement(Key) {
     companion object Key : CoroutineContext.Key<SmokeSession> {
         fun allows(call: ToolCall, readOnly: Boolean) = Policy.allows(call, readOnly)
     }
     var route = "fallback"
     var call: ToolCall? = null
+    var requestedCall: ToolCall? = null
     var ok = true
-    var dryRun = false
+    var dryRun = forceDryRun
 
     fun intercept(call: ToolCall): ToolResult? {
         this.call = call
+        if (forceDryRun) {
+            dryRun = true
+            ok = true
+            return ToolResult(true, "Dry run: ${call.tool} was not executed.")
+        }
         if (allows(call, readOnly)) return null
         dryRun = true
         ok = !readOnly
         return ToolResult(ok, if (readOnly) "Blocked by smoke read-only policy." else "Dry run: ${call.tool} was not executed.")
     }
 
-    fun record(id: String, heard: String, reply: String, ms: Long): String {
+    fun record(id: String, heard: String, reply: String, ms: Long, expectAnswer: Boolean? = null,
+        deviceTime: String? = null): String {
         val data = linkedMapOf<String, Any?>(
             "id" to id, "heard" to heard, "route" to route, "tool" to call?.tool,
             "args" to call?.args.orEmpty(), "ok" to ok, "reply" to reply.take(600),
             "ms" to ms, "dry_run" to dryRun, "read_only" to readOnly,
             "truncated" to (reply.length > 600),
         )
+        if (expectAnswer != null) data["expectAnswer"] = expectAnswer
+        if (forceDryRun) {
+            data["executed"] = false
+            data["requested_args"] = requestedCall?.args.orEmpty()
+        }
+        if (deviceTime != null) data["device_time"] = deviceTime
         if (Json.write(data).toByteArray(Charsets.UTF_8).size > 3500) {
             data["truncated"] = true
             data["args"] = emptyMap<String, String>()
+            if (forceDryRun) data["requested_args"] = emptyMap<String, String>()
             data["reply"] = reply.take(150)
             data["heard"] = heard.take(150)
             data["tool"] = call?.tool?.take(80)

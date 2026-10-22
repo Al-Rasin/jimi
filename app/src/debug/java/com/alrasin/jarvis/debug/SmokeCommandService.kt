@@ -22,6 +22,8 @@ import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeout
 import javax.inject.Inject
+import java.time.LocalDateTime
+import java.time.format.DateTimeFormatter
 
 @AndroidEntryPoint
 class SmokeCommandService : Service() {
@@ -44,17 +46,20 @@ class SmokeCommandService : Service() {
         val request = SmokeRequest.parse(intent.action, mapOf(
             "id" to intent.getStringExtra("id"), "text" to intent.getStringExtra("text"),
             "read_only" to intent.getBooleanExtra("read_only", true),
+            "dry_run" to intent.getBooleanExtra("dry_run", false),
         ))
         scope.launch {
             serial.withLock {
                 val start = SystemClock.elapsedRealtime()
-                val trace = SmokeSession(request.readOnly)
+                val trace = SmokeSession(request.readOnly, request.dryRun)
+                var expectAnswer = false
+                val deviceTime = LocalDateTime.now().format(DateTimeFormatter.ISO_LOCAL_DATE_TIME)
                 val reply = try {
                     withTimeout(120_000) {
                         withContext(trace) {
                             assistant.handle(Assistant.Input(request.text, source = "typed",
                                 locked = getSystemService(KeyguardManager::class.java).isKeyguardLocked,
-                                voiceOk = false)).text
+                                voiceOk = false)).also { expectAnswer = it.expectAnswer }.text
                         }
                     }
                 } catch (e: Exception) {
@@ -62,7 +67,8 @@ class SmokeCommandService : Service() {
                     trace.route = "error"
                     e.message ?: e.javaClass.simpleName
                 }
-                JarvisLog.i("SMOKE " + trace.record(request.id, request.text, reply, SystemClock.elapsedRealtime() - start))
+                JarvisLog.i("SMOKE " + trace.record(request.id, request.text, reply,
+                    SystemClock.elapsedRealtime() - start, expectAnswer, deviceTime))
             }
             stopSelf(startId)
         }

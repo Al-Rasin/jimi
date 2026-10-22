@@ -129,6 +129,7 @@ class Assistant @Inject constructor(
         }
         smoke?.route = "empty"
         smoke?.call = null
+        smoke?.requestedCall = null
         smoke?.ok = false
         val text = input.heard.trim()
         val r = if (text.isEmpty()) Reply(Persona.DIDNT_GET) else runCatching { route(text, input, speak) }
@@ -274,6 +275,7 @@ class Assistant @Inject constructor(
         val smoke = coroutineContext[SmokeSession]
         smoke?.route = source
         smoke?.call = call
+        smoke?.requestedCall = request
         smoke?.ok = true
         if (smoke != null && call.tool in setOf("run_routine", "panic")) {
             val result = smoke.intercept(call)!!
