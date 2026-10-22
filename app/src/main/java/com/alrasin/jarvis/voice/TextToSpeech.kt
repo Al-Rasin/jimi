@@ -4,6 +4,7 @@ import android.content.Context
 import android.media.AudioAttributes
 import android.media.AudioFormat
 import android.media.AudioTrack
+import com.alrasin.jarvis.core.JarvisLog
 import com.k2fsa.sherpa.onnx.GeneratedAudio
 import com.k2fsa.sherpa.onnx.GenerationConfig
 import com.k2fsa.sherpa.onnx.OfflineTts
@@ -52,12 +53,17 @@ class TextToSpeech(
         generate("Hi.")   // first run is ~4x slower; pay it now, not on the first answer
     }
 
-    fun generate(text: String): GeneratedAudio =
-        if (voice.pack.engine == Engine.SUPERTONIC) {
+    fun generate(text: String): GeneratedAudio {
+        val start = System.currentTimeMillis()
+        val audio = if (voice.pack.engine == Engine.SUPERTONIC) {
             tts.generateWithConfig(text, GenerationConfig(sid = voice.sid, speed = speed, numSteps = SUPERTONIC_STEPS, extra = mapOf("lang" to "en")))
         } else {
             tts.generate(text, sid = voice.sid, speed = speed)
         }
+        val made = System.currentTimeMillis() - start
+        JarvisLog.i("tts ${voice.id}: ${audio.samples.size * 1000L / audio.sampleRate.coerceAtLeast(1)} ms audio in $made ms")
+        return audio
+    }
 
     /** Stops the sentence being played now (user tapped stop / said "stop"). */
     fun stop() { stopped = true }
@@ -81,12 +87,20 @@ class TextToSpeech(
     companion object {
         private const val DIR = "tts"
         /** Supertonic quality/speed: more denoising steps = cleaner voice, slower. */
-        private const val SUPERTONIC_STEPS = 2
+        private const val SUPERTONIC_STEPS = 3
         private const val ESPEAK = "espeak-ng-data"
 
-        /** Plays mono float PCM on the assistant audio stream; blocks until done or [stop] returns true. */
-        fun playPcm(samples: FloatArray, rate: Int, stop: () -> Boolean = { false }): Boolean {
-            if (samples.isEmpty()) return true
+        /** Quiet audio added after each sentence so the last sound is not cut when the track stops. */
+        private const val TAIL_MS = 120
+
+        /**
+         * Plays mono float PCM on the assistant audio stream; blocks until done or [stop] returns true.
+         * Waits on the real playback position (not the clock): on MIUI a track can start 200+ ms late,
+         * and a clock-based wait then stopped it before the last words were heard.
+         */
+        fun playPcm(pcm: FloatArray, rate: Int, stop: () -> Boolean = { false }): Boolean {
+            if (pcm.isEmpty()) return true
+            val samples = pcm.copyOf(pcm.size + rate * TAIL_MS / 1000)
             val track = AudioTrack.Builder()
                 .setAudioAttributes(
                     AudioAttributes.Builder()
@@ -107,8 +121,11 @@ class TextToSpeech(
             try {
                 track.write(samples, 0, samples.size, AudioTrack.WRITE_BLOCKING)
                 track.play()
-                val end = System.currentTimeMillis() + samples.size * 1000L / rate + 150
-                while (!stop() && System.currentTimeMillis() < end) Thread.sleep(50)
+                // give up only if playback is stuck (2 s more than the audio length)
+                val end = System.currentTimeMillis() + samples.size * 1000L / rate + 2000
+                while (!stop() && track.playbackHeadPosition < samples.size && System.currentTimeMillis() < end) {
+                    Thread.sleep(20)
+                }
                 track.stop()
                 return !stop()
             } finally {
