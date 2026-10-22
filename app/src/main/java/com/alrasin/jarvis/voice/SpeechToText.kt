@@ -1,6 +1,7 @@
 package com.alrasin.jarvis.voice
 
 import android.content.Context
+import com.alrasin.jarvis.core.JarvisLog
 import com.k2fsa.sherpa.onnx.EndpointConfig
 import com.k2fsa.sherpa.onnx.EndpointRule
 import com.k2fsa.sherpa.onnx.FeatureConfig
@@ -21,10 +22,28 @@ import java.io.File
  * then stop after [END_SILENCE] s of silence. Words from the pre-roll (the "Hey Jimi" itself) are dropped by
  * their timestamps, so they neither show up in the text nor count as "the user already spoke".
  */
-class SpeechToText(context: Context, dir: File? = null) : AutoCloseable {
+class SpeechToText(context: Context, dir: File? = null, hotwords: Collection<String> = emptyList()) : AutoCloseable {
     private val modelDir = dir ?: overrideDir(context).takeIf { File(it, "tokens.txt").isFile }
     val modelName: String = modelDir?.name ?: "built-in Kroko en"
 
+    private val bias = if (hotwords.isEmpty()) SttHotwords.Prepared(reason = "no vocabulary") else {
+        fun metadata(name: String): String? = runCatching {
+            val input = if (modelDir == null) context.assets.open("$DIR/$name") else File(modelDir, name).inputStream()
+            input.bufferedReader().use { reader ->
+                val text = StringBuilder()
+                val buffer = CharArray(4096)
+                while (text.length <= SttHotwords.MAX_METADATA) {
+                    val count = reader.read(buffer)
+                    if (count < 0) break
+                    text.append(buffer, 0, count)
+                }
+                text.toString()
+            }
+        }.getOrNull()
+        SttHotwords.prepare(metadata("tokens.txt").orEmpty(), metadata("bpe.vocab"), hotwords).also {
+            JarvisLog.i("STT hotwords ${if (it.enabled) "enabled" else "disabled"}: ${it.reason}")
+        }
+    }
     private val recognizer = OnlineRecognizer(
         if (modelDir == null) context.assets else null,
         OnlineRecognizerConfig(
@@ -37,6 +56,8 @@ class SpeechToText(context: Context, dir: File? = null) : AutoCloseable {
                 ),
                 tokens = modelDir?.let { File(it, "tokens.txt").path } ?: "$DIR/tokens.txt",
                 numThreads = 2,
+                modelingUnit = if (bias.enabled) "bpe" else "",
+                bpeVocab = if (bias.enabled) modelDir?.let { File(it, "bpe.vocab").path } ?: "$DIR/bpe.vocab" else "",
             ),
             endpointConfig = EndpointConfig(
                 // the "nothing said yet" and hard limits are done in Session (they must ignore the wake words)
@@ -46,7 +67,9 @@ class SpeechToText(context: Context, dir: File? = null) : AutoCloseable {
                 rule3 = EndpointRule(false, 0f, 60f),
             ),
             enableEndpoint = true,
-            decodingMethod = "greedy_search",
+            decodingMethod = if (bias.enabled) "modified_beam_search" else "greedy_search",
+            maxActivePaths = 4,
+            hotwordsScore = 1.0f,
         ),
     )
 
@@ -55,7 +78,8 @@ class SpeechToText(context: Context, dir: File? = null) : AutoCloseable {
      * [waitStart]: seconds to wait for the user to start talking.
      */
     fun session(preRoll: ShortArray? = null, waitStart: Float = WAIT_START) = Session(
-        recognizer.createStream(),
+        // Per-stream input avoids asking AssetManager to open a private filesystem hotwords file.
+        recognizer.createStream(bias.phrases),
         startAt = (LEAD_SILENCE + (preRoll?.size ?: 0)) / SAMPLE_RATE.toFloat(),
         cut = (LEAD_SILENCE + (preRoll?.size ?: 0)) / SAMPLE_RATE.toFloat() + if (preRoll != null) WAKE_MARGIN else 0f,
         waitStart = waitStart,
