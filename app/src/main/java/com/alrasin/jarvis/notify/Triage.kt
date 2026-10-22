@@ -17,7 +17,7 @@ object Triage {
     )
     private val KEEP_CATEGORIES = setOf("call", "msg", "email", "alarm", "reminder", "event", "alert")
     private val IMPORTANT_WORDS = Regex(
-        "\\b(otp|verification code|one.time|passcode|pin|tk ?\\d|bdt|debited|credited|transaction|payment|bkash|nagad|rocket|" +
+        "\\b(otp|verification code|one.time|passcode|pin|tk ?\\d+|bdt|debited|credited|transaction|payment|bkash|nagad|rocket|" +
             "missed call|calling|urgent|security|sign.in|login attempt|delivery|delivered|order shipped|flight|appointment|interview)\\b",
         RegexOption.IGNORE_CASE,
     )

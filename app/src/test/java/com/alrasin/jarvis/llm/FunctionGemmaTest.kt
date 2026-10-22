@@ -10,6 +10,37 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class FunctionGemmaTest {
+    @Test fun parsesCallWithNoArgumentsAndLeadingWhitespace() = assertEquals(
+        ToolCall("lock_phone"),
+        FunctionGemma.parse(" \n<start_function_call>call:lock_phone{}<end_function_call>"),
+    )
+
+    @Test fun preservesSpeechPunctuationAndMixedCaseInEscapedValue() = assertEquals(
+        ToolCall("create_note", mapOf("text" to "Fifty percent, Please! {OK}: yes?")),
+        FunctionGemma.parse("<start_function_call>call:create_note{text:<escape>Fifty percent, Please! {OK}: yes?<escape>}<end_function_call>"),
+    )
+
+    @Test fun parsesMultilineEscapedMessage() = assertEquals(
+        ToolCall("create_note", mapOf("text" to "First line\nSecond line, Fifty percent!")),
+        FunctionGemma.parse("<start_function_call>call:create_note{text:<escape>First line\nSecond line, Fifty percent!<escape>}<end_function_call>"),
+    )
+
+    @Test fun dropsEmptyAndBlankArguments() = assertEquals(
+        ToolCall("create_note", mapOf("text" to "hello")),
+        FunctionGemma.parse("<start_function_call>call:create_note{title:<escape> \t <escape>,text:<escape> hello <escape>,label:}<end_function_call>"),
+    )
+
+    @Test fun parsesCompleteCallWhenEndTokenIsOmitted() = assertEquals(
+        ToolCall("set_volume", mapOf("level" to "50")),
+        FunctionGemma.parse("<start_function_call>call:set_volume{level:50}"),
+    )
+
+    @Test fun incompleteAndEmptyOutputAreNotCalls() {
+        listOf("", " \n", "<start_function_call>", "<start_function_call>call:open_app{app:").forEach {
+            assertNull(it, FunctionGemma.parse(it))
+        }
+    }
+
     private val tools = listOf(
         SimpleTool("open_app", "Open an app", listOf(arg("app", "App name"))) { _, _ -> ToolResult.ok("") },
         SimpleTool(
