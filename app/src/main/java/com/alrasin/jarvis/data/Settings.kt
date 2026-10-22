@@ -63,7 +63,7 @@ class Settings @Inject constructor(@ApplicationContext private val context: Cont
     val cloudSendFacts: Flow<Boolean> = context.dataStore.data.map { it[cloudFactsKey] ?: false }
 
     /** Jimi's voice id (see Voices, D-038). */
-    val voice: Flow<String> = context.dataStore.data.map { it[voiceKey] ?: Voices.BUILT_IN }
+    val voice: Flow<String> = context.dataStore.data.map { Voices.byId(it[voiceKey]).id }
     /** Speaking speed, 1.0 = normal. */
     val voiceSpeed: Flow<Float> = context.dataStore.data.map { it[voiceSpeedKey] ?: 1.0f }
     val chatModel: Flow<String> = context.dataStore.data.map {
@@ -71,7 +71,7 @@ class Settings @Inject constructor(@ApplicationContext private val context: Cont
     }
 
     suspend fun setChatModel(v: String) = context.dataStore.edit { it[chatModelKey] = v }
-    suspend fun setVoice(v: String) = context.dataStore.edit { it[voiceKey] = v }
+    suspend fun setVoice(v: String) = context.dataStore.edit { it[voiceKey] = Voices.byId(v).id }
     suspend fun setVoiceSpeed(v: Float) = context.dataStore.edit { it[voiceSpeedKey] = v }
     suspend fun setCloudEnabled(v: Boolean) = context.dataStore.edit { it[cloudKey] = v }
     suspend fun setCloudForChat(v: Boolean) = context.dataStore.edit { it[cloudChatKey] = v }

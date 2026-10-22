@@ -518,7 +518,7 @@ internal fun VoiceCard(vm: AppViewModel) {
         TextButton(onClick = { open = !open }) { Text(if (open) "Hide voices" else "Change voice") }
         if (open) {
             val (natural, fast) = Voices.ALL.partition { it.pack.engine == Engine.SUPERTONIC }
-            Text("Natural (best, a bit slower to start)", fontWeight = FontWeight.Bold)
+            Text("Natural (a bit slower to start)", fontWeight = FontWeight.Bold)
             PackBar(Voices.SUPERTONIC)
             natural.forEach { VoiceRow(it) }
             Text("Fast", fontWeight = FontWeight.Bold, modifier = Modifier.padding(top = 8.dp))
