@@ -105,6 +105,11 @@ internal class SharedMicrophone(
         }
     }
 
+    fun releaseForPhone() {
+        close()
+        available = null
+    }
+
     override fun close() {
         echoCanceled = false
         runCatching { echoCanceler?.release() }
