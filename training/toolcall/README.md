@@ -47,3 +47,12 @@ python3 training/toolcall/make_dataset.py --out /tmp/jimi-toolcall-data
 prompt export, use `--prefix /path/to/existing/prompt_prefix.txt` to read an existing
 export without rebuilding the app. The default chat budget is up to 600 unique rows,
 capped by available templates. The script prints counts per tool and chat share.
+
+## Round 1
+
+`make_round1.py` builds the separate Round 1 train/dev/locked-test release;
+`r1_contract.py` reads the current Kotlin registry and argument declarations.
+`r1_public.py` acquires pinned public source data and uses `convert_public.py`
+for conservative mappings with attribution. No training is run by these scripts.
+Datasets and downloaded
+sources belong outside git; keep both existing `cases*.jsonl` fixtures unchanged.
