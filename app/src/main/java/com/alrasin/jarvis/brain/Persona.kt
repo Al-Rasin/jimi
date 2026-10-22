@@ -8,8 +8,10 @@ object Persona {
     const val FILLER = "One moment, $ADDRESS."
 
     val SYSTEM_PROMPT = """
-        You are $NAME, a helpful voice assistant on the user's Android phone. Call the user "$ADDRESS".
-        Answer in one or two short sentences, plain spoken English, no lists, no markdown, no emojis.
+        You are $NAME, the user's helpful voice assistant on their Android phone. Address the user as "$ADDRESS" when natural.
+        Answer directly in one to three short sentences of plain spoken English. No markdown, lists or emojis.
+        Use relevant remembered facts and recent conversation. Never invent personal details or claim an action succeeded without a result.
+        If you do not know or lack current information, say "I am not sure" instead of guessing.
     """.trimIndent()
 
     private val YES = Regex("^(yes|yeah|yep|yup|sure|ok|okay|do it|go ahead|confirm|right|correct|send it|send|call|please do|of course|ya|ha|hmm yes)( please)?$")

@@ -1,0 +1,43 @@
+# One JSON object per case; order preserves confirmation and repeat follow-ups.
+# Default: readonly cases only. --all changes flashlight, volume and Settings UI; media/reminders simulate.
+# Risky communication never executes; wrong contact tests the safe confirmation boundary.
+{"name": "time", "text": "what time is it", "readonly": true, "route": "rule", "tool": "device_status", "args": {"what": "time"}, "ok": true, "reply": "\\d+:\\d+"}
+{"name": "time_polite", "text": "please tell me the time", "readonly": true, "route": "rule", "tool": "device_status", "args": {"what": "time"}, "ok": true, "reply": "\\d+:\\d+"}
+{"name": "time_short", "text": "time now", "readonly": true, "route": "rule", "tool": "device_status", "args": {"what": "time"}, "ok": true, "reply": "\\d+:\\d+"}
+{"name": "date", "text": "what is the date", "readonly": true, "route": "rule", "tool": "device_status", "args": {"what": "date"}, "ok": true, "reply": "\\d"}
+{"name": "day", "text": "what day is today", "readonly": true, "route": "rule", "tool": "device_status", "args": {"what": "date"}, "ok": true, "reply": "\\d"}
+{"name": "battery", "text": "battery", "readonly": true, "route": "rule", "tool": "device_status", "args": {"what": "battery"}, "ok": true, "reply": "Battery \\d+ percent"}
+{"name": "battery_question", "text": "how much battery is left", "readonly": true, "route": "rule", "tool": "device_status", "args": {"what": "battery"}, "ok": true, "reply": "Battery \\d+ percent"}
+{"name": "battery_check", "text": "check battery level", "readonly": true, "route": "rule", "tool": "device_status", "args": {"what": "battery"}, "ok": true, "reply": "Battery \\d+ percent"}
+{"name": "storage", "text": "storage", "readonly": true, "route": "rule", "tool": "device_status", "args": {"what": "storage"}, "ok": true, "reply": "free|storage|GB"}
+{"name": "storage_check", "text": "check free storage", "readonly": true, "route": "rule", "tool": "device_status", "args": {"what": "storage"}, "ok": true, "reply": "free|storage|GB"}
+{"name": "status", "text": "device status", "readonly": true, "route": "rule", "tool": "device_status", "args": {"what": "all"}, "ok": true, "reply": "Battery \\d+ percent"}
+{"name": "status_report", "text": "status report", "readonly": true, "route": "rule", "tool": "device_status", "args": {"what": "all"}, "ok": true, "reply": "Battery \\d+ percent"}
+{"name": "hello", "text": "hello", "readonly": true, "route": "smalltalk", "tool": null, "args": {}, "ok": true, "reply": "Hello"}
+{"name": "greeting", "text": "hi jimi", "readonly": true, "route": "smalltalk", "tool": null, "args": {}, "ok": true, "reply": "Hello"}
+{"name": "how_are_you", "text": "how are you", "readonly": true, "route": "smalltalk", "tool": null, "args": {}, "ok": true, "reply": "All good"}
+{"name": "identity", "text": "who are you", "readonly": true, "route": "smalltalk", "tool": null, "args": {}, "ok": true, "reply": "Jimi"}
+{"name": "thanks", "text": "thank you", "readonly": true, "route": "smalltalk", "tool": null, "args": {}, "ok": true, "reply": "Any time"}
+{"name": "listening", "text": "are you there", "readonly": true, "route": "smalltalk", "tool": null, "args": {}, "ok": true, "reply": "here"}
+{"name": "help", "text": "what can you do", "readonly": true, "route": "smalltalk", "tool": null, "args": {}, "ok": true, "reply": "apps"}
+{"name": "joke", "text": "tell me a joke", "readonly": true, "route": "smalltalk", "tool": null, "args": {}, "ok": true, "reply": "joke|cache"}
+{"name": "joke_short", "text": "joke", "readonly": true, "route": "smalltalk", "tool": null, "args": {}, "ok": true, "reply": "joke|cache"}
+{"name": "goodbye", "text": "bye", "readonly": true, "route": "smalltalk", "tool": null, "args": {}, "ok": true, "reply": "Bye"}
+{"name": "screen", "text": "what's on screen", "readonly": true, "route": "rule", "tool": "read_screen", "args": {}, "ok": true, "reply": "\\S"}
+{"name": "screen_read", "text": "read the screen", "readonly": true, "route": "rule", "tool": "read_screen", "args": {}, "ok": true, "reply": "\\S"}
+{"name": "gravity", "text": "what is gravity", "readonly": true, "route": ["chat", "cloud"], "tool": ["chat", "cloud"], "args": {}, "ok": true, "reply": "gravit|mass|attract|force"}
+{"name": "repeat", "text": "say that again", "readonly": true, "route": "rule", "tool": "repeat_last", "args": {}, "ok": true, "reply": "\\S", "repeat": true}
+{"name": "cancel", "text": "cancel", "readonly": true, "route": "rule", "tool": "cancel", "args": {}, "ok": true, "reply": "Okay"}
+{"name": "flashlight_on", "text": "flashlight on", "readonly": false, "route": "rule", "tool": "toggle", "args": {"target": "flashlight", "state": "on"}, "ok": true, "reply": "\\S"}
+{"name": "flashlight_off", "text": "flashlight off", "readonly": false, "route": "rule", "tool": "toggle", "args": {"target": "flashlight", "state": "off"}, "ok": true, "reply": "\\S"}
+{"name": "volume_50", "text": "volume 50", "readonly": false, "route": "rule", "tool": "set_volume", "args": {"level": "50"}, "ok": true, "reply": "\\S"}
+{"name": "open_settings", "text": "open settings", "readonly": false, "route": "rule", "tool": "open_app", "args": {"app": "settings"}, "ok": true, "reply": "\\S"}
+{"name": "youtube_search", "text": "play relaxing piano on youtube", "readonly": false, "route": "rule", "tool": "play_media", "args": {"query": "relaxing piano", "app": "youtube"}, "ok": true, "reply": "Dry run.*not executed", "dry_run": true}
+{"name": "reminder", "text": "remind me in 1 minute", "readonly": false, "route": "rule", "tool": "create_reminder", "args": {"text": "reminder"}, "ok": true, "reply": "Dry run.*not executed", "dry_run": true}
+{"name": "call_confirmation", "text": "call mom", "readonly": false, "route": "rule", "tool": "call", "args": {"contact": "mom"}, "ok": true, "reply": "Call mom\\?"}
+{"name": "call_cancel", "text": "no", "readonly": false, "route": "confirm", "tool": "call", "args": {"contact": "mom"}, "ok": true, "reply": "cancelled"}
+{"name": "whatsapp_draft", "text": "whatsapp mom hello", "readonly": false, "route": "rule", "tool": "send_whatsapp", "args": {"contact": "mom", "text": "hello"}, "ok": true, "reply": "Send.*hello.*mom\\?"}
+{"name": "whatsapp_dry_run", "text": "yes", "readonly": false, "route": "confirm", "tool": "send_whatsapp", "args": {"contact": "mom", "text": "hello"}, "ok": true, "reply": "Dry run.*not executed", "dry_run": true}
+{"name": "wrong_contact", "text": "call zzzsmokenosuchcontact", "readonly": false, "route": "rule", "tool": "call", "args": {"contact": "zzzsmokenosuchcontact"}, "ok": true, "reply": "Call zzzsmokenosuchcontact\\?"}
+{"name": "wrong_contact_cancel", "text": "no", "readonly": false, "route": "confirm", "tool": "call", "args": {"contact": "zzzsmokenosuchcontact"}, "ok": true, "reply": "cancelled"}
+{"name": "time_after_followups", "text": "what time is it", "readonly": true, "route": "rule", "tool": "device_status", "args": {"what": "time"}, "ok": true, "reply": "\\d+:\\d+"}

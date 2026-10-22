@@ -59,6 +59,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.alrasin.jarvis.service.JarvisCoreService
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.delay
+import java.lang.ref.WeakReference
 
 /**
  * The assistant panel (replaces the Google Assistant / Gemini sheet, D-036): slides up from the bottom with a living orb. Opens on the wake word, also on the lock screen.
@@ -71,6 +72,7 @@ class AssistantActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        current = WeakReference(this)
         setShowWhenLocked(true)
         setTurnScreenOn(true)
         setContent {
@@ -80,7 +82,14 @@ class AssistantActivity : ComponentActivity() {
         }
     }
 
+    override fun onDestroy() {
+        if (current?.get() === this) current = null
+        super.onDestroy()
+    }
+
     companion object {
+        private var current: WeakReference<AssistantActivity>? = null
+        fun hideForScreenAgent() { current?.get()?.finish() }
         const val NOTHING_HEARD = "(nothing heard)"
         const val IDLE_MS = 30_000L
     }

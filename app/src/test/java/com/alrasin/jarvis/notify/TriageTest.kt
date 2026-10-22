@@ -15,15 +15,15 @@ class TriageTest {
 
     @Test fun chatAppIsImportant() = assertTrue(keep("com.whatsapp", "Rahim", "Where are you?"))
 
-    @Test fun promoIsNoise() = assertFalse(keep("com.daraz.android", "Flash sale", "50% off today"))
+    @Test fun promoIsNoise() = assertFalse(keep("com.daraz.android", "Flash sale", "50% off today", category = "promo"))
 
-    @Test fun noisyAppIsNoise() = assertFalse(keep("com.instagram.android", "New post", "See what's new"))
+    @Test fun socialAppWithoutMessageMetadataIsKept() = assertTrue(keep("com.instagram.android", "New post", "See what's new"))
 
     @Test fun callCategoryKept() = assertTrue(keep("com.unknown.app", "Incoming", category = "call"))
 
-    @Test fun userRuleWins() {
+    @Test fun keepRuleWinsAndClearRuleCannotOverrideOtp() {
         assertTrue(keep("com.instagram.android", "New post", rule = "keep"))
-        assertFalse(keep("com.whatsapp", "Rahim", "OTP 1234", rule = "clear"))
+        assertTrue(keep("com.whatsapp", "Rahim", "OTP 1234", rule = "clear"))
     }
 
     @Test fun emptyUnknownNotificationIsKeptByDefault() {
@@ -61,26 +61,26 @@ class TriageTest {
     @Test fun promotionMatchingIgnoresCaseAndPunctuation() {
         for (message in listOf("50% OFF!", "[CoUpOn]", "Limited Time!", "You might like this", "Discount: fifty percent")) {
             assertEquals(message, Triage.Verdict(false, "promo words"),
-                Triage.classify("com.unknown.app", "News", message, null, null))
+                Triage.classify("com.daraz.android", "News", message, "promo", null))
         }
     }
 
     @Test fun wordsInsideLongerWordsDoNotTriggerRules() {
-        assertEquals(Triage.Verdict(false, "noisy app"),
+        assertEquals(Triage.Verdict(true, "possible personal message"),
             Triage.classify("com.instagram.android", "Spinning rockets", "", null, null))
         assertEquals(Triage.Verdict(true, "default keep"),
             Triage.classify("com.unknown.app", "Window freezer", "", null, null))
     }
 
-    @Test fun explicitUserRulesWinOverEveryOtherSignal() {
-        assertEquals(Triage.Verdict(false, "your rule"),
+    @Test fun explicitClearRuleCannotOverrideProtectedSignals() {
+        assertEquals(Triage.Verdict(true, "important words"),
             Triage.classify("com.whatsapp", "URGENT OTP", "", "call", "clear"))
         assertEquals(Triage.Verdict(true, "your rule"),
             Triage.classify("com.instagram.android", "Flash sale", "", null, "keep"))
     }
 
     @Test fun unknownRuleAndCategoryFallThroughToNormalClassification() {
-        assertEquals(Triage.Verdict(false, "noisy app"),
+        assertEquals(Triage.Verdict(true, "possible personal message"),
             Triage.classify("com.instagram.android", "A new photo", "", "status", "automatic"))
     }
 

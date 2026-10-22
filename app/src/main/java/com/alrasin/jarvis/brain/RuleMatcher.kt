@@ -58,7 +58,9 @@ object RuleMatcher {
     fun match(input: String, now: LocalDateTime = LocalDateTime.now()): ToolCall? {
         val t = normalize(input)
         if (t.isEmpty()) return null
-        return talk(t) ?: toggle(t) ?: time(t, now) ?: notes(t, now) ?: comms(t) ?: media(t) ?: system(t) ?: screen(t)
+        val actionText = input.lowercase().trim().replace(Regex("\\s+"), " ")
+            .replace(Regex("^(?:(?:hey |ok |okay )?(?:jarvis|jimi|jimmy)[, ]+|(?:please|pls|can you|could you|would you|will you|i want you to|i want to|i would like to|just|hey|ok|okay) )+"), "")
+        return talk(t) ?: comms(actionText) ?: media(actionText.trimEnd('.', '!', '?')) ?: toggle(t) ?: time(t, now) ?: notes(t, now) ?: media(t) ?: system(t) ?: screen(t)
             ?: notifications(t) ?: knowledge(t) ?: memory(t) ?: apps(t)
     }
 
@@ -78,6 +80,7 @@ object RuleMatcher {
     }
 
     private fun toggle(t: String): ToolCall? {
+        if (t == "on flushed light") return call("toggle", "target" to "flashlight", "state" to "on")
         val on = Regex("\\b(turn on|switch on|enable|activate|start|open)\\b").containsMatchIn(t) || t.endsWith(" on")
         val off = Regex("\\b(turn off|switch off|disable|deactivate|stop|close|shut off)\\b").containsMatchIn(t) || t.endsWith(" off")
         if (on == off) {
@@ -143,26 +146,61 @@ object RuleMatcher {
     }
 
     private fun comms(t: String): ToolCall? {
-        Regex("^(?:call|phone|ring|dial)(?: to)? (.+?)(?: on (?:speaker|whatsapp))?$").find(t)?.let {
-            if (t.contains(" on whatsapp")) return call("call", "contact" to it.groupValues[1], "app" to "whatsapp")
-            return call("call", "contact" to it.groupValues[1])
+        val calling = t.trimEnd('.', '!', '?').replace(Regex("(?: (?:please|for me|now|okay|ok))+$"), "")
+        Regex("^(whats ?app|messenger) (?:(video|voice|audio) )?call(?: to)? (.+)$").find(calling)?.let {
+            return call("call", "contact" to it.groupValues[3], "app" to commsApp(it.groupValues[1]),
+                "video" to it.groupValues[2].takeIf { mode -> mode.isNotEmpty() }?.let { mode -> (mode == "video").toString() })
         }
-        Regex("^(?:send |write )?(?:a )?(?:whatsapp|whats app)(?: message| text)?(?: to)? ([a-z0-9 ]+?)(?: saying| that says| that| say|:)? (?:saying |that )?(.+)$").find(t)
-            ?.let { return call("send_whatsapp", "contact" to splitContact(it.groupValues[1], it.groupValues[2]).first, "text" to splitContact(it.groupValues[1], it.groupValues[2]).second) }
-        Regex("^(?:send|write) (?:a )?(?:message|text|sms|msg) to ([a-z0-9 ]+?) on (?:whatsapp|whats app)(?: saying| that)? (.+)$").find(t)
-            ?.let { return call("send_whatsapp", "contact" to it.groupValues[1], "text" to it.groupValues[2]) }
-        Regex("^(?:send |write )?(?:a |an )?(?:message|text|sms|msg) to ([a-z0-9 ]+?)(?: saying| that says| that)? (.+)$").find(t)
-            ?.let { return call("send_sms", "contact" to it.groupValues[1], "text" to it.groupValues[2]) }
-        Regex("^(?:text|message|sms) ([a-z]+(?: [a-z]+)?) (?:saying |that )(.+)$").find(t)
-            ?.let { return call("send_sms", "contact" to it.groupValues[1], "text" to it.groupValues[2]) }
-        if (t.matches(re("(?:read|check|show|any|do i have any)(?: me)?(?: my)?(?: new| unread| latest| last)? (?:messages|texts|sms)|(?:read|show) (?:the )?last (?:message|text|sms)"))) return call("read_messages")
+        Regex("^(?:(video|voice|audio) )?(?:call|phone|ring|dial)(?: to)? (.+?)(?: (?:on|via|using) (whats ?app|messenger|phone|speaker))?$").find(calling)?.let {
+            return call("call", "contact" to it.groupValues[2], "app" to it.groupValues[3].takeUnless { app -> app.isEmpty() || app == "speaker" }?.let(::commsApp),
+                "video" to it.groupValues[1].takeIf { mode -> mode.isNotEmpty() }?.let { mode -> (mode == "video").toString() })
+        }
+        Regex("^(?:(?:send|write) (?:a |an )?)?(whats ?app|messenger)(?: message| text)?(?: to)? (.+)$").find(t)?.let {
+            return message(it.groupValues[2], commsApp(it.groupValues[1]))
+        }
+        Regex("^(?:(?:send|write) (?:a |an )?)?(?:message|text|sms|msg)(?: to)? (.+)$").find(t)?.let {
+            return message(it.groupValues[1])
+        }
+        if (normalize(t).matches(re("(?:read|check|show|any|do i have any)(?: me)?(?: my)?(?: new| unread| latest| last)? (?:messages|texts|sms)|(?:read|show) (?:the )?last (?:message|text|sms)"))) return call("read_messages")
         Regex("^(?:send|write|compose) (?:an |a )?(?:email|mail|e mail)(?: to ([a-z0-9 ]+?))?(?: about (.+))?$").find(t)
             ?.let { return call("compose_email", "to" to it.groupValues[1], "subject" to it.groupValues[2]) }
         return null
     }
 
-    /** "send whatsapp to mom hi" has no clear end of the name; keep 1 word unless the message is empty. */
-    private fun splitContact(name: String, text: String) = name to text
+    private fun commsApp(app: String) = app.replace(" ", "")
+
+    private fun message(rest: String, requestedApp: String? = null): ToolCall? {
+        val delimiter = Regex("\\s+(?:saying|that says|say|that)(?:\\s+|$)|\\s*:\\s*").find(rest)
+        var app = requestedApp
+        val recipient: String
+        val text: String
+        if (delimiter != null) {
+            var head = rest.substring(0, delimiter.range.first).trim()
+            text = rest.substring(delimiter.range.last + 1).trim()
+            Regex("^(.+?) (?:on|via|using) (whats ?app|messenger|sms)$").find(head)?.let {
+                if (app != null && app != commsApp(it.groupValues[2])) return null
+                app = commsApp(it.groupValues[2])
+                head = it.groupValues[1]
+            }
+            recipient = head
+        } else {
+            val routed = if (requestedApp == null) Regex("^(.+?) (?:on|via|using) (whats ?app|messenger|sms)(?: (.+))?$").find(rest) else null
+            if (routed != null) {
+                if (app != null && app != commsApp(routed.groupValues[2])) return null
+                app = commsApp(routed.groupValues[2])
+                recipient = routed.groupValues[1]
+                text = routed.groupValues[3]
+            } else {
+                val split = rest.indexOf(' ')
+                if (split < 1) return null
+                recipient = rest.substring(0, split)
+                text = rest.substring(split + 1)
+            }
+        }
+        if (recipient.isBlank() || text.isBlank() || text in setOf("saying", "that says", "say", "that")) return null
+        return call(if (app == "whatsapp") "send_whatsapp" else "send_sms", "contact" to recipient,
+            "text" to text, "app" to app?.takeIf { it == "messenger" })
+    }
 
     private fun media(t: String): ToolCall? {
         when {
@@ -171,8 +209,18 @@ object RuleMatcher {
             t.matches(re("(?:next|skip)(?: the)?(?: song| track| video)?|play (?:the )?next(?: song| track)?|skip (?:this|it)")) -> return call("media_control", "action" to "next")
             t.matches(re("(?:previous|last|go back)(?: song| track)|play (?:the )?previous(?: song| track)?|previous")) -> return call("media_control", "action" to "previous")
         }
-        Regex("^play (.+?)(?: on (youtube|you tube|spotify|youtube music))?$").find(t)?.let {
-            val app = it.groupValues[2].replace("you tube", "youtube").ifEmpty { null }
+        val mediaApps = "youtube music|you tube music|youtube|you tube|spotify"
+        Regex("^(?:open|launch) ($mediaApps)(?: app)? and (?:play|search(?: for)?) (.+)$").find(t)?.let {
+            return call("play_media", "query" to it.groupValues[2], "app" to mediaApp(it.groupValues[1]))
+        }
+        Regex("^search(?: for)? (.+?) (?:on|in) ($mediaApps)$").find(t)?.let {
+            return call("play_media", "query" to it.groupValues[1], "app" to mediaApp(it.groupValues[2]))
+        }
+        Regex("^search ($mediaApps)(?: for)? (.+)$").find(t)?.let {
+            return call("play_media", "query" to it.groupValues[2], "app" to mediaApp(it.groupValues[1]))
+        }
+        Regex("^play (.+?)(?: (?:on|in|using) ($mediaApps))?$").find(t)?.let {
+            val app = it.groupValues[2].takeIf { it.isNotEmpty() }?.let(::mediaApp)
             return call("play_media", "query" to it.groupValues[1].removePrefix("some ").removePrefix("the song "), "app" to app)
         }
         Regex("^(?:set |change |turn )?(?:the )?(?:volume|sound)(?: to| at)? (\\d+)(?: percent)?$").find(t)
@@ -185,6 +233,8 @@ object RuleMatcher {
         }
         return null
     }
+
+    private fun mediaApp(app: String) = app.replace("you tube", "youtube").replace(' ', '_')
 
     private fun system(t: String): ToolCall? {
         Regex("^(?:set |change |turn )?(?:the )?(?:screen )?brightness(?: to| at)? (\\d+)(?: percent)?$").find(t)

@@ -1,6 +1,7 @@
 package com.alrasin.jarvis.actions
 
 import android.annotation.SuppressLint
+import android.accessibilityservice.AccessibilityService
 import android.app.KeyguardManager
 import android.app.NotificationManager
 import android.bluetooth.BluetoothManager
@@ -32,13 +33,23 @@ import java.util.Locale
 class Torch(private val context: Context) {
     @Volatile private var state: Boolean? = null
     private var usesRoot = false
+    private var rootLed: String? = null
+
+    private suspend fun led(): String? {
+        rootLed?.let { return it }
+        if (!RootShell.available) return null
+        val paths = RootShell.run("for l in /sys/class/leds/*; do [ -f \"\$l/brightness\" ] && [ -f \"\$l/max_brightness\" ] && echo \"\$l\"; done")
+        return DeviceActionPolicy.torchDirectories(paths.out.lines()).firstOrNull().also { rootLed = it }
+    }
 
     suspend fun readState(): Boolean? {
         runCatching { cm }
-        val led = RootShell.run("for l in $LEDS; do [ -r \$l/brightness ] && cat \$l/brightness; done")
-        val values = led.out.lineSequence().mapNotNull { it.trim().toIntOrNull() }.toList()
-        val ledState = values.takeIf { it.isNotEmpty() }?.any { it > 0 }
-        return if (usesRoot) ledState else if (ledState == true) true else state ?: ledState
+        if (!usesRoot) {
+            if (state == null) delay(80)
+            state?.let { return it }
+        }
+        val path = led() ?: return null
+        return RootShell.run("cat ${RootShell.quote("$path/brightness")}").out.trim().toIntOrNull()?.let { it > 0 }
     }
 
     private val cm: CameraManager by lazy {
@@ -59,21 +70,43 @@ class Torch(private val context: Context) {
         val api = runCatching { id?.let { state = null; cm.setTorchMode(it, value); true } ?: false }
             .onFailure { JarvisLog.e("torch: camera API failed", it) }.getOrDefault(false)
         if (api) { usesRoot = false; return true }
-        val ok = RootShell.run("for l in $LEDS; do [ -w \$l/brightness ] && echo ${if (value) LED_ON else 0} > \$l/brightness; done; true").ok
-        usesRoot = true
+        val path = led() ?: return false
+        val maximum = DeviceActionPolicy.torchBrightness(
+            RootShell.run("cat ${RootShell.quote("$path/max_brightness")}").out,
+        ) ?: return false
+        val ok = RootShell.run("echo ${if (value) maximum else 0} > ${RootShell.quote("$path/brightness")}").ok
+        usesRoot = ok
         return ok
-    }
-
-    companion object {
-        /** MediaTek flash LEDs (Redmi 10 Prime: torch-light0). */
-        private const val LEDS = "/sys/class/leds/torch-light0 /sys/class/leds/flashlight"
-        private const val LED_ON = 200
     }
 }
 
 val TOGGLE_TARGETS = listOf("flashlight", "wifi", "bluetooth", "data", "dnd", "airplane", "location", "hotspot", "battery_saver", "auto_rotate")
 
 fun systemTools(context: Context, torch: Torch): List<Tool> {
+    fun settingsPage(target: String): Boolean {
+        val action = when (target) {
+            "wifi" -> Settings.Panel.ACTION_WIFI
+            "bluetooth" -> Settings.ACTION_BLUETOOTH_SETTINGS
+            "data" -> Settings.Panel.ACTION_INTERNET_CONNECTIVITY
+            "dnd" -> Settings.ACTION_NOTIFICATION_POLICY_ACCESS_SETTINGS
+            "airplane" -> Settings.ACTION_AIRPLANE_MODE_SETTINGS
+            "location" -> Settings.ACTION_LOCATION_SOURCE_SETTINGS
+            "battery_saver" -> Settings.ACTION_BATTERY_SAVER_SETTINGS
+            "auto_rotate", "brightness" -> Settings.ACTION_DISPLAY_SETTINGS
+            "hotspot" -> Settings.ACTION_WIRELESS_SETTINGS
+            else -> return false
+        }
+        return context.launch(Intent(action)) || context.launch(Intent(Settings.ACTION_SETTINGS))
+    }
+
+    suspend fun writeSettings(vararg values: Pair<String, Int>): Boolean {
+        val written = runCatching {
+            Settings.System.canWrite(context) && values.all { (key, value) ->
+                Settings.System.putInt(context.contentResolver, key, value)
+            }
+        }.getOrDefault(false)
+        return written || RootShell.run(*values.map { (key, value) -> "settings put system $key $value" }.toTypedArray()).ok
+    }
     suspend fun isOn(target: String): Boolean? {
         if (target == "flashlight") return torch.readState()
         return runCatching { when (target) {
@@ -101,21 +134,25 @@ fun systemTools(context: Context, torch: Torch): List<Tool> {
         return when (target) {
             "flashlight" -> torch.set(on)
             "wifi" -> RootShell.run("svc wifi $e").ok
-            "bluetooth" -> RootShell.run("svc bluetooth $e").ok ||
-                bluetoothFallback(context, on)
+            "bluetooth" -> bluetoothFallback(context, on) || RootShell.run("svc bluetooth $e").ok
             "data" -> RootShell.run("svc data $e").ok
-            "dnd" -> RootShell.run("cmd notification set_dnd ${if (on) "priority" else "off"}").ok
+            "dnd" -> runCatching {
+                val notifications = context.getSystemService(NotificationManager::class.java)
+                if (!notifications.isNotificationPolicyAccessGranted) false else {
+                    notifications.setInterruptionFilter(if (on) NotificationManager.INTERRUPTION_FILTER_PRIORITY else NotificationManager.INTERRUPTION_FILTER_ALL)
+                    true
+                }
+            }.getOrDefault(false) || RootShell.run("cmd notification set_dnd ${if (on) "priority" else "off"}").ok
             "airplane" -> RootShell.run("cmd connectivity airplane-mode $e").ok
             "location" -> RootShell.run(
                 "settings put secure location_mode ${if (on) 3 else 0}",
                 "cmd location set-location-enabled $on 2>/dev/null; true",
             ).ok
             "hotspot" -> {
-                // no stable shell command on Android 11: open the hotspot page instead
-                context.launch(Intent().setClassName("com.android.settings", "com.android.settings.TetherSettings"))
+                context.launch(Intent("android.settings.TETHER_SETTINGS")) || settingsPage(target)
             }
             "battery_saver" -> RootShell.run("cmd power set-mode ${if (on) 1 else 0}").ok
-            "auto_rotate" -> RootShell.run("settings put system accelerometer_rotation ${if (on) 1 else 0}").ok
+            "auto_rotate" -> writeSettings(Settings.System.ACCELEROMETER_ROTATION to if (on) 1 else 0)
             else -> false
         }
     }
@@ -148,18 +185,22 @@ fun systemTools(context: Context, torch: Torch): List<Tool> {
             val want = requestedToggleState(c.arg("state"), before)
                 ?: return@SimpleTool ToolResult.fail("Boss, I can't read ${nice(target)}. Say on or off.")
             if (before == want) return@SimpleTool toggleTruth(nice(target), want, before)
-            set(target, want)
+            val requested = set(target, want)
+            if (!requested && settingsPage(target)) return@SimpleTool ToolResult.ok("Boss, I opened ${nice(target)} settings. Set it ${if (want) "on" else "off"} there.")
             var actual = isOn(target)
             repeat(8) {
                 if (actual != want) { delay(250); actual = isOn(target) }
             }
-            toggleTruth(nice(target), want, actual)
+            if (actual != want && settingsPage(target)) ToolResult.ok("Boss, the change isn't confirmed. I opened ${nice(target)} settings; set it ${if (want) "on" else "off"} there.")
+            else toggleTruth(nice(target), want, actual)
         },
         SimpleTool("set_brightness", "Screen brightness", listOf(arg("level", "0-100, up, down or auto"))) { c, _ ->
             val cur = Settings.System.getInt(context.contentResolver, Settings.System.SCREEN_BRIGHTNESS, maxBrightness / 2)
             val target = when (val l = c.arg("level")) {
                 "auto" -> {
-                    RootShell.run("settings put system screen_brightness_mode 1")
+                    if (!writeSettings(Settings.System.SCREEN_BRIGHTNESS_MODE to 1) && settingsPage("brightness")) {
+                        return@SimpleTool ToolResult.ok("Boss, I opened display settings. Turn on auto brightness there.")
+                    }
                     val actual = runCatching { Settings.System.getInt(context.contentResolver, Settings.System.SCREEN_BRIGHTNESS_MODE) == 1 }.getOrNull()
                     return@SimpleTool toggleTruth("Auto brightness", true, actual)
                 }
@@ -167,7 +208,9 @@ fun systemTools(context: Context, torch: Torch): List<Tool> {
                 "down" -> cur - maxBrightness / 5
                 else -> (l?.toDoubleOrNull()?.toInt() ?: return@SimpleTool ToolResult.fail("What brightness?")) * maxBrightness / 100
             }.coerceIn(1, maxBrightness)
-            RootShell.run("settings put system screen_brightness_mode 0", "settings put system screen_brightness $target")
+            if (!writeSettings(Settings.System.SCREEN_BRIGHTNESS_MODE to 0, Settings.System.SCREEN_BRIGHTNESS to target) && settingsPage("brightness")) {
+                return@SimpleTool ToolResult.ok("Boss, I opened display settings. Set brightness to ${target * 100 / maxBrightness} percent there.")
+            }
             val actual = runCatching { Settings.System.getInt(context.contentResolver, Settings.System.SCREEN_BRIGHTNESS) }.getOrNull()
             val manual = runCatching { Settings.System.getInt(context.contentResolver, Settings.System.SCREEN_BRIGHTNESS_MODE) == 0 }.getOrDefault(false)
             if (actual == null) ToolResult.fail("Boss, I couldn't verify brightness.")
@@ -197,10 +240,13 @@ fun systemTools(context: Context, torch: Torch): List<Tool> {
             )
         },
         SimpleTool("take_screenshot", "Take a screenshot") { _, _ ->
+            if (JarvisAccessibilityService.instance?.global(AccessibilityService.GLOBAL_ACTION_TAKE_SCREENSHOT) == true) {
+                return@SimpleTool ToolResult.ok("Screenshot requested. Android will show it when saved.")
+            }
             val dir = File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_PICTURES), "Screenshots")
             val f = File(dir, "Screenshot_${SimpleDateFormat("yyyyMMdd-HHmmss", Locale.US).format(Date())}_Jarvis.png")
             val r = RootShell.run("mkdir -p ${RootShell.quote(dir.path)}", "screencap -p ${RootShell.quote(f.path)}")
-            if (!r.ok || !f.isFile || f.length() == 0L) return@SimpleTool ToolResult.fail("Screenshot failed.")
+            if (!r.ok || !f.isFile || f.length() == 0L) return@SimpleTool ToolResult.fail("Screenshot failed. Enable accessibility in Setup or use the phone's screenshot buttons.")
             MediaScannerConnection.scanFile(context, arrayOf(f.path), null, null)
             ToolResult.ok("Screenshot saved.")
         },
@@ -215,7 +261,7 @@ fun systemTools(context: Context, torch: Torch): List<Tool> {
     )
 }
 
-/** Old API, still works on Android 11 when root `svc` fails. */
+/** Available on older Android versions; modern Android requires the settings page or root. */
 @SuppressLint("MissingPermission")
 @Suppress("DEPRECATION")
 private fun bluetoothFallback(context: Context, on: Boolean): Boolean = runCatching {
@@ -225,6 +271,7 @@ private fun bluetoothFallback(context: Context, on: Boolean): Boolean = runCatch
 /** Used by unlock_phone (risk VOICE_ID) and the panic word. */
 object Keyguard {
     suspend fun unlock(context: Context, pin: String?): Boolean {
+        if (!RootShell.available) return false
         val dm = context.resources.displayMetrics
         val x = dm.widthPixels / 2
         RootShell.run("input keyevent 224")   // wake up
@@ -237,7 +284,7 @@ object Keyguard {
 
 fun unlockTool(context: Context, pin: suspend () -> String?) = SimpleTool("unlock_phone", "Unlock the phone", risk = Risk.VOICE_ID) { _, _ ->
     val p = pin()
-    if (!Keyguard.unlock(context, p)) return@SimpleTool ToolResult.fail("Boss, I couldn't request an unlock.")
+    if (!Keyguard.unlock(context, p)) return@SimpleTool ToolResult.fail("Boss, I couldn't request an unlock. Please unlock the phone yourself.")
     delay(300)
     if (!context.getSystemService(KeyguardManager::class.java).isKeyguardLocked) ToolResult.ok("Boss, unlocked.")
     else ToolResult.fail("Boss, the phone is still locked.")

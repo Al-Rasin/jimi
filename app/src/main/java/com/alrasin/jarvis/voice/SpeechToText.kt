@@ -1,8 +1,7 @@
 package com.alrasin.jarvis.voice
 
 import android.content.Context
-import com.k2fsa.sherpa.onnx.EndpointConfig
-import com.k2fsa.sherpa.onnx.EndpointRule
+import com.alrasin.jarvis.core.JarvisLog
 import com.k2fsa.sherpa.onnx.FeatureConfig
 import com.k2fsa.sherpa.onnx.OnlineModelConfig
 import com.k2fsa.sherpa.onnx.OnlineRecognizer
@@ -17,14 +16,31 @@ import java.io.File
  * instead when present — or [dir] for tests — so other models can be tried without a rebuild.
  * One [Session] per command: feed 16 kHz chunks, read [Session.text], stop when [Session.done].
  *
- * End of command (D-027, like phone assistants): wait up to [Session] `waitStart` seconds for the command to start,
- * then stop after [END_SILENCE] s of silence. Words from the pre-roll (the "Hey Jimi" itself) are dropped by
- * their timestamps, so they neither show up in the text nor count as "the user already spoke".
+ * Wake text is removed by phrase, preserving command words overlapping the wake detector's trigger.
+ * [CaptureEndpoint] combines audio activity and partial text for adaptive command ending.
  */
-class SpeechToText(context: Context, dir: File? = null) : AutoCloseable {
-    private val modelDir = dir ?: overrideDir(context).takeIf { File(it, "tokens.txt").isFile }
+class SpeechToText(context: Context, dir: File? = null, hotwords: Collection<String> = emptyList()) : AutoCloseable {
+    private val modelDir = dir ?: overrideDir(context).takeIf(ModelFiles::speechReady)
     val modelName: String = modelDir?.name ?: "built-in Kroko en"
 
+    private val bias = if (hotwords.isEmpty()) SttHotwords.Prepared(reason = "no vocabulary") else {
+        fun metadata(name: String): String? = runCatching {
+            val input = if (modelDir == null) context.assets.open("$DIR/$name") else File(modelDir, name).inputStream()
+            input.bufferedReader().use { reader ->
+                val text = StringBuilder()
+                val buffer = CharArray(4096)
+                while (text.length <= SttHotwords.MAX_METADATA) {
+                    val count = reader.read(buffer)
+                    if (count < 0) break
+                    text.append(buffer, 0, count)
+                }
+                text.toString()
+            }
+        }.getOrNull()
+        SttHotwords.prepare(metadata("tokens.txt").orEmpty(), metadata("bpe.vocab"), hotwords).also {
+            JarvisLog.i("STT hotwords ${if (it.enabled) "enabled" else "disabled"}: ${it.reason}")
+        }
+    }
     private val recognizer = OnlineRecognizer(
         if (modelDir == null) context.assets else null,
         OnlineRecognizerConfig(
@@ -37,16 +53,13 @@ class SpeechToText(context: Context, dir: File? = null) : AutoCloseable {
                 ),
                 tokens = modelDir?.let { File(it, "tokens.txt").path } ?: "$DIR/tokens.txt",
                 numThreads = 2,
+                modelingUnit = if (bias.enabled) "bpe" else "",
+                bpeVocab = if (bias.enabled) modelDir?.let { File(it, "bpe.vocab").path } ?: "$DIR/bpe.vocab" else "",
             ),
-            endpointConfig = EndpointConfig(
-                // the "nothing said yet" and hard limits are done in Session (they must ignore the wake words)
-                rule1 = EndpointRule(false, 60f, 0f),
-                // something said: silence this long ends the command (only used once command words exist)
-                rule2 = EndpointRule(true, END_SILENCE, 0f),
-                rule3 = EndpointRule(false, 0f, 60f),
-            ),
-            enableEndpoint = true,
-            decodingMethod = "greedy_search",
+            enableEndpoint = false,
+            decodingMethod = if (bias.enabled) "modified_beam_search" else "greedy_search",
+            maxActivePaths = 4,
+            hotwordsScore = 1.0f,
         ),
     )
 
@@ -54,23 +67,25 @@ class SpeechToText(context: Context, dir: File? = null) : AutoCloseable {
      * [preRoll]: audio from just before the wake, so a command said right after "Hey Jimi" is not cut.
      * [waitStart]: seconds to wait for the user to start talking.
      */
-    fun session(preRoll: ShortArray? = null, waitStart: Float = WAIT_START) = Session(
-        recognizer.createStream(),
-        startAt = (LEAD_SILENCE + (preRoll?.size ?: 0)) / SAMPLE_RATE.toFloat(),
-        cut = (LEAD_SILENCE + (preRoll?.size ?: 0)) / SAMPLE_RATE.toFloat() + if (preRoll != null) WAKE_MARGIN else 0f,
+    fun session(
+        preRoll: ShortArray? = null,
+        waitStart: Float = WAIT_START,
+        stripWake: Boolean = preRoll != null,
+    ) = Session(
+        // Per-stream input avoids asking AssetManager to open a private filesystem hotwords file.
+        recognizer.createStream(bias.phrases),
         waitStart = waitStart,
+        stripWake = stripWake,
     ).also {
             // the model drops the first words if speech starts at sample 0
             it.feed(ShortArray(LEAD_SILENCE), LEAD_SILENCE)
             if (preRoll != null) it.feed(preRoll, preRoll.size)
         }
 
-    /** [startAt]: stream time (s) where live audio starts. Words starting before [cut] are the wake phrase. */
     inner class Session(
         private val stream: OnlineStream,
-        private val startAt: Float,
-        private val cut: Float,
-        private val waitStart: Float,
+        waitStart: Float,
+        private val stripWake: Boolean,
     ) : AutoCloseable {
         /** Command text (wake phrase removed). */
         var text = ""
@@ -78,28 +93,36 @@ class SpeechToText(context: Context, dir: File? = null) : AutoCloseable {
         /** Everything the model heard, wake phrase included. */
         var raw = ""
             private set
-        var done = false
-            private set
-        private var samples = 0L
+        val finishReason: CaptureEndpoint.FinishReason? get() = endpoint.finishReason
+        val done: Boolean get() = finishReason != null
+        private val endpoint = CaptureEndpoint(
+            waitStartMillis = (waitStart * 1_000).toLong(),
+            maxMillis = (MAX_SECONDS * 1_000).toLong(),
+        )
+        private val activity = CaptureVoiceActivity()
 
         fun accept(chunk: ShortArray, count: Int = chunk.size) {
             if (done) return
+            require(count in 0..chunk.size)
             feed(chunk, count)
-            val elapsed = samples / SAMPLE_RATE.toFloat() - startAt
-            done = when {
-                elapsed >= MAX_SECONDS -> true
-                text.isEmpty() -> elapsed >= waitStart
-                else -> recognizer.isEndpoint(stream)
+            if (endpoint.accept(count, text, activity.hasSpeech(chunk, count)) != null) {
+                // Right-context padding flushes the final decoder frames, including at the hard limit.
+                stream.acceptWaveform(FloatArray(LEAD_SILENCE), SAMPLE_RATE)
+                stream.inputFinished()
+                decode()
             }
         }
 
         internal fun feed(chunk: ShortArray, count: Int) {
             stream.acceptWaveform(FloatArray(count) { chunk[it] / 32768f }, SAMPLE_RATE)
-            samples += count
+            decode()
+        }
+
+        private fun decode() {
             while (recognizer.isReady(stream)) recognizer.decode(stream)
             val r = recognizer.getResult(stream)
             raw = normalize(r.text)
-            text = commandText(r.tokens, r.timestamps, cut)
+            text = if (stripWake) WakePhrase.strip(raw) else raw
         }
 
         override fun close() = stream.release()
@@ -110,23 +133,7 @@ class SpeechToText(context: Context, dir: File? = null) : AutoCloseable {
     companion object {
         private const val DIR = "stt"
 
-        fun overrideDir(context: Context) = File(context.getExternalFilesDir(null), "models/stt")
-
-        /**
-         * Joins [tokens] into words (a token starting with a space starts a word), drops words that start before
-         * [cut] (wake phrase in the pre-roll), then strips a wake phrase the user may say again.
-         */
-        fun commandText(tokens: Array<String>, times: FloatArray, cut: Float): String {
-            val sb = StringBuilder()
-            var keep = false
-            for (i in tokens.indices) {
-                val t = tokens[i]
-                val newWord = i == 0 || t.startsWith(" ") || t.startsWith("\u2581")
-                if (newWord) keep = (times.getOrElse(i) { Float.MAX_VALUE }) >= cut
-                if (keep) sb.append(if (newWord) " " + t.trimStart(' ', '\u2581') else t)
-            }
-            return WakePhrase.strip(normalize(sb.toString()))
-        }
+        fun overrideDir(context: Context) = PortableModels.dir(context, "stt")
 
         /** Lower case, no punctuation (Kroko writes "Hey, Jimmy."), keeps apostrophes: "what's". */
         fun normalize(text: String) =
@@ -142,8 +149,6 @@ class SpeechToText(context: Context, dir: File? = null) : AutoCloseable {
         const val SAMPLE_RATE = 16_000
         const val MAX_SECONDS = 20f
         const val WAIT_START = 7f
-        const val END_SILENCE = 1.2f
-        private const val WAKE_MARGIN = 0.35f
         private const val LEAD_SILENCE = SAMPLE_RATE / 2
     }
 }

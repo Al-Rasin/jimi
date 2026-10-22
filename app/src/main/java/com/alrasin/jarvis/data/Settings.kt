@@ -7,6 +7,7 @@ import androidx.datastore.preferences.core.floatPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import com.alrasin.jarvis.voice.Voices
+import com.alrasin.jarvis.llm.ChatModels
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
@@ -30,6 +31,15 @@ class Settings @Inject constructor(@ApplicationContext private val context: Cont
     private val cloudFactsKey = booleanPreferencesKey("cloud_send_facts")
     private val voiceKey = stringPreferencesKey("voice")
     private val voiceSpeedKey = floatPreferencesKey("voice_speed")
+    private val assistantModeKey = stringPreferencesKey("assistant_mode")
+    private val setupCompleteKey = booleanPreferencesKey("setup_complete")
+
+    val assistantMode: Flow<AssistantMode> = context.dataStore.data.map { AssistantMode.fromStored(it[assistantModeKey]) }
+    val setupComplete: Flow<Boolean> = context.dataStore.data.map { it[setupCompleteKey] ?: false }
+
+    suspend fun setAssistantMode(mode: AssistantMode) = context.dataStore.edit { it[assistantModeKey] = mode.name }
+    suspend fun setSetupComplete(complete: Boolean) = context.dataStore.edit { it[setupCompleteKey] = complete }
+    private val chatModelKey = stringPreferencesKey("chat_model")
 
     val wakeThreshold: Flow<Float> = context.dataStore.data.map { it[thresholdKey] ?: DEFAULT_THRESHOLD }
     val listeningEnabled: Flow<Boolean> = context.dataStore.data.map { it[enabledKey] ?: false }
@@ -56,7 +66,11 @@ class Settings @Inject constructor(@ApplicationContext private val context: Cont
     val voice: Flow<String> = context.dataStore.data.map { it[voiceKey] ?: Voices.BUILT_IN }
     /** Speaking speed, 1.0 = normal. */
     val voiceSpeed: Flow<Float> = context.dataStore.data.map { it[voiceSpeedKey] ?: 1.0f }
+    val chatModel: Flow<String> = context.dataStore.data.map {
+        if (it[chatModelKey] == ChatModels.LFM) ChatModels.LFM else ChatModels.DEFAULT
+    }
 
+    suspend fun setChatModel(v: String) = context.dataStore.edit { it[chatModelKey] = v }
     suspend fun setVoice(v: String) = context.dataStore.edit { it[voiceKey] = v }
     suspend fun setVoiceSpeed(v: Float) = context.dataStore.edit { it[voiceSpeedKey] = v }
     suspend fun setCloudEnabled(v: Boolean) = context.dataStore.edit { it[cloudKey] = v }

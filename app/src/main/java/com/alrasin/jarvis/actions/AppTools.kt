@@ -60,7 +60,10 @@ fun appTools(context: Context, apps: AppList): List<Tool> = listOf(
         val app = apps.find(name) ?: return@SimpleTool ToolResult.fail("I can't find an app called $name.")
         if (app.pkg == context.packageName) return@SimpleTool ToolResult.fail("I can't close myself.")
         val r = RootShell.run("am force-stop ${app.pkg}")
-        if (r.ok) ToolResult.ok("Boss, I requested ${app.label} to close.") else ToolResult.fail("Couldn't close ${app.label}.")
+        if (r.ok) ToolResult.ok("Boss, I requested ${app.label} to close.")
+        else if (context.launch(Intent(android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:${app.pkg}")))) {
+            ToolResult.ok("Boss, I opened ${app.label}'s app settings. Tap Force stop to close it.")
+        } else ToolResult.fail("Couldn't close ${app.label}.")
     },
     SimpleTool("open_url", "Open a website", listOf(arg("url", "web address, e.g. google.com"))) { c, _ ->
         var url = c.arg("url") ?: return@SimpleTool ToolResult.fail("Which website?")

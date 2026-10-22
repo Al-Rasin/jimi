@@ -5,6 +5,7 @@ import android.app.PendingIntent
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
+import android.os.Build
 import android.os.SystemClock
 import com.alrasin.jarvis.actions.ReminderScheduler
 import com.alrasin.jarvis.core.JarvisLog
@@ -15,8 +16,8 @@ import kotlinx.coroutines.runBlocking
 import javax.inject.Inject
 
 /**
- * After reboot: starts listening if it was on before, and sets reminder alarms again (alarms die on reboot).
- * Also the watchdog (PLAN 2.4): every ~15 min [ACTION_WATCHDOG] restarts the service if MIUI killed it.
+ * Restores reminders after reboot. Android 14+ requires a visible activity to resume microphone
+ * access; older devices retain their supported boot/watchdog startup with failure handling.
  */
 @AndroidEntryPoint
 class BootReceiver : BroadcastReceiver() {
@@ -27,18 +28,26 @@ class BootReceiver : BroadcastReceiver() {
         when (intent.action) {
             Intent.ACTION_BOOT_COMPLETED -> {
                 runBlocking { reminders.rescheduleAll() }
-                if (runBlocking { settings.listeningEnabled.first() }) JarvisCoreService.start(context)
+                if (runBlocking { settings.setupComplete.first() && settings.listeningEnabled.first() }) {
+                    resume(context)
+                }
                 schedule(context)
             }
-            ACTION_WATCHDOG -> if (!JarvisCoreService.running.value && runBlocking { settings.listeningEnabled.first() }) {
-                JarvisLog.i("watchdog: service was not running, restarting")
-                runCatching { JarvisCoreService.start(context) }.onFailure { JarvisLog.e("watchdog restart failed", it) }
+            ACTION_WATCHDOG -> if (!JarvisCoreService.running.value &&
+                runBlocking { settings.setupComplete.first() && settings.listeningEnabled.first() }) {
+                JarvisLog.i("watchdog: microphone service was not running")
+                resume(context)
             }
         }
     }
 
     companion object {
         const val ACTION_WATCHDOG = "com.alrasin.jarvis.WATCHDOG"
+
+        private fun resume(context: Context) {
+            if (Build.VERSION.SDK_INT >= 34) Notifications.showResumeListening(context)
+            else JarvisCoreService.start(context)
+        }
 
         /** Inexact repeating alarm: cheap on battery, survives the app process dying. */
         fun schedule(context: Context) {

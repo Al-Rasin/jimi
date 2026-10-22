@@ -19,6 +19,7 @@ object Notifications {
     private const val CH_REMINDER = "reminder"
     private const val CH_REPLY = "reply"
     private const val ID_REPLY = 2
+    private const val ID_RESUME = 3
     private const val ID_REMINDER_BASE = 500
     const val ID_SERVICE = 1
     private const val ID_WAKE_BASE = 1000
@@ -60,7 +61,7 @@ object Notifications {
         )
         return Notification.Builder(context, CH_SERVICE)
             .setSmallIcon(R.drawable.ic_jarvis)
-            .setContentTitle("Jarvis is listening")
+            .setContentTitle("Jimi voice service")
             .setContentText(text)
             .setContentIntent(openApp(context))
             .setOngoing(true)
@@ -68,6 +69,23 @@ object Notifications {
             .addAction(Notification.Action.Builder(null, "Missed it", missed).build())
             .addAction(Notification.Action.Builder(null, "Stop", stop).build())
             .build()
+    }
+
+    fun updateListening(context: Context, text: String) {
+        context.getSystemService(NotificationManager::class.java).notify(ID_SERVICE, listening(context, text))
+        context.getSystemService(NotificationManager::class.java).cancel(ID_RESUME)
+    }
+
+    fun showResumeListening(context: Context) {
+        createChannels(context)
+        val notification = Notification.Builder(context, CH_SERVICE)
+            .setSmallIcon(R.drawable.ic_jarvis)
+            .setContentTitle("Open Jimi to resume listening")
+            .setContentText("Android needs you to open Jimi and enable listening after a restart.")
+            .setContentIntent(openApp(context))
+            .setAutoCancel(true)
+            .build()
+        context.getSystemService(NotificationManager::class.java).notify(ID_RESUME, notification)
     }
 
     /** "Was that you?" prompt after a voice wake (D-023). */

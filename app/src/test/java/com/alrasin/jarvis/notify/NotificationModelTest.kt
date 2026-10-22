@@ -6,7 +6,7 @@ import org.junit.Assert.*
 import org.junit.Test
 
 class NotificationModelTest {
-    private val input = NotificationModel.Input("com.example", "Offer", "Sale 50%", 0)
+    private val input = NotificationModel.Input("com.daraz.android", "Offer", "Sale 50%", 0)
 
     @Test fun sharedPythonVectorsMatchFeaturesAndProbabilities() {
         val fixture = javaClass.getResourceAsStream("/notification_feature_vectors.json")!!
@@ -70,10 +70,10 @@ class NotificationModelTest {
 
     @Test fun explicitAppRulesAlwaysWin() {
         val model = NotificationModel.fromJson(modelJson(bias = -1000.0))
-        assertFalse(model.classify(input).important)
+        assertFalse(model.classify(input, category = "promo").important)
         assertEquals(Triage.Verdict(true, "your rule"), model.classify(input, rule = "keep"))
         val positive = NotificationModel.fromJson(modelJson(bias = 1000.0))
-        assertEquals(Triage.Verdict(false, "your rule"), positive.classify(input, rule = "clear"))
+        assertEquals(Triage.Verdict(false, "your rule"), positive.classify(input, category = "promo", rule = "clear"))
     }
 
     @Test fun stableSigmoidAtExtremeScores() {
@@ -84,15 +84,15 @@ class NotificationModelTest {
     @Test fun thresholdAndUnknownFeatures() {
         val model = NotificationModel.fromJson(modelJson(threshold = 0.7))
         assertEquals(0.5, model.predictKeepProbability(input)!!, 0.0)
-        assertFalse(model.classify(input).important)
-        assertTrue(NotificationModel.fromJson(modelJson()).classify(input).important)
+        assertFalse(model.classify(input, category = "promo").important)
+        assertTrue(NotificationModel.fromJson(modelJson()).classify(input, category = "promo").important)
     }
 
     @Test fun conservativeClassificationOnlyAddsKeeps() {
         val dismiss = NotificationModel.fromJson(modelJson(bias = -1000.0))
         val keep = NotificationModel.fromJson(modelJson(bias = 1000.0))
-        assertEquals(Triage.Verdict(true, "learned notification preference"), keep.classifyConservatively(input))
-        assertEquals(Triage.classify(input.pkg, input.title, input.text, null, null), dismiss.classifyConservatively(input))
+        assertEquals(Triage.Verdict(true, "learned notification preference"), keep.classifyConservatively(input, "promo"))
+        assertEquals(Triage.classify(input.pkg, input.title, input.text, "promo", null), dismiss.classifyConservatively(input, "promo"))
         for (category in listOf("call", "msg", "alarm")) {
             assertEquals(
                 Triage.classify(input.pkg, input.title, input.text, category, null),
@@ -102,7 +102,7 @@ class NotificationModelTest {
         val ordinary = input.copy(title = "Update", text = "The task finished")
         assertTrue(dismiss.classifyConservatively(ordinary).important)
         assertEquals(Triage.Verdict(true, "your rule"), dismiss.classifyConservatively(input, rule = "keep"))
-        assertEquals(Triage.Verdict(false, "your rule"), keep.classifyConservatively(input, rule = "clear"))
+        assertEquals(Triage.Verdict(false, "your rule"), keep.classifyConservatively(input, "promo", rule = "clear"))
     }
 
     @Test fun conservativeClassificationPreservesFullTextProtectionAndFallback() {
@@ -113,10 +113,10 @@ class NotificationModelTest {
 
         val latePromo = "x".repeat(501) + " sale"
         val plain = input.copy(title = "Update", text = latePromo.take(500))
-        val baseline = Triage.classify(plain.pkg, plain.title, latePromo, null, null)
+        val baseline = Triage.classify(plain.pkg, plain.title, latePromo, "promo", null)
         assertFalse(baseline.important)
         for (model in listOf(NotificationModel.load(null), NotificationModel.fromJson("broken"))) {
-            assertEquals(baseline, model.classifyConservatively(plain, fullText = latePromo))
+            assertEquals(baseline, model.classifyConservatively(plain, "promo", fullText = latePromo))
         }
     }
 
