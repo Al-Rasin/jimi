@@ -16,7 +16,9 @@ class AppList(private val context: Context) {
 
     init {
         RuleMatcher.appNameMatches = { name ->
-            name.lowercase().trim() in setOf("settings", "phone settings") || find(name) != null
+            runCatching {
+                name.lowercase().trim() in setOf("settings", "phone settings") || find(name) != null
+            }.getOrDefault(true)
         }
     }
 

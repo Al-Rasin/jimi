@@ -1,6 +1,7 @@
 package com.alrasin.jarvis.actions
 
 import android.content.ContextWrapper
+import com.alrasin.jarvis.brain.RuleMatcher
 import com.alrasin.jarvis.core.Tool
 import com.alrasin.jarvis.data.MemoryDao
 import com.alrasin.jarvis.data.NoteDao
@@ -10,6 +11,7 @@ import com.alrasin.jarvis.llm.FunctionGemma
 import com.alrasin.jarvis.notify.notificationTools
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
+import org.junit.After
 import org.junit.Test
 import java.io.File
 import java.lang.reflect.Proxy
@@ -19,6 +21,12 @@ import java.lang.reflect.Proxy
  * app/build/llm/ (used by training/ scripts and to test the model on the Mac with llama.cpp).
  */
 class ToolPromptDump {
+    private val previousMatcher = RuleMatcher.appNameMatches
+
+    @After fun restoreAppNameMatcher() {
+        RuleMatcher.appNameMatches = previousMatcher
+    }
+
     private inline fun <reified T> fake(): T =
         Proxy.newProxyInstance(T::class.java.classLoader, arrayOf(T::class.java)) { _, _, _ -> null } as T
 

@@ -1,5 +1,6 @@
 package com.alrasin.jarvis.actions
 
+import com.alrasin.jarvis.brain.Persona
 import com.alrasin.jarvis.core.JarvisLog
 import com.alrasin.jarvis.core.SmokeSession
 import kotlin.coroutines.coroutineContext
@@ -85,12 +86,49 @@ internal class ToolSafetyGate {
         return Outcome.Done(run())
     }
 
-    private fun question(call: ToolCall): String = when (call.tool) {
-        "send_sms", "send_whatsapp" -> "Send \"${call.arg("text")}\" to ${call.arg("contact")}?"
-        "call" -> "Call ${call.arg("contact")}?"
-        "unlock_phone" -> "Unlock the phone?"
-        "clear_notifications" -> "Clear all notifications?"
-        "delete_reminder" -> "Delete ${if (call.arg("text") == "all") "all reminders" else "the reminder ${call.arg("text")}"}?"
-        else -> "Do ${call.tool.replace('_', ' ')}?"
+    private fun question(call: ToolCall): String {
+        fun arg(name: String) = call.arg(name)?.let(::spoken)
+        val contact = arg("contact_name") ?: arg("contact") ?: "that contact"
+        val app = when (call.arg("app")?.lowercase()) {
+            "whatsapp" -> " on WhatsApp"
+            "messenger" -> " on Messenger"
+            else -> ""
+        }
+        val action = when (call.tool) {
+            "send_sms", "send_whatsapp" -> {
+                val message = arg("text")?.let { "\"$it\"" } ?: "this message"
+                val channel = if (call.tool == "send_whatsapp") " on WhatsApp" else app
+                "Send $message to $contact$channel"
+            }
+            "call" -> {
+                val verb = if (app.isNotEmpty() && call.arg("video").equals("true", ignoreCase = true)) "Video call" else "Call"
+                "$verb $contact$app"
+            }
+            "unlock_phone" -> "Unlock your phone"
+            "clear_notifications" -> "Clear all your notifications"
+            "cancel_alarm" -> "Cancel all your alarms and timers"
+            "delete_reminder" -> when (val text = arg("text")) {
+                "all" -> "Delete all your reminders"
+                null -> "Delete that reminder"
+                else -> "Delete your reminder \"$text\""
+            }
+            "forget_fact" -> arg("text")?.let { "Forget \"$it\"" } ?: "Forget that fact"
+            "read_messages" -> "Read your latest messages"
+            "read_notes" -> "Read your latest notes"
+            "list_reminders" -> "Read your pending reminders"
+            "recall_facts" -> "Read what I remember about you"
+            "read_screen" -> "Read your screen"
+            "read_notifications" -> "Read your notifications"
+            "notification_summary" -> "Summarize your recent notifications"
+            "undo_notification_clear" -> "Restore your last cleared notifications as copies"
+            "explain_notification_clear" -> "Explain why I cleared those notifications"
+            "search_notification_history" -> arg("query")?.let { "Search notification history for \"$it\"" }
+                ?: "Search your notification history"
+            else -> spoken(call.tool).takeIf { it.isNotBlank() }?.let { "Go ahead with $it" }
+                ?: "Should I go ahead"
+        }
+        return "$action, ${Persona.ADDRESS}?"
     }
+
+    private fun spoken(text: String): String = text.replace('_', ' ').replace(Regex("\\s+"), " ").trim()
 }

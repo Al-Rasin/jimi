@@ -3,6 +3,8 @@ package com.alrasin.jarvis.actions
 import android.app.AlarmManager
 import android.content.Context
 import android.content.Intent
+import android.content.pm.ApplicationInfo
+import android.content.pm.PackageManager
 import android.provider.AlarmClock
 import com.alrasin.jarvis.core.JarvisLog
 import com.alrasin.jarvis.core.Tool
@@ -43,7 +45,7 @@ fun timeTools(context: Context): List<Tool> = listOf(
         c.arg("label")?.let { i.putExtra(AlarmClock.EXTRA_MESSAGE, it) }
         val days = plan.days
         if (days != null) i.putExtra(AlarmClock.EXTRA_DAYS, ArrayList(days))
-        if (!context.launch(i)) return@SimpleTool ToolResult.fail("The clock app didn't take the alarm.")
+        if (!context.launchClock(i)) return@SimpleTool ToolResult.fail("The clock app didn't take the alarm.")
         val expected = plan.at.atZone(ZoneId.systemDefault()).toInstant().toEpochMilli()
         if (!awaitAlarmState(context) { next ->
                 if (next != null && !matchesAlarmMinute(next, expected)) {
@@ -68,14 +70,14 @@ fun timeTools(context: Context): List<Tool> = listOf(
             .putExtra(AlarmClock.EXTRA_LENGTH, secs)
             .putExtra(AlarmClock.EXTRA_SKIP_UI, true)
         c.arg("label")?.let { i.putExtra(AlarmClock.EXTRA_MESSAGE, it) }
-        if (!context.launch(i)) return@SimpleTool ToolResult.fail("The clock app didn't take the timer.")
+        if (!context.launchClock(i)) return@SimpleTool ToolResult.fail("The clock app didn't take the timer.")
         JarvisLog.i("set_timer: Clock request sent; Android does not expose timer confirmation")
         timerSetResult(secs)
     },
     SimpleTool("cancel_alarm", "Turn off alarms and timers") { _, _ ->
-        val alarmsSent = context.launch(Intent(AlarmClock.ACTION_DISMISS_ALARM)
+        val alarmsSent = context.launchClock(Intent(AlarmClock.ACTION_DISMISS_ALARM)
             .putExtra(AlarmClock.EXTRA_ALARM_SEARCH_MODE, AlarmClock.ALARM_SEARCH_MODE_ALL))
-        val timersSent = context.launch(Intent(AlarmClock.ACTION_DISMISS_TIMER))
+        val timersSent = context.launchClock(Intent(AlarmClock.ACTION_DISMISS_TIMER))
         if (!alarmsSent || !timersSent) {
             JarvisLog.e("cancel_alarm: Clock accepted alarm request=$alarmsSent, timer request=$timersSent")
             return@SimpleTool ToolResult.fail("The clock didn't accept every turn-off request. Check the Clock app.")
@@ -85,6 +87,20 @@ fun timeTools(context: Context): List<Tool> = listOf(
         cancelAlarmResult(noNextAlarm)
     },
 )
+
+internal fun Context.launchClock(intent: Intent): Boolean {
+    val manager = packageManager
+    val handlers = manager.queryIntentActivities(intent, PackageManager.MATCH_DEFAULT_ONLY).map { result ->
+        ClockHandler(
+            result.activityInfo.packageName,
+            result.activityInfo.applicationInfo.flags and
+                (ApplicationInfo.FLAG_SYSTEM or ApplicationInfo.FLAG_UPDATED_SYSTEM_APP) != 0,
+        )
+    }
+    val defaultPackage = manager.resolveActivity(intent, PackageManager.MATCH_DEFAULT_ONLY)?.activityInfo?.packageName
+    pickClockPackage(handlers, defaultPackage)?.let { intent.setPackage(it) }
+    return launch(intent)
+}
 
 private suspend fun awaitAlarmState(context: Context, matches: (Long?) -> Boolean): Boolean {
     val manager = context.getSystemService(AlarmManager::class.java) ?: return false
