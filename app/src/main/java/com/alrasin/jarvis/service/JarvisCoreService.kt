@@ -146,7 +146,10 @@ class JarvisCoreService : LifecycleService() {
             ACTION_ASK -> intent.getStringExtra(EXTRA_TEXT)?.let {
                 ask(it, it, intent.getStringExtra(EXTRA_SOURCE) ?: "typed", null, null, null)
             }
-            ACTION_LISTEN -> listenRequest = "tap"
+            ACTION_LISTEN -> synchronized(speechState) {
+                shutUp()
+                listenRequest = "tap"
+            }
             ACTION_SHUT_UP -> shutUp()
             ACTION_ENROLL -> enrollRequested = true
         }
@@ -382,7 +385,7 @@ class JarvisCoreService : LifecycleService() {
     }
 
     /** Runs one command through the assistant and speaks the answer. Then maybe listens for a follow-up. */
-    private fun ask(text: String, raw: String, source: String, wakeId: Long?, audioPath: String?, audio: ShortArray?) {
+    private fun ask(text: String, raw: String, source: String, wakeId: Long?, audioPath: String?, audio: ShortArray?) = synchronized(speechState) {
         shutUp()
         var epoch = speechEpoch
         agentInterrupt.set(null)
@@ -433,7 +436,11 @@ class JarvisCoreService : LifecycleService() {
                 }
                 JarvisLog.i("reply (${r.tool ?: "talk"}): ${r.text}")
                 Notifications.showReply(this@JarvisCoreService, text, r.text)
-                if (r.tool == "panic") shutUp()
+                if (r.tool == "panic") synchronized(speechState) {
+                    if (epoch != speechEpoch) return@launch
+                    shutUp(cancelReply = false)
+                    epoch = speechEpoch
+                }
                 if (!r.spokenAlready) say(r.text, epoch)
                 awaitSpeech()
                 if (r.expectAnswer || (followUp && !r.endConversation && source != "typed")) next = "follow_up"
@@ -515,6 +522,7 @@ class JarvisCoreService : LifecycleService() {
             .onFailure { JarvisLog.e("speech-to-text not loaded (run tools/fetch_speech.sh)", it) }
             .getOrNull()
         var command: SpeechToText.Session? = null
+        var commandEpoch = speechEpoch
         var interruption: SpeechToText.Session? = null
         var interruptionChunks = 0
         var stopCommand: SpeechToText.Session? = null
@@ -564,6 +572,13 @@ class JarvisCoreService : LifecycleService() {
                     continue
                 }
                 interrupted = false
+                val captureEpoch = speechEpoch
+                if (command != null && commandEpoch != captureEpoch) {
+                    command?.close()
+                    command = null
+                    commandAudio.clear()
+                    _micLevel.value = 0f
+                }
                 ring.write(chunk)
                 val agentRunning = screenAgent.running
                 val listenForStop = stopListener.canListen(agentRunning, playbackActive, SystemClock.elapsedRealtime())
@@ -618,7 +633,11 @@ class JarvisCoreService : LifecycleService() {
                         val audio = join(commandAudio)
                         val path = saveCommand(audio, cmd.raw)
                         val wakeId = if (commandSource == "voice") clips.lastWakeId else null
-                        onCommand(corrector.correct(heard), cmd.raw, commandSource, wakeId, clips.lastWakePeak, path, audio, tone)
+                        synchronized(speechState) {
+                            if (commandEpoch == speechEpoch) {
+                                onCommand(corrector.correct(heard), cmd.raw, commandSource, wakeId, clips.lastWakePeak, path, audio, tone)
+                            }
+                        }
                     }
                     continue
                 }
@@ -645,6 +664,7 @@ class JarvisCoreService : LifecycleService() {
                     }
                     if ((wake || stop) && stt != null) {
                         interruptSpeech()
+                        commandEpoch = speechEpoch
                         interruption?.close()
                         interruption = null
                         // Exclude loudspeaker pre-roll; capture fresh command audio after the interruption.
@@ -679,9 +699,13 @@ class JarvisCoreService : LifecycleService() {
                     tone.listen()
                     continue
                 }
-                val req = listenRequest
+                val req = synchronized(speechState) {
+                    if (stt != null && captureEpoch == speechEpoch) {
+                        listenRequest.also { listenRequest = null }
+                    } else null
+                }
                 if (req != null && stt != null) {
-                    listenRequest = null
+                    commandEpoch = captureEpoch
                     tone.listen()
                     if (req == "tap") WakeFeedbackSignal.signal(this)
                     _phase.value = if (req == "follow_up") PHASE_FOLLOW_UP else PHASE_HEARING
@@ -699,6 +723,7 @@ class JarvisCoreService : LifecycleService() {
                 val score = detector.process(chunk)
                 _lastScore.value = score
                 if (clips.onChunk(score, threshold, ring, tone) && stt != null) {
+                    commandEpoch = captureEpoch
                     _heard.value = ""
                     _reply.value = ""
                     _phase.value = PHASE_HEARING

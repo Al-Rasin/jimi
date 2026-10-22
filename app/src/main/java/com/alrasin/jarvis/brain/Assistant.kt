@@ -224,11 +224,7 @@ class Assistant @Inject constructor(
         if (!forced && !contextualQuestion) {
             val intent = IntentRouter.classify(text, rule)
             JarvisLog.i("route ${intent.route} ${intent.confidence}: ${intent.reason}")
-            if (intent.isConfident && intent.route == IntentRouter.Route.WEB) {
-                val call = rule?.takeIf { it.tool in WEB_TOOLS }
-                    ?: ToolCall("web_search", mapOf("query" to text))
-                return runTool(call, input, "router")
-            }
+            webRouteCall(text, rule, intent)?.let { return runTool(it, input, "router") }
             if (!intent.isConfident || intent.route != IntentRouter.Route.CHAT) {
                 rule?.takeIf { AgentRouting.acceptsSingleTool(text, it.tool) }
                     ?.let { return runTool(it, input, "rule") }
@@ -412,6 +408,12 @@ class Assistant @Inject constructor(
     companion object {
         private const val PENDING_MS = 30_000L
         private val WEB_TOOLS = setOf("web_search", "weather", "news", "wiki_lookup", "read_page", "open_url")
+
+        internal fun webRouteCall(text: String, rule: ToolCall?, intent: IntentRouter.Decision): ToolCall? {
+            if (!intent.isConfident || intent.route != IntentRouter.Route.WEB) return null
+            if (rule != null && rule.tool !in WEB_TOOLS) return null
+            return rule ?: ToolCall("web_search", mapOf("query" to text))
+        }
 
         fun stepsJson(steps: List<ToolCall>) = Json.write(steps.map { mapOf("tool" to it.tool, "args" to it.args) })
 

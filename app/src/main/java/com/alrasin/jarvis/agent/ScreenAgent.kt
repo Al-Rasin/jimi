@@ -93,7 +93,7 @@ class ScreenAgent(
             AgentResult("I could not continue the screen task. Please try again.")
         } finally {
             activeJob = null
-            if (!allowed()) hasPendingQuestion = false
+            if (!allowed()) { pending = null; hasPendingQuestion = false }
         }
     }
 

@@ -44,8 +44,10 @@ class ScreenAgentSession @Inject constructor(
                 panel?.show(step)
             })
             agent = next
-            speak(backend.description)
-            acting { next.run(task) }
+            acting {
+                speak(backend.description)
+                next.run(task)
+            }
         }
 
     suspend fun confirm(voiceConfirmed: Boolean, locked: Boolean, voiceOk: Boolean?): AgentResult =
