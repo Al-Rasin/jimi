@@ -3,6 +3,7 @@ package com.alrasin.jarvis.ui
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.activity.enableEdgeToEdge
 import androidx.activity.viewModels
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
@@ -16,6 +17,8 @@ class MainActivity : ComponentActivity() {
     private val appVm: AppViewModel by viewModels()
 
     override fun onCreate(savedInstanceState: Bundle?) {
+        // Compose only gets keyboard insets edge-to-edge; without it the ArcDial thinks the keyboard is open and hides.
+        enableEdgeToEdge()
         super.onCreate(savedInstanceState)
         lifecycleScope.launch {
             repeatOnLifecycle(Lifecycle.State.RESUMED) { appVm.resumeListening() }

@@ -12,7 +12,7 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.layout.systemBarsPadding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
@@ -92,7 +92,7 @@ fun SetupWizard(vm: AppViewModel, home: HomeViewModel, onFinish: () -> Unit) {
     BackHandler(step > 0) { step-- }
     // Not inside a Surface, so set the text color here (black text on the dark background otherwise).
     CompositionLocalProvider(LocalContentColor provides JimiColors.Text) {
-    Column(Modifier.fillMaxSize().statusBarsPadding().padding(20.dp).verticalScroll(rememberScrollState()),
+    Column(Modifier.fillMaxSize().systemBarsPadding().padding(20.dp).verticalScroll(rememberScrollState()),
         verticalArrangement = Arrangement.spacedBy(12.dp)) {
         GradientTitle("Set up Jimi", 28)
         Text("${step + 1} of ${titles.size} · ${titles[step]}")
@@ -229,7 +229,7 @@ private fun WakeTestCard(vm: AppViewModel, home: HomeViewModel) {
 fun DeviceCheckScreen(vm: AppViewModel, onBack: () -> Unit) {
     RefreshOnResume(vm)
     BackHandler(onBack = onBack)
-    Column(Modifier.fillMaxSize().statusBarsPadding().padding(20.dp).verticalScroll(rememberScrollState()),
+    Column(Modifier.fillMaxSize().systemBarsPadding().padding(20.dp).verticalScroll(rememberScrollState()),
         verticalArrangement = Arrangement.spacedBy(12.dp)) {
         TextButton(onClick = onBack) { Text("Back to Settings") }
         GradientTitle("Device check", 28)
