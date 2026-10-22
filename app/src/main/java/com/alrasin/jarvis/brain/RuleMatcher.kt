@@ -117,8 +117,21 @@ object RuleMatcher {
             val label = Regex("\\b(?:called|named|labelled|labeled|for) ([a-z ]+)$").find(spec)?.groupValues?.get(1)
                 ?.takeUnless { it.matches(Regex(".*\\d.*|tomorrow|today|tonight")) }
             val specNoLabel = if (label != null) spec.substringBeforeLast(label).removeSuffix(" ").removeSuffix("called").removeSuffix("named").removeSuffix("for").trim() else spec
-            val m = TimeParser.parse("at $specNoLabel".replace("at at ", "at "), now) ?: return call("set_alarm", "time" to null, "label" to label)
+            var m = TimeParser.parse("at $specNoLabel".replace("at at ", "at "), now) ?: return call("set_alarm", "time" to null, "label" to label)
             if (!m.hasTime) return null
+            val bareClock = Regex("(?:at )?(1[0-2]|[1-9])(?: (\\d{2}))?(?: o clock)?").matchEntire(specNoLabel)
+            if (bareClock != null) {
+                val hour = bareClock.groupValues[1].toInt() % 12
+                val minute = bareClock.groupValues[2].ifEmpty { "0" }.toInt()
+                var next = now.toLocalDate().atTime(hour, minute)
+                while (!next.isAfter(now)) next = next.plusHours(12)
+                m = m.copy(at = next)
+            }
+            if (specNoLabel.startsWith("in ") || specNoLabel.startsWith("after ")) {
+                if (!m.at.isAfter(now)) return call("set_alarm", "label" to label)
+                // Clock intents only accept whole minutes; never ring before the requested delay.
+                if (m.at.second != 0 || now.nano != 0) m = m.copy(at = m.at.withSecond(0).plusMinutes(1))
+            }
             val days = if (m.repeat == "daily") "daily" else if (m.repeat == "weekly") m.at.dayOfWeek.name.lowercase() else null
             return call("set_alarm", "time" to m.at.format(HM), "label" to label, "repeat" to days,
                 "date" to if (m.at.toLocalDate() != now.toLocalDate() && days == null) m.at.toLocalDate().toString() else null)
