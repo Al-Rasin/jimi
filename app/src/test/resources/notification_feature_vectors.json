@@ -1,0 +1,147 @@
+{
+  "feature_version": 1,
+  "model": {
+    "version": 1,
+    "feature_version": 1,
+    "bias": -0.35,
+    "threshold": 0.5,
+    "weights": {
+      "has_otp": 1.2,
+      "has_digits": 0.15,
+      "is_conversation": 0.7,
+      "is_group_conversation": -0.2,
+      "title:sale": -1.1,
+      "hour:23": 0.3,
+      "pkg:com.example": 0.1
+    }
+  },
+  "vectors": [
+    {
+      "name": "otp",
+      "input": {
+        "pkg": "COM.Example",
+        "title": "OTP OTP",
+        "text": "Verification CODE: 123456",
+        "timeMs": 0
+      },
+      "features": [
+        "has_digits",
+        "has_otp",
+        "hour:0",
+        "pkg:com.example",
+        "text:123456",
+        "text:code",
+        "text:verification",
+        "title:otp"
+      ],
+      "probability": 0.7502601055951177
+    },
+    {
+      "name": "unicode",
+      "input": {
+        "pkg": "Com.İAPP",
+        "title": "İ I CAFÉ café বাংলা ১২৩",
+        "text": "FULLWIDTH １２３ PIN",
+        "timeMs": -1
+      },
+      "features": [
+        "has_otp",
+        "hour:23",
+        "pkg:com.İapp",
+        "text:fullwidth",
+        "text:pin",
+        "title:caf",
+        "title:i"
+      ],
+      "probability": 0.759510916949111
+    },
+    {
+      "name": "group",
+      "input": {
+        "pkg": "chat.example",
+        "title": "Team",
+        "text": "Hello HELLO friend",
+        "timeMs": 86400000,
+        "isConversation": true,
+        "isGroupConversation": true
+      },
+      "features": [
+        "hour:0",
+        "is_conversation",
+        "is_group_conversation",
+        "pkg:chat.example",
+        "text:friend",
+        "text:hello",
+        "title:team"
+      ],
+      "probability": 0.5374298453437496
+    },
+    {
+      "name": "promo",
+      "input": {
+        "pkg": "shop.example",
+        "title": "SALE!!!",
+        "text": "Save 50% today",
+        "timeMs": 82800000
+      },
+      "features": [
+        "has_digits",
+        "hour:23",
+        "pkg:shop.example",
+        "text:50",
+        "text:save",
+        "text:today",
+        "title:sale"
+      ],
+      "probability": 0.2689414213699951
+    },
+    {
+      "name": "empty",
+      "input": {},
+      "features": [
+        "hour:0",
+        "pkg:"
+      ],
+      "probability": 0.41338242108267
+    },
+    {
+      "name": "phrase",
+      "input": {
+        "pkg": "com.example",
+        "title": "one-time",
+        "text": "verification-code passcode",
+        "timeMs": 3600000
+      },
+      "features": [
+        "has_otp",
+        "hour:1",
+        "pkg:com.example",
+        "text:code",
+        "text:passcode",
+        "text:verification",
+        "title:one",
+        "title:time"
+      ],
+      "probability": 0.7211151780228631
+    },
+    {
+      "name": "boundaries",
+      "input": {
+        "pkg": "com.example",
+        "title": "spin otps",
+        "text": "pinning someone timeless",
+        "timeMs": 3599999
+      },
+      "features": [
+        "hour:0",
+        "pkg:com.example",
+        "text:pinning",
+        "text:someone",
+        "text:timeless",
+        "title:otps",
+        "title:spin"
+      ],
+      "probability": 0.4378234991142019
+    }
+  ]
+}
