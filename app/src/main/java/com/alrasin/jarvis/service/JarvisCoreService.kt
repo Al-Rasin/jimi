@@ -29,6 +29,7 @@ import com.alrasin.jarvis.voice.AudioRing
 import com.alrasin.jarvis.voice.SpeakerVerifier
 import com.alrasin.jarvis.voice.SpeechToText
 import com.alrasin.jarvis.voice.Chimes
+import com.alrasin.jarvis.voice.PhraseCache
 import com.alrasin.jarvis.voice.TextToSpeech
 import com.alrasin.jarvis.voice.WakePhrase
 import com.alrasin.jarvis.voice.Wav
@@ -46,7 +47,6 @@ import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
-import com.k2fsa.sherpa.onnx.GeneratedAudio
 import kotlinx.coroutines.runBlocking
 import java.util.concurrent.atomic.AtomicInteger
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -91,6 +91,8 @@ class JarvisCoreService : LifecycleService() {
     private var voiceJob: Job? = null
     /** Generating and closing a voice must not overlap (native code). */
     private val ttsLock = Mutex()
+    private var phrases: PhraseCache? = null
+    private var phraseWarm: Job? = null
     @Volatile private var speechEpoch = 0
     @Volatile private var voiceSpeed = 1.0f
     private val speech = Channel<String>(Channel.UNLIMITED)
@@ -141,12 +143,12 @@ class JarvisCoreService : LifecycleService() {
             settings.voice.distinctUntilChanged().collect { id -> switchVoice(id) }
         }
         lifecycleScope.launch { settings.voiceSpeed.collect { s -> voiceSpeed = s; readyVoice()?.speed = s } }
-        val audio = Channel<Pair<Int, GeneratedAudio>>(1)
+        val audio = Channel<Pair<Int, PhraseCache.Audio>>(1)
         lifecycleScope.launch(Dispatchers.IO) {
             for (s in speech) {
                 val epoch = speechEpoch
                 val made = try {
-                    ttsLock.withLock { tts?.await()?.generate(s) }
+                    ttsLock.withLock { tts?.await()?.let { v -> audioFor(v, s) } }
                 } catch (t: Throwable) {
                     JarvisLog.e("speak failed", t)
                     null
@@ -200,8 +202,38 @@ class JarvisCoreService : LifecycleService() {
                 .getOrNull()
         }
         tts = next
-        next.await()
+        val loaded = next.await()
         old?.await()?.let { o -> ttsLock.withLock { o.close() } }
+        loaded?.let { warmPhrases(it) }
+    }
+
+    /** Common short replies come from [PhraseCache] (made once per voice + speed), the rest is made now. */
+    private fun audioFor(v: TextToSpeech, text: String): PhraseCache.Audio {
+        val common = text.trim() in COMMON_PHRASES
+        val cache = if (common) phraseCache(v) else null
+        cache?.get(text)?.let { return it }
+        val made = v.generate(text)
+        cache?.put(text, made.samples, made.sampleRate)
+        return PhraseCache.Audio(made.samples, made.sampleRate)
+    }
+
+    private fun phraseCache(v: TextToSpeech): PhraseCache {
+        val c = phrases
+        if (c != null && c.voiceId == v.voice.id && c.speed == v.speed) return c
+        return PhraseCache(File(cacheDir, "phrases"), v.voice.id, v.speed, sampleRate = 24_000).also { phrases = it }
+    }
+
+    /** Makes the common replies in the background, one at a time, only while Jimi is not speaking. */
+    private fun warmPhrases(v: TextToSpeech) {
+        phraseWarm?.cancel()
+        phraseWarm = lifecycleScope.launch(Dispatchers.IO) {
+            for (text in PhraseCache.COMMON) {
+                while (speechLeft.get() > 0) delay(1_000)
+                if (readyVoice() !== v) return@launch
+                ttsLock.withLock { runCatching { audioFor(v, text) } }
+                delay(200)
+            }
+        }
     }
 
     @OptIn(ExperimentalCoroutinesApi::class)
@@ -581,6 +613,7 @@ class JarvisCoreService : LifecycleService() {
     }
 
     companion object {
+        private val COMMON_PHRASES = PhraseCache.COMMON.toSet()
         /** -1000 = never kill; -800 keeps us above ordinary apps but still killable if the phone is desperate. */
         private const val OOM_ADJ = -800
         const val ACTION_STOP = "com.alrasin.jarvis.STOP"
