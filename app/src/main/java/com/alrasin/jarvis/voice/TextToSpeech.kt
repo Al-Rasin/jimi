@@ -54,11 +54,13 @@ class TextToSpeech(
     }
 
     fun generate(text: String): GeneratedAudio {
+        val spoken = SpeechText.normalize(text)
+        if (spoken.isBlank()) return GeneratedAudio(FloatArray(0), 24_000)
         val start = System.currentTimeMillis()
         val audio = if (voice.pack.engine == Engine.SUPERTONIC) {
-            tts.generateWithConfig(text, GenerationConfig(sid = voice.sid, speed = speed, numSteps = SUPERTONIC_STEPS, extra = mapOf("lang" to "en")))
+            tts.generateWithConfig(spoken, GenerationConfig(sid = voice.sid, speed = speed, numSteps = SUPERTONIC_STEPS, extra = mapOf("lang" to "en")))
         } else {
-            tts.generate(text, sid = voice.sid, speed = speed)
+            tts.generate(spoken, sid = voice.sid, speed = speed)
         }
         val made = System.currentTimeMillis() - start
         JarvisLog.i("tts ${voice.id}: ${audio.samples.size * 1000L / audio.sampleRate.coerceAtLeast(1)} ms audio in $made ms")
@@ -71,9 +73,14 @@ class TextToSpeech(
     /** Blocks until the sentence has been played or [stop] is called. Returns false if stopped. */
     fun speak(text: String): Boolean {
         stopped = false
-        val audio = generate(text)
-        if (stopped) return false
-        return play(audio)
+        val chunks = if (voice.pack.engine == Engine.SUPERTONIC) SpeechText.chunks(text)
+            else listOf(SpeechText.normalize(text)).filter { it.isNotBlank() }
+        for (chunk in chunks) {
+            if (stopped) return false
+            val audio = generate(chunk)
+            if (stopped || !playPcm(audio.samples, audio.sampleRate) { stopped }) return false
+        }
+        return !stopped
     }
 
     /** Plays audio made by [generate] (the service makes the next sentence while this one plays). */

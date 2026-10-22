@@ -30,6 +30,8 @@ import com.alrasin.jarvis.voice.SpeakerVerifier
 import com.alrasin.jarvis.voice.SpeechToText
 import com.alrasin.jarvis.voice.Chimes
 import com.alrasin.jarvis.voice.PhraseCache
+import com.alrasin.jarvis.voice.SpeechText
+import com.alrasin.jarvis.voice.Engine
 import com.alrasin.jarvis.voice.TextToSpeech
 import com.alrasin.jarvis.voice.WakePhrase
 import com.alrasin.jarvis.voice.Wav
@@ -209,11 +211,12 @@ class JarvisCoreService : LifecycleService() {
 
     /** Common short replies come from [PhraseCache] (made once per voice + speed), the rest is made now. */
     private fun audioFor(v: TextToSpeech, text: String): PhraseCache.Audio {
-        val common = text.trim() in COMMON_PHRASES
+        val spoken = SpeechText.normalize(text)
+        val common = spoken in COMMON_PHRASES
         val cache = if (common) phraseCache(v) else null
-        cache?.get(text)?.let { return it }
-        val made = v.generate(text)
-        cache?.put(text, made.samples, made.sampleRate)
+        cache?.get(spoken)?.let { return it }
+        val made = v.generate(spoken)
+        cache?.put(spoken, made.samples, made.sampleRate)
         return PhraseCache.Audio(made.samples, made.sampleRate)
     }
 
@@ -240,9 +243,12 @@ class JarvisCoreService : LifecycleService() {
     private fun readyVoice(): TextToSpeech? = tts?.takeIf { it.isCompleted }?.getCompleted()
 
     private fun say(text: String) {
-        if (text.isBlank()) return
-        speechLeft.incrementAndGet()
-        speech.trySend(text)
+        val chunks = if (readyVoice()?.voice?.pack?.engine != Engine.PIPER) SpeechText.chunks(text)
+            else listOf(SpeechText.normalize(text)).filter { it.isNotBlank() }
+        for (chunk in chunks) {
+            speechLeft.incrementAndGet()
+            if (speech.trySend(chunk).isFailure) speechLeft.decrementAndGet()
+        }
     }
 
     private suspend fun awaitSpeech() {
@@ -613,7 +619,7 @@ class JarvisCoreService : LifecycleService() {
     }
 
     companion object {
-        private val COMMON_PHRASES = PhraseCache.COMMON.toSet()
+        private val COMMON_PHRASES = PhraseCache.COMMON.map(SpeechText::normalize).toSet()
         /** -1000 = never kill; -800 keeps us above ordinary apps but still killable if the phone is desperate. */
         private const val OOM_ADJ = -800
         const val ACTION_STOP = "com.alrasin.jarvis.STOP"
