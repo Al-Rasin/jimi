@@ -16,14 +16,29 @@ import re
 import subprocess
 import sys
 import tempfile
+import urllib.parse
+import urllib.request
 
 ROOT = pathlib.Path(__file__).resolve().parents[2]
 LLM = ROOT / "app/build/llm"
 
 
-def run(binary, model, prefix, grammar, text, context, prompt_dir=LLM, cpu=False, prompt_cache=None):
+def run(binary, model, prefix, grammar, text, context, prompt_dir=LLM, cpu=False, prompt_cache=None, server_url=None):
     user = f"{text}\n({context})"
     prompt = prefix.removeprefix("<bos>") + f"<start_of_turn>user\n{user}<end_of_turn>\n<start_of_turn>model\n"
+    if server_url:
+        body = {"prompt": prompt, "temperature": 0, "n_predict": 80,
+                "repeat_penalty": 1.0, "cache_prompt": True, "id_slot": 0,
+                "stream": False, "stop": []}
+        if grammar:
+            body["grammar"] = (prompt_dir / "grammar.gbnf").read_text()
+        request = urllib.request.Request(server_url.rstrip("/") + "/completion",
+                                         data=json.dumps(body).encode(), headers={"Content-Type": "application/json"})
+        with urllib.request.urlopen(request, timeout=120) as response:
+            result = json.load(response)
+        if not isinstance(result.get("content"), str):
+            raise RuntimeError(f"invalid server response for {text!r}: {result}")
+        return result["content"]
     with tempfile.NamedTemporaryFile(mode="w", suffix=".txt", encoding="utf-8") as tmp:
         tmp.write(prompt)
         tmp.flush()
@@ -51,7 +66,9 @@ def parse(out):
 
 def main():
     p = argparse.ArgumentParser()
-    p.add_argument("--bin", required=True)
+    backend = p.add_mutually_exclusive_group(required=True)
+    backend.add_argument("--bin")
+    backend.add_argument("--server-url", help="local llama-server started with -sp and matching CPU/context flags")
     p.add_argument("--model", required=True)
     p.add_argument("--cases", default=str(pathlib.Path(__file__).with_name("cases.jsonl")))
     p.add_argument("--no-grammar", action="store_true")
@@ -62,6 +79,14 @@ def main():
     p.add_argument("--output-jsonl", type=pathlib.Path, help="new file for raw output and per-case scores")
     p.add_argument("-v", action="store_true")
     a = p.parse_args()
+    if a.server_url:
+        url = urllib.parse.urlparse(a.server_url)
+        if url.scheme != "http" or url.hostname not in ("localhost", "127.0.0.1", "::1"):
+            p.error("--server-url must be a local HTTP endpoint")
+        with urllib.request.urlopen(a.server_url.rstrip("/") + "/props", timeout=30) as response:
+            props = json.load(response)
+        if pathlib.Path(props.get("model_path", "")).resolve() != pathlib.Path(a.model).resolve():
+            p.error("server loaded model does not match --model")
 
     prefix = (a.prompt_dir / "prompt_prefix.txt").read_text()
     cases = [json.loads(l) for l in open(a.cases) if l.strip()]
@@ -69,7 +94,7 @@ def main():
         a.output_jsonl.touch(exist_ok=False)
     ok_tool = ok_all = 0
     for c in cases:
-        out = run(a.bin, a.model, prefix, not a.no_grammar, c["text"], a.context, a.prompt_dir, a.cpu, a.prompt_cache)
+        out = run(a.bin, a.model, prefix, not a.no_grammar, c["text"], c.get("context", a.context), a.prompt_dir, a.cpu, a.prompt_cache, a.server_url)
         tool, args = parse(out)
         want = c.get("tool")  # null = should answer in text (chat)
         good_tool = tool == want

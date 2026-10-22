@@ -16,6 +16,8 @@ import json
 import pathlib
 import shutil
 import subprocess
+import time
+import resource
 import sys
 import tempfile
 
@@ -25,6 +27,8 @@ import mlx.optimizers as optim
 from mlx_lm import load
 from mlx_lm.tuner.datasets import CacheDataset
 from mlx_lm.tuner.trainer import TrainingArgs, train
+from mlx_lm.tuner.callbacks import TrainingCallback
+from mlx.utils import tree_flatten
 from mlx_lm.tuner.utils import linear_to_lora_layers
 
 ROOT = pathlib.Path(__file__).resolve().parents[2]
@@ -80,12 +84,36 @@ class Sized(CacheDataset):
         return len(r["prompt"]) + len(r["completion"])
 
 
+class TrainingStopped(Exception):
+    pass
+
+
+class BudgetCallback(TrainingCallback):
+    def __init__(self, seconds, stop_file):
+        self.started = time.monotonic()
+        self.seconds = seconds
+        self.stop_file = stop_file
+
+    def on_train_loss_report(self, info):
+        elapsed = time.monotonic() - self.started
+        print(f"Runtime: iteration={info['iteration']} elapsed={elapsed:.1f}s "
+              f"peak_rss={resource.getrusage(resource.RUSAGE_SELF).ru_maxrss / 1e9:.3f}GB", flush=True)
+        if (self.seconds and elapsed >= self.seconds) or (self.stop_file and self.stop_file.exists()):
+            raise TrainingStopped(f"stopped after {info['iteration']} iterations ({elapsed:.1f}s)")
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--iters", type=int, default=1500)
     ap.add_argument("--batch", type=int, default=2)
     ap.add_argument("--lr", type=float, default=2e-4)
     ap.add_argument("--rank", type=int, default=16)
+    ap.add_argument("--val-batches", type=int, default=10)
+    ap.add_argument("--report-every", type=int, default=25)
+    ap.add_argument("--save-every", type=int, default=250)
+    ap.add_argument("--cpu-float32", action="store_true")
+    ap.add_argument("--max-seconds", type=int, default=0)
+    ap.add_argument("--stop-file", type=pathlib.Path)
     ap.add_argument("--skip-train", action="store_true", help="only fuse + convert the last adapter")
     ap.add_argument("--base", type=pathlib.Path, default=BASE)
     ap.add_argument("--data", type=pathlib.Path, default=DATA)
@@ -106,6 +134,8 @@ def main():
     if not a.skip_train:
         mx.random.seed(0)
         model, tok = load(str(a.base))
+        if a.cpu_float32:
+            model.set_dtype(mx.float32)
         model.freeze()
         lora = {"rank": a.rank, "scale": 2.0, "dropout": 0.0,
                 "keys": ["self_attn.q_proj", "self_attn.k_proj", "self_attn.v_proj", "self_attn.o_proj",
@@ -120,10 +150,15 @@ def main():
                          for d in (train_set, valid_set) for r in d._data.rows) + 1
         warm = min(50, a.iters // 5)
         sched = optim.join_schedules([optim.linear_schedule(1e-6, a.lr, warm), optim.cosine_decay(a.lr, a.iters - warm, 1e-6)], [warm])
-        args = TrainingArgs(batch_size=a.batch, iters=a.iters, val_batches=10, steps_per_report=min(25, a.iters), steps_per_eval=250,
-                            steps_per_save=250, adapter_file=str(adapter), max_seq_length=3072, grad_checkpoint=True)
-        train(model=model, optimizer=optim.AdamW(learning_rate=sched, weight_decay=0.0), train_dataset=train_set,
-              val_dataset=valid_set, args=args, loss=answer_loss)
+        args = TrainingArgs(batch_size=a.batch, iters=a.iters, val_batches=a.val_batches, steps_per_report=min(a.report_every, a.iters), steps_per_eval=250,
+                            steps_per_save=a.save_every, adapter_file=str(adapter), max_seq_length=3072, grad_checkpoint=True)
+        try:
+            train(model=model, optimizer=optim.AdamW(learning_rate=sched, weight_decay=0.0), train_dataset=train_set,
+                  val_dataset=valid_set, args=args, loss=answer_loss,
+                  training_callback=BudgetCallback(a.max_seconds, a.stop_file))
+        except TrainingStopped as stopped:
+            print(stopped, flush=True)
+            mx.save_safetensors(str(adapter), dict(tree_flatten(model.trainable_parameters())))
         del model, tok, train_set, valid_set
         mx.clear_cache()
 
