@@ -32,6 +32,12 @@ import com.alrasin.jarvis.voice.SpeechToText
 import com.alrasin.jarvis.voice.SecondPassSpeechToText
 import com.alrasin.jarvis.voice.SttCorrector
 import com.alrasin.jarvis.voice.SttVocabularyLoader
+import com.alrasin.jarvis.voice.SttVocabularyUpdates
+import com.alrasin.jarvis.voice.PhoneSpeechRecognizer
+import com.alrasin.jarvis.voice.SpeechCapturePolicy
+import com.alrasin.jarvis.voice.SpeechEngine
+import com.alrasin.jarvis.voice.WakePhrase
+import com.alrasin.jarvis.data.SpeechEngineSettings
 import com.alrasin.jarvis.voice.ScreenAgentInterrupt
 import com.alrasin.jarvis.voice.Chimes
 import com.alrasin.jarvis.voice.PhraseCache
@@ -64,6 +70,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -442,7 +449,7 @@ class JarvisCoreService : LifecycleService() {
                     _lastTurn.value = Turn(r.turnId, text, r.text, r.tool)
                     _phase.value = PHASE_SPEAKING
                 }
-                JarvisLog.i("reply (${r.tool ?: "talk"}): ${r.text}")
+                JarvisLog.i("reply (${r.tool ?: "talk"}): ${r.text.length} characters")
                 Notifications.showReply(this@JarvisCoreService, text, r.text)
                 if (r.tool == "panic") synchronized(speechState) {
                     if (epoch != speechEpoch) return@launch
@@ -477,7 +484,7 @@ class JarvisCoreService : LifecycleService() {
      */
     private fun voiceOk(locked: Boolean, audio: ShortArray?): Boolean? {
         if (!locked || !voiceId) return null
-        val score = audio?.let { runCatching { speaker.score(it) }.getOrNull() }
+        val score = audio?.takeIf { it.isNotEmpty() }?.let { runCatching { speaker.score(it) }.getOrNull() }
         JarvisLog.i("voice ID score ${score?.let { "%.2f".format(it) } ?: "none"} (need ${"%.2f".format(speakerThreshold)})")
         _lastVoiceScore.value = score
         return score != null && score >= speakerThreshold
@@ -525,7 +532,14 @@ class JarvisCoreService : LifecycleService() {
         _modelName.value = models.wakeName
         val detector = WakeWordDetector(models.mel, models.embedding, models.wake)
         val vocabulary = SttVocabularyLoader(this).load()
-        val corrector = SttCorrector(vocabulary.contacts, vocabulary.apps)
+        val currentVocabulary = AtomicReference(vocabulary)
+        val vocabularyJob = lifecycleScope.launch(Dispatchers.IO) {
+            SttVocabularyUpdates(this@JarvisCoreService).snapshots().collect { currentVocabulary.set(it) }
+        }
+        var corrector = SttCorrector(vocabulary.contacts, vocabulary.apps)
+        val engineSettings = SpeechEngineSettings(this)
+        val phone = PhoneSpeechRecognizer(this)
+        val capturePolicy = SpeechCapturePolicy()
         val secondPass = SecondPassSpeechToText(this)
         val stt = runCatching { SpeechToText(this, hotwords = vocabulary.hotwords) }
             .onSuccess { JarvisLog.i("speech-to-text: ${it.modelName}") }
@@ -553,6 +567,66 @@ class JarvisCoreService : LifecycleService() {
         val tone = Chimes()
         var clips = ClipCollector()
         var interrupted = false
+        suspend fun phoneCapture(source: String, stripWake: Boolean, epoch: Int): Boolean {
+            if (capturePolicy.select(engineSettings.engine.first()) != SpeechEngine.PHONE_ON_DEVICE) {
+                val snapshot = currentVocabulary.get()
+                corrector = SttCorrector(snapshot.contacts, snapshot.apps)
+                JarvisLog.i("STT engine=Jimi offline capture=$source")
+                return false
+            }
+            val snapshot = currentVocabulary.get()
+            val commandCorrector = SttCorrector(snapshot.contacts, snapshot.apps)
+            interruption?.close()
+            interruption = null
+            stopCommand?.close()
+            stopCommand = null
+            rec.releaseForPhone()
+            _microphoneAvailable.value = false
+            JarvisLog.i("STT engine=Phone capture=$source; sherpa microphone released")
+            try {
+                val raw = coroutineScope {
+                    val recognition = async { phone.recognize(snapshot.hotwords) }
+                    val cancellation = launch {
+                        while (recognition.isActive) {
+                            if (epoch != speechEpoch) { recognition.cancel(); break }
+                            delay(100)
+                        }
+                    }
+                    try { recognition.await() }
+                    catch (cancelled: CancellationException) {
+                        currentCoroutineContext().ensureActive()
+                        null
+                    } finally { cancellation.cancel() }
+                }
+                if (epoch != speechEpoch) return true
+                val normalized = raw?.let(SpeechToText::normalize).orEmpty()
+                val stripped = if (stripWake) WakePhrase.strip(normalized) else normalized
+                val heard = if (source == "barge_in") BargeIn.stripInterruption(stripped) else stripped
+                if (heard.isBlank()) {
+                    capturePolicy.phoneFailed()
+                    _heard.value = ""
+                    _phase.value = PHASE_WAKE
+                    JarvisLog.i("STT engine=Phone unavailable/error/blank; next capture uses sherpa")
+                    return true
+                }
+                JarvisLog.i("STT engine=Phone transcript received (${heard.length} characters)")
+                synchronized(speechState) {
+                    if (epoch == speechEpoch) {
+                        tone.endListening()
+                        onCommand(commandCorrector.correct(heard), raw.orEmpty(), source,
+                            if (source == "voice") clips.lastWakeId else null,
+                            clips.lastWakePeak, null, ShortArray(0), tone)
+                    }
+                }
+                return true
+            } finally {
+                ring = AudioRing(WakeWordDetector.SAMPLE_RATE * RING_SECONDS)
+                detector.reset()
+                _micLevel.value = 0f
+                wasBusy = true
+                JarvisLog.i("STT engine=Phone finished; sherpa microphone resumes on next read")
+            }
+        }
         try {
             _running.value = true
             JarvisLog.i("listening")
@@ -687,13 +761,13 @@ class JarvisCoreService : LifecycleService() {
                         interruption?.close()
                         interruption = null
                         // Exclude loudspeaker pre-roll; capture fresh command audio after the interruption.
-                        command = stt.session(stripWake = wake)
                         commandSource = "barge_in"
                         commandAudio.clear()
                         _heard.value = ""
                         _reply.value = ""
                         _phase.value = PHASE_HEARING
                         showPanel()
+                        if (!phoneCapture(commandSource, wake, commandEpoch)) command = stt.session(stripWake = wake)
                     }
                     continue
                 }
@@ -729,6 +803,8 @@ class JarvisCoreService : LifecycleService() {
                     if (req == "tap") WakeFeedbackSignal.signal(this)
                     _phase.value = if (req == "follow_up") PHASE_FOLLOW_UP else PHASE_HEARING
                     if (req == "tap") showPanel()
+                    _heard.value = ""
+                    if (phoneCapture(req, false, commandEpoch)) continue
                     command = stt.session(null, waitStart = if (req == "follow_up") FOLLOW_UP_WAIT else SpeechToText.WAIT_START)
                         .also { it.accept(chunk) }
                     commandSource = req
@@ -747,6 +823,7 @@ class JarvisCoreService : LifecycleService() {
                     _reply.value = ""
                     _phase.value = PHASE_HEARING
                     showPanel()
+                    if (phoneCapture("voice", true, commandEpoch)) continue
                     val preRoll = ring.last(PRE_ROLL_SAMPLES)
                     command = stt.session(preRoll)
                     commandSource = "voice"
@@ -756,6 +833,7 @@ class JarvisCoreService : LifecycleService() {
                 }
             }
         } finally {
+            vocabularyJob.cancel()
             interruption?.close()
             stopCommand?.close()
             command?.close()
@@ -804,7 +882,7 @@ class JarvisCoreService : LifecycleService() {
         text: String, raw: String, source: String, wakeId: Long?, wakeScore: Float, audioPath: String?, audio: ShortArray,
         tone: Chimes, refine: (suspend () -> String)? = null,
     ) {
-        JarvisLog.i("heard ($source): \"$text\"")
+        JarvisLog.i("heard ($source): ${text.length} characters")
         if (source == "voice") _wakeId.value = wakeId
         if (wakeId != null) Notifications.showWakeCheck(this, wakeId, wakeScore, heard = text.ifEmpty { "(nothing)" })
         if (text.isEmpty()) {

@@ -394,6 +394,7 @@ private fun SettingsTab(vm: AppViewModel, onSetup: () -> Unit, onDeviceCheck: ()
         }
         AssistantModeCard(vm)
         GlassCard(title = "Conversation") {
+            SpeechEngineSetting()
             SecondPassSetting()
             Toggle("Keep listening after an answer (no \"Hey Jimi\" needed)", followUp, vm::setFollowUp)
             Toggle("Show panel on wake (also on lock screen)", panel, vm::setShowPanel)
