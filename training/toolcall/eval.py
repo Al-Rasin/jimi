@@ -7,7 +7,7 @@ app/build/llm/) and a Mac build of llama.cpp `llama-completion`.
     ./gradlew testDebugUnitTest                         # writes app/build/llm/*
     python3 training/toolcall/eval.py --bin <llama-completion> --model models/functiongemma-270m-it-Q8_0.gguf
 
-Exit code is 0 always; read the score line at the end.
+Model errors exit nonzero; read the score line for completed evaluations.
 """
 import argparse
 import json
@@ -15,21 +15,30 @@ import pathlib
 import re
 import subprocess
 import sys
+import tempfile
 
 ROOT = pathlib.Path(__file__).resolve().parents[2]
 LLM = ROOT / "app/build/llm"
 
 
-def run(binary, model, prefix, grammar, text, context):
-    user = f"{text}\n({context})" if context else text
+def run(binary, model, prefix, grammar, text, context, prompt_dir=LLM, cpu=False, prompt_cache=None):
+    user = f"{text}\n({context})"
     prompt = prefix.removeprefix("<bos>") + f"<start_of_turn>user\n{user}<end_of_turn>\n<start_of_turn>model\n"
-    tmp = ROOT / "app/build/llm/eval_prompt.txt"
-    tmp.write_text(prompt)
-    cmd = [binary, "-m", model, "-f", str(tmp), "-n", "80", "--temp", "0", "-no-cnv", "--no-display-prompt", "-sp", "-t", "6"]
-    if grammar:
-        cmd += ["--grammar-file", str(LLM / "grammar.gbnf")]
-    out = subprocess.run(cmd, capture_output=True, text=True).stdout
-    return out
+    with tempfile.NamedTemporaryFile(mode="w", suffix=".txt", encoding="utf-8") as tmp:
+        tmp.write(prompt)
+        tmp.flush()
+        # --file strips the final model-turn newline, changing the learned prompt boundary.
+        cmd = [binary, "-m", model, "--binary-file", tmp.name, "--no-escape", "-n", "80", "--temp", "0", "-no-cnv", "--no-display-prompt", "-sp", "-t", "4", "-c", "4096"]
+        if grammar:
+            cmd += ["--grammar-file", str(prompt_dir / "grammar.gbnf")]
+        if cpu:
+            cmd += ["--device", "none", "-ngl", "0", "--no-op-offload", "--no-kv-offload", "--fit", "off", "-b", "256", "-ub", "128"]
+        if prompt_cache:
+            cmd += ["--prompt-cache", str(prompt_cache)]
+        result = subprocess.run(cmd, capture_output=True, text=True)
+    if result.returncode:
+        raise RuntimeError(f"llama-completion failed ({result.returncode}) for {text!r}:\n{result.stderr[-4000:]}")
+    return result.stdout
 
 
 def parse(out):
@@ -47,20 +56,30 @@ def main():
     p.add_argument("--cases", default=str(pathlib.Path(__file__).with_name("cases.jsonl")))
     p.add_argument("--no-grammar", action="store_true")
     p.add_argument("--context", default="", help="text the app adds after the request, e.g. the time")
+    p.add_argument("--prompt-dir", type=pathlib.Path, default=LLM)
+    p.add_argument("--cpu", action="store_true", help="disable GPU and Metal offloading")
+    p.add_argument("--prompt-cache", type=pathlib.Path, help="cache the common tool prompt between cases")
+    p.add_argument("--output-jsonl", type=pathlib.Path, help="new file for raw output and per-case scores")
     p.add_argument("-v", action="store_true")
     a = p.parse_args()
 
-    prefix = (LLM / "prompt_prefix.txt").read_text()
+    prefix = (a.prompt_dir / "prompt_prefix.txt").read_text()
     cases = [json.loads(l) for l in open(a.cases) if l.strip()]
+    if a.output_jsonl:
+        a.output_jsonl.touch(exist_ok=False)
     ok_tool = ok_all = 0
     for c in cases:
-        out = run(a.bin, a.model, prefix, not a.no_grammar, c["text"], a.context)
+        out = run(a.bin, a.model, prefix, not a.no_grammar, c["text"], a.context, a.prompt_dir, a.cpu, a.prompt_cache)
         tool, args = parse(out)
         want = c.get("tool")  # null = should answer in text (chat)
         good_tool = tool == want
         good_args = good_tool and all(args.get(k, "").lower() == str(v).lower() for k, v in c.get("args", {}).items())
         ok_tool += good_tool
         ok_all += good_args
+        if a.output_jsonl:
+            with a.output_jsonl.open("a") as results:
+                results.write(json.dumps({"case": c, "raw": out, "tool": tool, "args": args,
+                                          "correct_tool": good_tool, "correct_args": good_args}) + "\n")
         mark = "✓" if good_args else ("~" if good_tool else "✗")
         print(f"{mark} {c['text']!r:45} → {tool} {args}" + ("" if good_args else f"   (want {want} {c.get('args', {})})"))
         if a.v and not good_args:
