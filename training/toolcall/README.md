@@ -29,3 +29,21 @@ python3 training/toolcall/eval.py --bin <llama-completion> --model models/functi
 Push to the phone: `adb push models/functiongemma-270m-jarvis-Q8_0.gguf /sdcard/Android/data/com.alrasin.jarvis/files/models/llm/`.
 
 Note: the prompt prefix must match the app exactly. If a tool, its description or args change, re-run all steps.
+
+## Dataset checks without training
+
+`make_dataset.py` includes 448 distinct chat templates and deterministic STT noise
+for tool requests. It excludes phrases from both `cases.jsonl` and `cases_v2.jsonl`,
+including common wake/filler wrappers. The new set has 60 held-out phrases (25 chat,
+20 noisy commands, 15 clean commands). First-word dropping is restricted to
+redundant command prefixes; free-text tool arguments are preserved.
+
+```bash
+python3 -m unittest discover -s training/toolcall/tests -q
+python3 training/toolcall/make_dataset.py --out /tmp/jimi-toolcall-data
+```
+
+`--out` leaves the default output location unchanged. If a worktree has no generated
+prompt export, use `--prefix /path/to/existing/prompt_prefix.txt` to read an existing
+export without rebuilding the app. The default chat budget is up to 600 unique rows,
+capped by available templates. The script prints counts per tool and chat share.
