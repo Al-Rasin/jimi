@@ -1,0 +1,11 @@
+{"text":"down on flushlight","tool":"toggle","args":{"target":"flashlight","state":"on"}}
+{"text":"new down on flashlight","tool":"toggle","args":{"target":"flashlight","state":"on"}}
+{"text":"do you mean on flashlight","tool":"toggle","args":{"target":"flashlight","state":"on"}}
+{"text":"turn of the flashlight","tool":"toggle","args":{"target":"flashlight","state":"off"}}
+{"text":"sound up","tool":"set_volume","args":{"level":"up"}}
+{"text":"sound down","tool":"set_volume","args":{"level":"down"}}
+{"text":"sound of","tool":"set_volume","args":{"level":"0"}}
+{"text":"on flushed light","tool":"toggle","args":{"target":"flashlight","state":"on"}}
+{"text":"do you love me","tool":null}
+{"text":"fun fact about the moon","tool":null}
+{"text":"joke about cats","tool":null}
