@@ -21,6 +21,16 @@ class SttCorrector(
             pattern.find(text)?.let { return replaceSlot(text, it.groups[1]!!, contacts) }
         }
         appPattern.find(text)?.let { return replaceSlot(text, it.groups[1]!!, apps) }
+        batteryPercentagePattern.find(text)?.let { match ->
+            if (tools.any { it.key == "battery" }) {
+                return text.replaceRange(match.groups[1]!!.range, "percentage")
+            }
+        }
+        mistakenTurnPattern.find(text)?.let { match ->
+            val replacement = toolReplacement(match.groupValues[3]) ?: return text
+            val corrected = text.replaceRange(match.groups[3]!!.range, replacement)
+            return corrected.replaceRange(match.groups[1]!!.range, "turn")
+        }
         soundPattern.find(text)?.let { match ->
             if (tools.none { it.key == "volume" }) return text
             if (match.groupValues[1].equals("volume", true) && !match.groupValues[2].equals("of", true)) return text
@@ -148,6 +158,14 @@ class SttCorrector(
         private val mistakenOff = Regex("\\b((?:turn|switch)\\s+)of\\b", RegexOption.IGNORE_CASE)
         private val negation = Regex("\\b(?:no|not|never|don['’]?t|can['’]?t|won['’]?t)\\b", RegexOption.IGNORE_CASE)
         private val soundPattern = Regex(PREFIX + "(sound|volume)\\s+(up|down|off|of|max|maximum|full)" + END, options)
+        private val batteryPercentagePattern = Regex(
+            PREFIX + "(?:(?:check|show|current|what is|what's|james)\\s+)?(?:the\\s+)?battery\\s+(for centers)" + END,
+            options,
+        )
+        private val mistakenTurnPattern = Regex(
+            PREFIX + "(turned|done)\\s+(on|off)\\s+(?:the\\s+)?(.+?)" + END,
+            options,
+        )
         private val flashlightMistakes = mapOf(
             "flushlight" to "flashlight", "fleshlight" to "flashlight",
             "flashlite" to "flashlight", "flashlights" to "flashlight",

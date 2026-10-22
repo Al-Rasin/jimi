@@ -71,6 +71,14 @@ object IntentRouter {
     private val chatWords = setOf("joke", "story", "poem", "gravity", "meaning", "explain", "opinion", "advice", "feel", "think")
     private val webWords = setOf("search", "google", "online", "internet", "weather", "news", "headlines", "forecast")
     private val webTools = setOf("web_search", "weather", "news")
+    private val capabilityQuestion = Regex("\\bwhat (?:can|could|do) you (?:do|help)\\b")
+    private val launchRequest = Regex("^(?:open|launch|start|run|show)(?: the| my)? (.+?)(?: app| application)?$")
+
+    fun isAppLaunchQuestion(text: String): Boolean {
+        val normalized = polite.replace(RuleMatcher.normalize(text), "")
+        return Regex("\\b(?:what|who|where|when|why|how|which)\\b").containsMatchIn(normalized) ||
+            question.containsMatchIn(normalized)
+    }
 
     fun classify(text: String, ruleCall: ToolCall? = RuleMatcher.match(text)): Decision {
         val raw = text.trim().lowercase(Locale.ROOT).replace('’', '\'')
@@ -85,6 +93,16 @@ object IntentRouter {
         if (nickname.matches(normalized) || metaphor.matches(normalized)) return Decision(Route.CHAT, 0.98f, "conversational expression")
         if (explanation.matches(normalized) || definition.matches(normalized) || creative.matches(normalized)) return Decision(Route.CHAT, 0.96f, "explanation or creative request")
         if (greeting.matches(normalized)) return Decision(Route.CHAT, 0.98f, "conversation")
+        if (capabilityQuestion.containsMatchIn(normalized)) return Decision(Route.CHAT, 0.98f, "capability question")
+
+        val launchApp = when (ruleCall?.tool) {
+            "open_app" -> ruleCall.arg("app")
+            null -> launchRequest.matchEntire(normalized)?.groupValues?.get(1)
+            else -> null
+        }
+        if (launchApp != null && (isAppLaunchQuestion(normalized) || RuleMatcher.appNameMatches?.invoke(launchApp) == false)) {
+            return Decision(Route.CHAT, 0.96f, "unmatched app or app question")
+        }
 
         val first = normalized.substringBefore(' ')
         val directAction = first in actionVerbs
@@ -102,6 +120,11 @@ object IntentRouter {
         }
 
         val tokens = normalized.split(' ').toSet()
+        if (!chatStatement.containsMatchIn(normalized) && tokens.any { it in setOf(
+                "battery", "alarm", "alarms", "timer", "volume", "flashlight", "torch", "wifi", "bluetooth", "brightness",
+            ) } && tokens.none { it in webWords }) {
+            return Decision(Route.TOOL, 0.84f, "local tool keyword")
+        }
         var chat = 0
         var tool = 0
         var web = 0

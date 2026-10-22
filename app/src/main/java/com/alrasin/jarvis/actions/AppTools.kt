@@ -5,6 +5,7 @@ import android.content.Intent
 import android.net.Uri
 import com.alrasin.jarvis.core.Tool
 import com.alrasin.jarvis.core.ToolResult
+import com.alrasin.jarvis.brain.RuleMatcher
 
 /** Launchable apps, cached a few minutes (PLAN 4.3 Apps group). */
 class AppList(private val context: Context) {
@@ -12,6 +13,12 @@ class AppList(private val context: Context) {
 
     private var cache: List<App> = emptyList()
     private var cacheMs = 0L
+
+    init {
+        RuleMatcher.appNameMatches = { name ->
+            name.lowercase().trim() in setOf("settings", "phone settings") || find(name) != null
+        }
+    }
 
     fun all(): List<App> {
         if (System.currentTimeMillis() - cacheMs > 5 * 60_000 || cache.isEmpty()) {
@@ -25,11 +32,24 @@ class AppList(private val context: Context) {
     }
 
     fun find(name: String): App? {
-        val q = ALIASES[name.lowercase().trim()] ?: name
-        return Fuzzy.best(q, all(), { it.label }) ?: all().firstOrNull { it.pkg.contains(Fuzzy.clean(q)) }
+        return matchName(name, all())
     }
 
     companion object {
+        internal fun matchName(name: String, installed: List<App>): App? {
+            val q = ALIASES[name.lowercase().trim()] ?: name.trim()
+            val cleaned = Fuzzy.clean(q)
+            if (cleaned.isEmpty()) return null
+            installed.firstOrNull { it.pkg.equals(q, ignoreCase = true) || Fuzzy.clean(it.label) == cleaned }
+                ?.let { return it }
+            if (cleaned.length < 4) return null
+            val ranked = installed.map { it to Fuzzy.score(q, it.label) }
+                .filter { it.second >= 0.70 }.sortedByDescending { it.second }
+            val best = ranked.firstOrNull() ?: return null
+            if (ranked.size > 1 && best.second - ranked[1].second < 0.08) return null
+            return best.first
+        }
+
         private val ALIASES = mapOf(
             "browser" to "Chrome", "internet" to "Chrome", "google chrome" to "Chrome",
             "photos" to "Gallery", "pictures" to "Gallery", "dialer" to "Phone", "phone app" to "Phone",

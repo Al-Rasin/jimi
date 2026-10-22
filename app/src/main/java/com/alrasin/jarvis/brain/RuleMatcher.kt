@@ -10,6 +10,8 @@ import java.time.format.DateTimeFormatter
  * Returns null when no rule fits (then the LLM / "I can't do that yet" takes over).
  */
 object RuleMatcher {
+    @Volatile var appNameMatches: ((String) -> Boolean)? = null
+
     private val ISO = DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm")
     private val HM = DateTimeFormatter.ofPattern("HH:mm")
 
@@ -60,8 +62,10 @@ object RuleMatcher {
         if (t.isEmpty()) return null
         val actionText = input.lowercase().trim().replace(Regex("\\s+"), " ")
             .replace(Regex("^(?:(?:hey |ok |okay )?(?:jarvis|jimi|jimmy)[, ]+|(?:please|pls|can you|could you|would you|will you|i want you to|i want to|i would like to|just|hey|ok|okay) )+"), "")
-        return talk(t) ?: comms(actionText) ?: media(actionText.trimEnd('.', '!', '?')) ?: toggle(t) ?: time(t, now) ?: notes(t, now) ?: media(t) ?: system(t) ?: screen(t)
-            ?: notifications(t) ?: knowledge(t) ?: memory(t) ?: apps(t)
+        return talk(t) ?: comms(actionText) ?: media(actionText.trimEnd('.', '!', '?'))
+            ?: knowledge(t)?.takeIf { it.tool == "web_search" || it.tool == "wiki_lookup" }
+            ?: toggle(t) ?: time(t, now) ?: notes(t, now) ?: media(t) ?: system(t) ?: screen(t)
+            ?: notifications(t) ?: noisyTool(t, now) ?: knowledge(t) ?: memory(t) ?: apps(t)
     }
 
     private fun call(tool: String, vararg args: Pair<String, String?>) =
@@ -80,6 +84,7 @@ object RuleMatcher {
     }
 
     private fun toggle(t: String): ToolCall? {
+        if (Regex("^(?:explain|define|why|how|what does|what do|tell me about|dont|do not|never)\\b").containsMatchIn(t)) return null
         if (t == "on flushed light") return call("toggle", "target" to "flashlight", "state" to "on")
         val on = Regex("\\b(turn on|switch on|enable|activate|start|open)\\b").containsMatchIn(t) || t.endsWith(" on")
         val off = Regex("\\b(turn off|switch off|disable|deactivate|stop|close|shut off)\\b").containsMatchIn(t) || t.endsWith(" off")
@@ -249,6 +254,45 @@ object RuleMatcher {
 
     private fun mediaApp(app: String) = app.replace("you tube", "youtube").replace(' ', '_')
 
+    private fun noisyTool(t: String, now: LocalDateTime): ToolCall? {
+        if (Regex("^(?:search|google|find|look up|wiki|wikipedia|tell me about|explain|define|why|how|what does|what do|what are|i |im |remember|forget|say|repeat)\\b").containsMatchIn(t)) return null
+        if (Regex("\\b(?:news|headlines|online|internet|technology|buy|price|prices)\\b").containsMatchIn(t)) return null
+        if (Regex("\\b(?:dont|do not|never|not|cancel|stop|delete|remove|dismiss|check|list|show)\\b").containsMatchIn(t)) {
+            return if (Regex("\\bbattery\\b").containsMatchIn(t) && !Regex("\\b(?:saver|saving|dont|do not|never|not)\\b").containsMatchIn(t)) {
+                call("device_status", "what" to "battery")
+            } else null
+        }
+        if (Regex("\\bbattery\\b").containsMatchIn(t) && !Regex("\\b(?:saver|saving)\\b").containsMatchIn(t)) {
+            return call("device_status", "what" to "battery")
+        }
+        if (Regex("\\b(?:timer|countdown)\\b").containsMatchIn(t)) {
+            TimeParser.duration(t)?.let { return call("set_timer", "seconds" to it.toString()) }
+        }
+        Regex("\\balarm\\b(?: for| at| to)? (.+)$").find(t)?.let {
+            if (TimeParser.parse("at ${it.groupValues[1]}", now)?.hasTime == true) {
+                return time("alarm ${it.groupValues[1]}", now)
+            }
+        }
+        Regex("\\b(?:volume|sound)(?: to| at)? (\\d+)(?: percent)?\\b").find(t)?.let {
+            return call("set_volume", "level" to it.groupValues[1])
+        }
+        Regex("\\b(?:volume|sound) (up|down|off|max|maximum|full)\\b").find(t)?.let {
+            return call("set_volume", "level" to when (val level = it.groupValues[1]) {
+                "off" -> "0"
+                "max", "maximum", "full" -> "100"
+                else -> level
+            })
+        }
+        for ((target, names) in TOGGLE_TARGETS) {
+            val directions = Regex("\\b(?:${names.joinToString("|")}) (on|off)\\b").findAll(t)
+                .map { it.groupValues[1] }.toSet()
+            if (directions.size == 1 && !Regex("\\b(?:on|off)\\b").findAll(t).any { it.value !in directions }) {
+                return call("toggle", "target" to target, "state" to directions.single())
+            }
+        }
+        return null
+    }
+
     private fun system(t: String): ToolCall? {
         Regex("^(?:set |change |turn )?(?:the )?(?:screen )?brightness(?: to| at)? (\\d+)(?: percent)?$").find(t)
             ?.let { return call("set_brightness", "level" to it.groupValues[1]) }
@@ -329,7 +373,12 @@ object RuleMatcher {
         Regex("^(?:close|kill|exit|quit|force stop|stop) (?:the )?(.+?)(?: app| application)?$").find(t)
             ?.let { return call("close_app", "app" to it.groupValues[1]) }
         Regex("^(?:open|launch|start|run|show)(?: the| my)? (.+?)(?: app| application)?$").find(t)
-            ?.let { return call("open_app", "app" to it.groupValues[1]) }
+            ?.let {
+                val app = it.groupValues[1]
+                if (!IntentRouter.isAppLaunchQuestion(t) && appNameMatches?.invoke(app) != false) {
+                    return call("open_app", "app" to app)
+                }
+            }
         return null
     }
 }
