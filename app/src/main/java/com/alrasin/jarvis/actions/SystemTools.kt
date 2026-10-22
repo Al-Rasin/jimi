@@ -198,8 +198,9 @@ fun systemTools(context: Context, torch: Torch): List<Tool> {
             val requested = set(target, want)
             if (!requested && settingsPage(target)) return@SimpleTool ToolResult.ok("Boss, I opened ${nice(target)} settings. Set it ${if (want) "on" else "off"} there.")
             var actual = isOn(target)
-            repeat(8) {
-                if (actual != want) { delay(250); actual = isOn(target) }
+            // poll often so a quick switch is reported quickly; same 2 s ceiling as before
+            repeat(20) {
+                if (actual != want) { delay(100); actual = isOn(target) }
             }
             if (actual != want && settingsPage(target)) ToolResult.ok("Boss, the change isn't confirmed. I opened ${nice(target)} settings; set it ${if (want) "on" else "off"} there.")
             else toggleTruth(nice(target), want, actual)

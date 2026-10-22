@@ -406,12 +406,14 @@ class JarvisCoreService : LifecycleService() {
         thinkingCue.start(epoch, SystemClock.elapsedRealtime())
         _heard.value = text
         _reply.value = ""
+        val asked = SystemClock.elapsedRealtime()
         replyJob = lifecycleScope.launch(Dispatchers.Default) {
             var next: String? = null
             try {
                 pendingCancel?.join()
                 if (epoch != speechEpoch) return@launch
                 val text = refine?.invoke() ?: text
+                if (refine != null) JarvisLog.i("latency: second-pass refine ${SystemClock.elapsedRealtime() - asked} ms")
                 synchronized(speechState) {
                     if (epoch != speechEpoch) return@launch
                     _heard.value = text
@@ -449,7 +451,7 @@ class JarvisCoreService : LifecycleService() {
                     _lastTurn.value = Turn(r.turnId, text, r.text, r.tool)
                     _phase.value = PHASE_SPEAKING
                 }
-                JarvisLog.i("reply (${r.tool ?: "talk"}): ${r.text.length} characters")
+                JarvisLog.i("reply (${r.tool ?: "talk"}): ${r.text.length} characters, ${SystemClock.elapsedRealtime() - asked} ms after command")
                 Notifications.showReply(this@JarvisCoreService, text, r.text)
                 if (r.tool == "panic") synchronized(speechState) {
                     if (epoch != speechEpoch) return@launch
