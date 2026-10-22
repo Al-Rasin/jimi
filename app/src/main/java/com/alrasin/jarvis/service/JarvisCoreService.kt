@@ -30,6 +30,8 @@ import com.alrasin.jarvis.voice.AudioRing
 import com.alrasin.jarvis.voice.BargeIn
 import com.alrasin.jarvis.voice.SpeakerVerifier
 import com.alrasin.jarvis.voice.SpeechToText
+import com.alrasin.jarvis.voice.SttCorrector
+import com.alrasin.jarvis.voice.SttVocabularyLoader
 import com.alrasin.jarvis.voice.Chimes
 import com.alrasin.jarvis.voice.PhraseCache
 import com.alrasin.jarvis.voice.TextToSpeech
@@ -465,7 +467,9 @@ class JarvisCoreService : LifecycleService() {
         JarvisLog.i("wake model: ${models.wakeName}")
         _modelName.value = models.wakeName
         val detector = WakeWordDetector(models.mel, models.embedding, models.wake)
-        val stt = runCatching { SpeechToText(this) }
+        val vocabulary = SttVocabularyLoader(this).load()
+        val corrector = SttCorrector(vocabulary.contacts, vocabulary.apps)
+        val stt = runCatching { SpeechToText(this, hotwords = vocabulary.hotwords) }
             .onSuccess { JarvisLog.i("speech-to-text: ${it.modelName}") }
             .onFailure { JarvisLog.e("speech-to-text not loaded (run tools/fetch_speech.sh)", it) }
             .getOrNull()
@@ -527,7 +531,7 @@ class JarvisCoreService : LifecycleService() {
                         val audio = join(commandAudio)
                         val path = saveCommand(audio, cmd.raw)
                         val wakeId = if (commandSource == "voice") clips.lastWakeId else null
-                        onCommand(heard, cmd.raw, commandSource, wakeId, clips.lastWakePeak, path, audio, tone)
+                        onCommand(corrector.correct(heard), cmd.raw, commandSource, wakeId, clips.lastWakePeak, path, audio, tone)
                     }
                     continue
                 }

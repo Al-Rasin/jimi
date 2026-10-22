@@ -1,6 +1,7 @@
 package com.alrasin.jarvis.voice
 
 import android.content.Context
+import com.alrasin.jarvis.core.JarvisLog
 import com.k2fsa.sherpa.onnx.FeatureConfig
 import com.k2fsa.sherpa.onnx.OnlineModelConfig
 import com.k2fsa.sherpa.onnx.OnlineRecognizer
@@ -18,10 +19,28 @@ import java.io.File
  * Wake text is removed by phrase, preserving command words overlapping the wake detector's trigger.
  * [CaptureEndpoint] combines audio activity and partial text for adaptive command ending.
  */
-class SpeechToText(context: Context, dir: File? = null) : AutoCloseable {
+class SpeechToText(context: Context, dir: File? = null, hotwords: Collection<String> = emptyList()) : AutoCloseable {
     private val modelDir = dir ?: overrideDir(context).takeIf { File(it, "tokens.txt").isFile }
     val modelName: String = modelDir?.name ?: "built-in Kroko en"
 
+    private val bias = if (hotwords.isEmpty()) SttHotwords.Prepared(reason = "no vocabulary") else {
+        fun metadata(name: String): String? = runCatching {
+            val input = if (modelDir == null) context.assets.open("$DIR/$name") else File(modelDir, name).inputStream()
+            input.bufferedReader().use { reader ->
+                val text = StringBuilder()
+                val buffer = CharArray(4096)
+                while (text.length <= SttHotwords.MAX_METADATA) {
+                    val count = reader.read(buffer)
+                    if (count < 0) break
+                    text.append(buffer, 0, count)
+                }
+                text.toString()
+            }
+        }.getOrNull()
+        SttHotwords.prepare(metadata("tokens.txt").orEmpty(), metadata("bpe.vocab"), hotwords).also {
+            JarvisLog.i("STT hotwords ${if (it.enabled) "enabled" else "disabled"}: ${it.reason}")
+        }
+    }
     private val recognizer = OnlineRecognizer(
         if (modelDir == null) context.assets else null,
         OnlineRecognizerConfig(
@@ -34,9 +53,13 @@ class SpeechToText(context: Context, dir: File? = null) : AutoCloseable {
                 ),
                 tokens = modelDir?.let { File(it, "tokens.txt").path } ?: "$DIR/tokens.txt",
                 numThreads = 2,
+                modelingUnit = if (bias.enabled) "bpe" else "",
+                bpeVocab = if (bias.enabled) modelDir?.let { File(it, "bpe.vocab").path } ?: "$DIR/bpe.vocab" else "",
             ),
             enableEndpoint = false,
-            decodingMethod = "greedy_search",
+            decodingMethod = if (bias.enabled) "modified_beam_search" else "greedy_search",
+            maxActivePaths = 4,
+            hotwordsScore = 1.0f,
         ),
     )
 
@@ -49,7 +72,8 @@ class SpeechToText(context: Context, dir: File? = null) : AutoCloseable {
         waitStart: Float = WAIT_START,
         stripWake: Boolean = preRoll != null,
     ) = Session(
-        recognizer.createStream(),
+        // Per-stream input avoids asking AssetManager to open a private filesystem hotwords file.
+        recognizer.createStream(bias.phrases),
         waitStart = waitStart,
         stripWake = stripWake,
     ).also {
