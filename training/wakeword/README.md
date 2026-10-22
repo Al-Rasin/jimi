@@ -36,6 +36,19 @@ PY=.venv-ww/bin/python training/wakeword/train.sh all   # or: generate | user | 
 ```
 `generate_samples.py` replaces piper-sample-generator (Linux-only) with piper-tts.
 Config: `hey_jimi.yml`. openWakeWord `train.py` is pinned to a commit inside `train.sh`.
+This is the original generation/training workflow. For feedback retraining use the entry point below,
+which uses `train_fast.py` (D-024); the old `train.sh train`/`all` auto-training output is not the chosen model.
+
+### Synthetic examples from real STT mishears
+Real transcripts of the user's "Hey Jimi" include `izumi`, `hayzumi`, `hazumi`, `zumi`,
+`hey zooming`, and `hi jimmy`. These are pronunciation clues, not reliable wake labels.
+For synthetic positives, generate "Hey Jimi" / "hey jimmy" with varied accents, speeds and
+pronunciations; try those mishear spellings as TTS prompts only after listening confirms
+the audio sounds like the intended wake phrase. An actual wake remains positive even when STT is wrong.
+For synthetic hard negatives, generate genuine non-wake uses of similar sounds (for example,
+"Izumi is here" or "keep zooming"), then listen to confirm they do not contain the wake phrase.
+Do not put every mishear into `custom_negative_phrases`: that would teach the model to reject
+the user's real pronunciation. Keep variants of the same source clip in the same dataset split.
 
 ## 4. Use in the app
 Copy the 3 models the app needs into `models/wakeword/app-assets/wakeword/` (git-ignored, packed into the APK):
@@ -51,3 +64,33 @@ run `adb shell am start -n com.alrasin.jarvis/.ui.MainActivity --es test_dir <th
 Every voice wake asks "Was that you?" (✓/✗). Clips are saved on the phone with the answer in the file name.
 After some days: `training/wakeword/pull_feedback.sh` → `models/wakeword/feedback/{yes,no,missed,near,none}/`.
 Retrain (PLAN 3.7): `yes` + `missed` → extra positives, `no` → extra negatives (listen to `near`/`none` first).
+
+From the repository root, prepare feedback without training:
+```bash
+python3 training/wakeword/retrain.py
+python3 training/wakeword/retrain.py --skip-pull   # offline dry run; no phone or ML packages needed
+```
+The default command uses `pull_feedback.sh` when a phone is available and skips pulling otherwise.
+It applies `label_fixes.json`, prints positive/negative and skipped counts, and writes a fresh
+dataset under `models/wakeword/retrain/<run>/` (`pos/`, `neg/`, `manifest.json`). Existing phone
+clips are kept unchanged. Use `--skip-pull --feedback-dir PATH` for another local feedback folder and
+`--label-fixes PATH` for another correction file. Empty or missing feedback is safe.
+
+The checked-in fixes mark wake events **43, 44, 47, 48, 50** positive: the user rejected the
+STT text, not the wake. Since exported WAV names do not include database event IDs, each fix
+also has its known timestamp prefix. `yes`, fixed events and `missed` are positive;
+`no` is negative. Unreviewed `near` and `none` clips are skipped. After listening, add an exact
+filename to the correction file's `clips` map with value `"no"` for a confirmed non-wake near
+miss, or `"yes"` for a real wake. The `events` list records event ID, clip prefix and verdict.
+
+Only when ready to spend CPU and memory, explicitly request training:
+```bash
+.venv-ww/bin/python training/wakeword/retrain.py --skip-pull --train
+```
+This requires the existing synthetic train/test WAVs, openWakeWord training dependencies,
+augmentation assets and background features. It reuses the existing augmentation wrapper
+and `train_fast.py` with D-024 settings (negative weight 5000, layer 64, 20,000 steps).
+Feedback augments the training set; existing synthetic test clips remain separate. It writes
+a candidate in the isolated run directory. Compare old and new models on the same held-out
+real clips, then run PLAN 3.7 phone acceptance checks before manually swapping; training alone
+does not establish that the candidate is better, and no model is deployed automatically.
