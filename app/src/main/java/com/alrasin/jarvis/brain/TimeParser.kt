@@ -4,6 +4,7 @@ import java.time.DayOfWeek
 import java.time.LocalDate
 import java.time.LocalDateTime
 import java.time.LocalTime
+import java.util.Locale
 
 /**
  * Natural time in commands (PLAN 6.3): "at 7 30 pm", "tomorrow 5 pm", "in 2 hours", "every friday at 6",
@@ -27,18 +28,18 @@ object TimeParser {
     private const val DAY_RE = "monday|tuesday|wednesday|thursday|friday|saturday|sunday"
     private val AMPM = "(a ?m|p ?m)"
 
-    private val IN_DURATION = Regex("\\b(?:in|after) ((?:(?:\\d+|a|an|half an?|one and a half)\\s*(?:seconds?|secs?|minutes?|mins?|hours?|hrs?|days?)\\s*(?:and\\s*)?)+)")
+    private val IN_DURATION = Regex("\\b(?:in|after) ((?:(?:\\d+|a|an|half an?|1 and a half)\\s*(?:seconds?|secs?|minutes?|mins?|hours?|hrs?|days?)\\s*(?:and\\s*)?)+)")
 
     /** Seconds in "2 hours and 5 minutes", "half an hour", "90 seconds". Null if none. */
     fun duration(text: String): Long? {
         var total = 0L
         var found = false
-        val re = Regex("(\\d+|a|an|half an?|one and a half)\\s*(seconds?|secs?|minutes?|mins?|hours?|hrs?|days?)\\b")
-        for (m in re.findAll(text)) {
+        val re = Regex("(\\d+|a|an|half an?|1 and a half)\\s*(seconds?|secs?|minutes?|mins?|hours?|hrs?|days?)\\b")
+        for (m in re.findAll(normalize(text))) {
             val n = when (val q = m.groupValues[1]) {
                 "a", "an" -> 1.0
                 "half a", "half an" -> 0.5
-                "one and a half" -> 1.5
+                "1 and a half" -> 1.5
                 else -> q.toDouble()
             }
             val unit = m.groupValues[2]
@@ -55,7 +56,7 @@ object TimeParser {
     }
 
     fun parse(text: String, now: LocalDateTime): Match? {
-        var rest = " $text "
+        var rest = " ${normalize(text)} "
         // 1. relative: "in 2 hours"
         IN_DURATION.find(rest)?.let { m ->
             val secs = duration(m.groupValues[1]) ?: return@let
@@ -65,21 +66,34 @@ object TimeParser {
         var date: LocalDate? = null
         var repeat = "none"
         var weekday: DayOfWeek? = null
+        var weekQualifier = ""
+        var monthDay: Int? = null
+        var part: String? = null
+        var todayExplicit = false
         var hint: String? = null   // am | pm
         fun cut(re: Regex): MatchResult? = re.find(rest)?.also { rest = " " + rest.replaceRange(it.range, " ").trim() + " " }
 
         cut(Regex(" (?:every day|everyday|daily|each day)(?: at)? "))?.let { repeat = "daily" }
         cut(Regex(" (?:every|each) ($DAY_RE)s?(?: at)? "))?.let { repeat = "weekly"; weekday = DAYS[it.groupValues[1]] }
-        if (weekday == null) cut(Regex(" (?:on |this |next )?($DAY_RE)(?: at)? "))?.let { weekday = DAYS[it.groupValues[1]] }
+        if (weekday == null) cut(Regex(" (?:on )?(?:(this|next) )?($DAY_RE)(?: at)? "))?.let {
+            weekQualifier = it.groupValues[1]
+            weekday = DAYS[it.groupValues[2]]
+        }
+        cut(Regex(" on (?:the )?(\\d{1,2})(?:st|nd|rd|th)?(?: at)? "))?.let {
+            monthDay = it.groupValues[1].toInt()
+            if (monthDay !in 1..31) return null
+        }
         cut(Regex(" (?:tomorrow|tmrw)(?: (morning|afternoon|evening|night))?(?: at)? "))?.let {
             date = now.toLocalDate().plusDays(1)
-            hint = partHint(it.groupValues[1])
+            part = it.groupValues[1].takeIf { value -> value.isNotEmpty() }
+            hint = partHint(part)
         }
         cut(Regex(" (?:today|tonight)(?: at)? "))?.let {
             date = now.toLocalDate()
-            if (it.value.contains("tonight")) hint = "pm"
+            todayExplicit = true
+            if (it.value.contains("tonight")) { hint = "pm"; part = "night" }
         }
-        cut(Regex(" (?:this |in the )(morning|afternoon|evening)(?: at)? "))?.let { hint = partHint(it.groupValues[1]) }
+        cut(Regex(" (?:this |in the )(morning|afternoon|evening)(?: at)? "))?.let { part = it.groupValues[1]; hint = partHint(part) }
         cut(Regex(" at night "))?.let { hint = "pm" }
 
         // 3. time of day
@@ -91,33 +105,42 @@ object TimeParser {
         }
         if (time == null) cut(Regex(" (?:at |by |for )?(half past|quarter past|quarter to) (\\d{1,2})(?: $AMPM)? "))?.let {
             val h = it.groupValues[2].toInt()
-            hint = ampm(it.groupValues[3]) ?: hint
+            val explicitHint = ampm(it.groupValues[3])
+            if (h > 23 || (explicitHint != null && h !in 1..12)) return null
+            hint = explicitHint ?: hint
+            val hour = if (h in 1..12) when (hint) {
+                "pm" -> h % 12 + 12
+                "am" -> h % 12
+                else -> h
+            } else h
             time = when (it.groupValues[1]) {
-                "half past" -> LocalTime.of(h % 24, 30)
-                "quarter past" -> LocalTime.of(h % 24, 15)
-                else -> LocalTime.of((h + 23) % 24, 45)
+                "half past" -> LocalTime.of(hour, 30)
+                "quarter past" -> LocalTime.of(hour, 15)
+                else -> LocalTime.of(hour, 0).minusMinutes(15)
             }
+            if (hint != null) hint = "fixed"
         }
         if (time == null) {
-            val m = Regex(" (?:at |by |for )?(\\d{1,2})(?: (\\d{2}))?(?: o clock)?(?: $AMPM)?(?: (in the morning|in the evening|in the afternoon|at night))? ")
+            val m = Regex(" (?:at |by |for )?(\\d{1,2})(?:[: ](\\d{2}))?(?: o clock)?(?: $AMPM)?(?: (in the morning|in the evening|in the afternoon|at night))? ")
                 .findAll(rest).firstOrNull { m ->
                     // a bare number is only a time with "at"/am/pm/o'clock/minutes, or when a day word was given
                     val v = m.value
                     v.startsWith(" at ") || v.startsWith(" by ") || m.groupValues[2].isNotEmpty() || m.groupValues[3].isNotEmpty() ||
-                        v.contains("o clock") || m.groupValues[4].isNotEmpty() || date != null || weekday != null || repeat != "none"
+                        v.contains("o clock") || m.groupValues[4].isNotEmpty() || date != null || weekday != null || monthDay != null || hint != null || repeat != "none"
                 }
             if (m != null) {
                 val h = m.groupValues[1].toInt()
                 val mi = m.groupValues[2].ifEmpty { "0" }.toInt()
-                if (h > 23 || mi > 59) return null
+                if (h > 23 || mi > 59 || (ampm(m.groupValues[3]) != null && h !in 1..12)) return null
                 hint = ampm(m.groupValues[3]) ?: partHint(m.groupValues[4].substringAfterLast(' ')) ?: hint
+                if (hint == null && (m.groupValues[1].startsWith("0") || m.value.contains(':') || h > 12)) hint = "fixed"
                 time = LocalTime.of(h, mi)
                 rest = " " + rest.replaceRange(m.range, " ").trim() + " "
             }
         }
 
-        if (time == null && date == null && weekday == null && repeat == "none") return null
-        var tod = time ?: LocalTime.of(9, 0)
+        if (time == null && date == null && weekday == null && monthDay == null && part == null && repeat == "none") return null
+        var tod = time ?: LocalTime.of(when (part) { "afternoon" -> 15; "evening" -> 18; "night" -> 21; else -> 9 }, 0)
         if (time != null && hint != "fixed" && tod.hour in 1..12) {
             tod = when (hint) {
                 "pm" -> if (tod.hour < 12) tod.plusHours(12) else tod
@@ -129,19 +152,44 @@ object TimeParser {
         var at: LocalDateTime = when {
             date != null -> LocalDateTime.of(date, tod)
             weekday != null -> {
-                var d = today
-                while (d.dayOfWeek != weekday) d = d.plusDays(1)
-                LocalDateTime.of(d, tod).let { if (!it.isAfter(now)) it.plusWeeks(1) else it }
+                val d = when (weekQualifier) {
+                    "this", "next" -> today.minusDays((today.dayOfWeek.value - 1).toLong())
+                        .plusDays((weekday!!.value - 1).toLong())
+                        .plusWeeks(if (weekQualifier == "next") 1 else 0)
+                    else -> today.plusDays(((weekday!!.value - today.dayOfWeek.value + 7) % 7).toLong())
+                }
+                LocalDateTime.of(d, tod).let {
+                    if (weekQualifier == "this" && !it.isAfter(now)) return null
+                    if (!it.isAfter(now)) it.plusWeeks(1) else it
+                }
+            }
+            monthDay != null -> {
+                var month = today.withDayOfMonth(1)
+                while (monthDay!! > month.lengthOfMonth() ||
+                    !LocalDateTime.of(month.withDayOfMonth(monthDay!!.coerceAtMost(month.lengthOfMonth())), tod).isAfter(now)) {
+                    month = month.plusMonths(1)
+                }
+                LocalDateTime.of(month.withDayOfMonth(monthDay!!), tod)
             }
             else -> LocalDateTime.of(today, tod)
         }
         // no am/pm said and time already passed today: try the pm version, else tomorrow
-        if (date == null && weekday == null && !at.isAfter(now)) {
-            at = if (hint == null && time != null && time!!.hour in 1..11 && at.plusHours(12).isAfter(now)) at.plusHours(12)
+        if ((date == null || todayExplicit) && weekday == null && monthDay == null && !at.isAfter(now)) {
+            at = if (!todayExplicit && hint == null && !text.contains(':') && time != null && time!!.hour in 1..11 && at.plusHours(12).isAfter(now)) at.plusHours(12)
             else at.plusDays(1)
         }
-        return Match(at, repeat, clean(rest), time != null)
+        return Match(at, repeat, clean(rest), time != null || part != null)
     }
+
+    private fun normalize(text: String): String = NumberWords.normalize(
+        text.lowercase(Locale.ENGLISH).replace("o'clock", "o clock")
+            .replace(Regex("\\b([ap])\\.m\\.?(?=\\s|$)"), "$1m")
+            .replace(Regex("(?<=\\d)([ap]m)\\b"), " $1")
+            .replace(Regex("\\bon (the )?(first|second|third|fourth|fifth|sixth|seventh|eighth|ninth|tenth)\\b")) {
+                "on ${it.groupValues[1]}${listOf("first", "second", "third", "fourth", "fifth", "sixth", "seventh", "eighth", "ninth", "tenth").indexOf(it.groupValues[2]) + 1}th"
+            }
+            .replace(Regex("\\s+"), " ").trim(),
+    ).replace(Regex("\\b(\\d{1,2}) 0 ([0-9])\\b"), "$1 0$2")
 
     private fun ampm(s: String) = when (s.replace(" ", "")) { "am" -> "am"; "pm" -> "pm"; else -> null }
 
