@@ -11,5 +11,6 @@ internal object DeviceActionPolicy {
                 (name.contains("torch", ignoreCase = true) || name.equals("flashlight", ignoreCase = true))
         }.distinct().sorted()
 
-    fun torchBrightness(maximum: String): Int? = maximum.trim().toIntOrNull()?.takeIf { it > 0 }
+    // Some MTK flash drivers report max 2047 but silently stay at 0 for values above ~255.
+    fun torchBrightness(maximum: String): Int? = maximum.trim().toIntOrNull()?.takeIf { it > 0 }?.coerceAtMost(255)
 }

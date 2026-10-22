@@ -65,11 +65,21 @@ class Torch(private val context: Context) {
             .getOrNull()
     }
 
+    /** MIUI can accept setTorchMode from a background app and silently ignore it; wait for the callback to confirm. */
+    private suspend fun confirmed(value: Boolean): Boolean {
+        repeat(10) {
+            if (state == value) return true
+            delay(50)
+        }
+        return state == value
+    }
+
     /** Camera API first; MIUI refuses it for background apps, then the flash LED is switched with root. */
     suspend fun set(value: Boolean): Boolean {
         val api = runCatching { id?.let { state = null; cm.setTorchMode(it, value); true } ?: false }
             .onFailure { JarvisLog.e("torch: camera API failed", it) }.getOrDefault(false)
-        if (api) { usesRoot = false; return true }
+        if (api && confirmed(value)) { usesRoot = false; return true }
+        if (api) JarvisLog.i("torch: camera API accepted but torch did not change; trying root LED")
         val path = led() ?: return false
         val maximum = DeviceActionPolicy.torchBrightness(
             RootShell.run("cat ${RootShell.quote("$path/max_brightness")}").out,

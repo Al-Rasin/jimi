@@ -35,6 +35,7 @@ class DeviceActionPolicyTest {
     @Test fun usesTheDriverBrightnessRangeAndRejectsUnknownRanges() {
         assertEquals(1, DeviceActionPolicy.torchBrightness("1\n"))
         assertEquals(255, DeviceActionPolicy.torchBrightness("255"))
+        assertEquals(255, DeviceActionPolicy.torchBrightness("2047"))
         listOf("0", "-1", "", "255\nPermission denied", "2147483648").forEach {
             assertNull(DeviceActionPolicy.torchBrightness(it))
         }
