@@ -40,7 +40,7 @@ object FunctionGemma {
     /** GBNF: either one function call to a known tool with its own arg names, or short plain text. */
     fun grammar(tools: List<Tool>): String {
         val sb = StringBuilder()
-        sb.append("root ::= call | text\n")
+        sb.append("root ::= [ \\n]* (call | text)\n")  // model often starts with a newline
         sb.append("text ::= [^<] [^<]*\n")
         sb.append("call ::= \"<start_function_call>call:\" (")
         sb.append(tools.indices.joinToString(" | ") { "t$it" })

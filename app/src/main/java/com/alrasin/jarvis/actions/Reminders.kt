@@ -23,10 +23,15 @@ import javax.inject.Singleton
 /** Exact alarms for reminders (PLAN 6.2). Survives reboot via [rescheduleAll] from BootReceiver. */
 @Singleton
 class ReminderScheduler @Inject constructor(@ApplicationContext private val context: Context, private val dao: ReminderDao) {
-    private val am = context.getSystemService(AlarmManager::class.java)
+    private val am: AlarmManager by lazy { context.getSystemService(AlarmManager::class.java) }
 
     fun schedule(r: Reminder) {
-        am.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, r.dueMs, pending(r.id))
+        try {
+            am.setExactAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, r.dueMs, pending(r.id))
+        } catch (e: SecurityException) {
+            // exact alarm access removed: a few minutes late is better than never
+            am.setAndAllowWhileIdle(AlarmManager.RTC_WAKEUP, r.dueMs, pending(r.id))
+        }
         JarvisLog.i("reminder ${r.id} at ${Instant.ofEpochMilli(r.dueMs)}")
     }
 

@@ -12,7 +12,7 @@ import com.alrasin.jarvis.core.Tool
 import com.alrasin.jarvis.core.ToolResult
 
 fun mediaTools(context: Context): List<Tool> {
-    val audio = context.getSystemService(AudioManager::class.java)
+    val audio by lazy { context.getSystemService(AudioManager::class.java) }
     fun key(code: Int) {
         val t = SystemClock.uptimeMillis()
         audio.dispatchMediaKeyEvent(KeyEvent(t, t, KeyEvent.ACTION_DOWN, code, 0))

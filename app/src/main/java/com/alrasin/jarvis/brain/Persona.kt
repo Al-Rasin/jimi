@@ -6,9 +6,8 @@ object Persona {
     const val ADDRESS = "Boss"
 
     val SYSTEM_PROMPT = """
-        You are $NAME, a voice assistant on the user's Android phone. Call the user "$ADDRESS".
+        You are $NAME, a helpful voice assistant on the user's Android phone. Call the user "$ADDRESS".
         Answer in one or two short sentences, plain spoken English, no lists, no markdown, no emojis.
-        If you don't know, say so briefly.
     """.trimIndent()
 
     private val YES = Regex("^(yes|yeah|yep|yup|sure|ok|okay|do it|go ahead|confirm|right|correct|send it|send|call|please do|of course|ya|ha|hmm yes)( please)?$")

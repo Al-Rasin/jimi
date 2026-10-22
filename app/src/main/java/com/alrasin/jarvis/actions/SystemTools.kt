@@ -1,5 +1,6 @@
 package com.alrasin.jarvis.actions
 
+import android.annotation.SuppressLint
 import android.app.NotificationManager
 import android.bluetooth.BluetoothManager
 import android.content.Context
@@ -25,19 +26,24 @@ import java.util.Date
 import java.util.Locale
 
 /** Torch state is only known through a callback. */
-class Torch(context: Context) {
-    private val cm = context.getSystemService(CameraManager::class.java)
-    private val id = cm.cameraIdList.firstOrNull { cm.getCameraCharacteristics(it).get(CameraCharacteristics.FLASH_INFO_AVAILABLE) == true }
-    @Volatile var on = false
-        private set
+/** Flashlight. Camera service is opened on first use, so a camera problem never breaks the tool list. */
+class Torch(private val context: Context) {
+    @Volatile private var state = false
+    val on: Boolean get() = runCatching { cm; state }.getOrDefault(false)
 
-    init {
-        cm.registerTorchCallback(object : CameraManager.TorchCallback() {
-            override fun onTorchModeChanged(cameraId: String, enabled: Boolean) { if (cameraId == id) on = enabled }
-        }, null)
+    private val cm: CameraManager by lazy {
+        context.getSystemService(CameraManager::class.java).also { cm ->
+            cm.registerTorchCallback(object : CameraManager.TorchCallback() {
+                override fun onTorchModeChanged(cameraId: String, enabled: Boolean) { if (cameraId == id) state = enabled }
+            }, null)
+        }
+    }
+    private val id: String? by lazy {
+        runCatching { cm.cameraIdList.firstOrNull { cm.getCameraCharacteristics(it).get(CameraCharacteristics.FLASH_INFO_AVAILABLE) == true } }
+            .getOrNull()
     }
 
-    fun set(value: Boolean): Boolean = id?.let { cm.setTorchMode(it, value); true } ?: false
+    fun set(value: Boolean): Boolean = runCatching { id?.let { cm.setTorchMode(it, value); true } ?: false }.getOrDefault(false)
 }
 
 val TOGGLE_TARGETS = listOf("flashlight", "wifi", "bluetooth", "data", "dnd", "airplane", "location", "hotspot", "battery_saver", "auto_rotate")
@@ -62,7 +68,7 @@ fun systemTools(context: Context, torch: Torch): List<Tool> {
             "flashlight" -> torch.set(on)
             "wifi" -> RootShell.run("svc wifi $e").ok
             "bluetooth" -> RootShell.run("svc bluetooth $e").ok ||
-                @Suppress("DEPRECATION") (context.getSystemService(BluetoothManager::class.java).adapter?.let { if (on) it.enable() else it.disable() } ?: false)
+                bluetoothFallback(context, on)
             "data" -> RootShell.run("svc data $e").ok
             "dnd" -> RootShell.run("cmd notification set_dnd ${if (on) "priority" else "off"}").ok
             "airplane" -> RootShell.run("cmd connectivity airplane-mode $e").ok
@@ -86,8 +92,12 @@ fun systemTools(context: Context, torch: Torch): List<Tool> {
         else -> target.replaceFirstChar { it.uppercase() }
     }
 
-    val maxBrightness = Resources.getSystem().getIdentifier("config_screenBrightnessSettingMaximum", "integer", "android")
-        .takeIf { it != 0 }?.let { Resources.getSystem().getInteger(it) } ?: 255
+    val maxBrightness by lazy {
+        runCatching {
+            Resources.getSystem().getIdentifier("config_screenBrightnessSettingMaximum", "integer", "android")
+                .takeIf { it != 0 }?.let { Resources.getSystem().getInteger(it) }
+        }.getOrNull() ?: 255
+    }
 
     return listOf(
         SimpleTool(
@@ -155,6 +165,13 @@ fun systemTools(context: Context, torch: Torch): List<Tool> {
         },
     )
 }
+
+/** Old API, still works on Android 11 when root `svc` fails. */
+@SuppressLint("MissingPermission")
+@Suppress("DEPRECATION")
+private fun bluetoothFallback(context: Context, on: Boolean): Boolean = runCatching {
+    context.getSystemService(BluetoothManager::class.java).adapter?.let { if (on) it.enable() else it.disable() } ?: false
+}.getOrDefault(false)
 
 /** Used by unlock_phone (risk VOICE_ID) and the panic word. */
 object Keyguard {

@@ -234,6 +234,7 @@ object RuleMatcher {
     }
 
     private fun memory(t: String): ToolCall? {
+        if (t.matches(re("what do you (?:remember|know)(?: about me)?|what (?:have|did) you (?:remembered|remember|learned)(?: about me)?|(?:list|show|tell me)(?: my| your)? (?:facts|memories)"))) return call("recall_facts")
         Regex("^(?:remember|dont forget|keep in mind|note that i)(?: that)? (.+)$").find(t)?.let {
             if (it.groupValues[1].startsWith("to ")) return null   // "remember to buy milk" = reminder, handled by LLM/chat
             return call("remember_fact", "text" to it.groupValues[1])

@@ -11,6 +11,8 @@ ksp {
     arg("room.schemaLocation", "$projectDir/schemas")
 }
 
+val llamaSource = file("src/main/cpp/llama.cpp/CMakeLists.txt").exists()
+
 android {
     namespace = "com.alrasin.jarvis"
     compileSdk = 35
@@ -23,6 +25,27 @@ android {
         versionName = "0.1.0"
         // Only the Redmi (arm64): smaller APK.
         ndk { abiFilters += "arm64-v8a" }
+        if (llamaSource) {
+            externalNativeBuild {
+                cmake {
+                    // Release-speed native code even in debug APKs: a -O0 llama.cpp is ~10x slower
+                    arguments += listOf("-DCMAKE_BUILD_TYPE=Release", "-DANDROID_PLATFORM=android-30")
+                    cFlags += "-O3"
+                    cppFlags += listOf("-O3", "-std=c++17")
+                }
+            }
+        }
+    }
+
+    // Local LLM (PLAN 9.1): built only after tools/fetch_llama.sh put llama.cpp in app/src/main/cpp/.
+    if (llamaSource) {
+        ndkVersion = "27.0.12077973"
+        externalNativeBuild {
+            cmake {
+                path = file("src/main/cpp/CMakeLists.txt")
+                version = "3.22.1"
+            }
+        }
     }
 
     buildTypes {
@@ -45,6 +68,9 @@ android {
     sourceSets["main"].assets.srcDir(rootProject.file("models/wakeword/app-assets"))
     // Speech-to-text + voice models (D-025), from tools/fetch_speech.sh: models/speech/app-assets/{stt,tts}/
     sourceSets["main"].assets.srcDir(rootProject.file("models/speech/app-assets"))
+    // android.* stubs return 0/null in JVM tests (the tool list is built in ToolPromptDump without a phone)
+    testOptions { unitTests.isReturnDefaultValues = true }
+
     androidResources {
         noCompress += "onnx"
     }

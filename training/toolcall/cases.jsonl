@@ -1,0 +1,45 @@
+{"text": "open youtube", "tool": "open_app", "args": {"app": "youtube"}}
+{"text": "launch whatsapp", "tool": "open_app", "args": {"app": "whatsapp"}}
+{"text": "close facebook", "tool": "close_app", "args": {"app": "facebook"}}
+{"text": "go to google.com", "tool": "open_url", "args": {"url": "google.com"}}
+{"text": "wake me up at 6:30", "tool": "set_alarm", "args": {"time": "06:30"}}
+{"text": "set an alarm for 7 am", "tool": "set_alarm", "args": {"time": "07:00"}}
+{"text": "start a 5 minute timer", "tool": "set_timer", "args": {"seconds": "300"}}
+{"text": "stop the alarm", "tool": "cancel_alarm"}
+{"text": "call mom", "tool": "call", "args": {"contact": "mom"}}
+{"text": "ring rahim on whatsapp", "tool": "call", "args": {"contact": "rahim", "app": "whatsapp"}}
+{"text": "text karim I am coming", "tool": "send_sms", "args": {"contact": "karim"}}
+{"text": "send a whatsapp to sara saying good night", "tool": "send_whatsapp", "args": {"contact": "sara"}}
+{"text": "read my messages", "tool": "read_messages"}
+{"text": "play arijit singh", "tool": "play_media", "args": {"query": "arijit singh"}}
+{"text": "pause the music", "tool": "media_control", "args": {"action": "pause"}}
+{"text": "next song", "tool": "media_control", "args": {"action": "next"}}
+{"text": "volume 50", "tool": "set_volume", "args": {"level": "50"}}
+{"text": "turn on the flashlight", "tool": "toggle", "args": {"target": "flashlight", "state": "on"}}
+{"text": "switch off wifi", "tool": "toggle", "args": {"target": "wifi", "state": "off"}}
+{"text": "enable do not disturb", "tool": "toggle", "args": {"target": "dnd", "state": "on"}}
+{"text": "turn bluetooth off", "tool": "toggle", "args": {"target": "bluetooth", "state": "off"}}
+{"text": "make the screen brighter", "tool": "set_brightness", "args": {"level": "up"}}
+{"text": "how much battery is left", "tool": "device_status", "args": {"what": "battery"}}
+{"text": "what time is it", "tool": "device_status", "args": {"what": "time"}}
+{"text": "take a screenshot", "tool": "take_screenshot"}
+{"text": "lock the phone", "tool": "lock_phone"}
+{"text": "what's on my screen", "tool": "read_screen"}
+{"text": "tap on send", "tool": "tap", "args": {"text": "send"}}
+{"text": "scroll down", "tool": "scroll", "args": {"direction": "down"}}
+{"text": "go back", "tool": "go_back"}
+{"text": "go home", "tool": "go_home"}
+{"text": "note that the wifi password is 1234", "tool": "create_note"}
+{"text": "remind me to drink water at 5 pm", "tool": "create_reminder"}
+{"text": "what are my reminders", "tool": "list_reminders"}
+{"text": "remember that my sister's name is Nila", "tool": "remember_fact"}
+{"text": "what do you remember about me", "tool": "recall_facts"}
+{"text": "read my notifications", "tool": "read_notifications"}
+{"text": "what's the weather today", "tool": "weather"}
+{"text": "will it rain tomorrow in Dhaka", "tool": "weather", "args": {"place": "dhaka"}}
+{"text": "latest news about cricket", "tool": "news", "args": {"topic": "cricket"}}
+{"text": "search for best android phones 2026", "tool": "web_search"}
+{"text": "who is Rabindranath Tagore", "tool": "wiki_lookup"}
+{"text": "tell me a joke", "tool": null}
+{"text": "how are you", "tool": null}
+{"text": "thank you", "tool": null}
