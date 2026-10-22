@@ -6,6 +6,11 @@ plugins {
     alias(libs.plugins.hilt)
 }
 
+ksp {
+    // Room schema JSON per version (small, in git) — migrations are checked against it
+    arg("room.schemaLocation", "$projectDir/schemas")
+}
+
 android {
     namespace = "com.alrasin.jarvis"
     compileSdk = 35
@@ -70,6 +75,9 @@ dependencies {
     // Not in git (big binary): tools/fetch_speech.sh downloads it.
     implementation(files("libs/sherpa-onnx-static-link-onnxruntime-${libs.versions.sherpa.onnx.get()}.aar"))
     implementation(libs.kotlinx.coroutines.android)
+    implementation(libs.libsu.core)
+    implementation(libs.okhttp)
+    implementation(libs.jsoup)
 
     testImplementation(libs.junit)
 }

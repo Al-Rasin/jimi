@@ -4,6 +4,8 @@ import android.content.Context
 import androidx.room.Database
 import androidx.room.Room
 import androidx.room.RoomDatabase
+import androidx.room.migration.Migration
+import androidx.sqlite.db.SupportSQLiteDatabase
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
@@ -11,9 +13,32 @@ import dagger.hilt.android.qualifiers.ApplicationContext
 import dagger.hilt.components.SingletonComponent
 import javax.inject.Singleton
 
-@Database(entities = [WakeEvent::class], version = 1, exportSchema = false)
+@Database(
+    entities = [
+        WakeEvent::class, ConversationTurn::class, Note::class, Reminder::class, NotificationLog::class,
+        AppRule::class, MemoryFact::class, ToolCallLog::class, Routine::class,
+    ],
+    version = 2,
+    exportSchema = true,
+)
 abstract class JarvisDatabase : RoomDatabase() {
     abstract fun wakeEventDao(): WakeEventDao
+    abstract fun turnDao(): TurnDao
+    abstract fun noteDao(): NoteDao
+    abstract fun reminderDao(): ReminderDao
+    abstract fun notificationDao(): NotificationDao
+    abstract fun memoryDao(): MemoryDao
+    abstract fun toolLogDao(): ToolLogDao
+    abstract fun routineDao(): RoutineDao
+
+    companion object {
+        /** v1 had only wake_event (kept as is). SQL copied from app/schemas/…/2.json. */
+        val MIGRATION_1_2 = object : Migration(1, 2) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                MIGRATION_SQL_1_2.forEach(db::execSQL)
+            }
+        }
+    }
 }
 
 @Module
@@ -22,8 +47,16 @@ object DataModule {
     @Provides
     @Singleton
     fun database(@ApplicationContext context: Context): JarvisDatabase =
-        Room.databaseBuilder(context, JarvisDatabase::class.java, "jarvis.db").build()
+        Room.databaseBuilder(context, JarvisDatabase::class.java, "jarvis.db")
+            .addMigrations(JarvisDatabase.MIGRATION_1_2)
+            .build()
 
-    @Provides
-    fun wakeEventDao(db: JarvisDatabase): WakeEventDao = db.wakeEventDao()
+    @Provides fun wakeEventDao(db: JarvisDatabase): WakeEventDao = db.wakeEventDao()
+    @Provides fun turnDao(db: JarvisDatabase): TurnDao = db.turnDao()
+    @Provides fun noteDao(db: JarvisDatabase): NoteDao = db.noteDao()
+    @Provides fun reminderDao(db: JarvisDatabase): ReminderDao = db.reminderDao()
+    @Provides fun notificationDao(db: JarvisDatabase): NotificationDao = db.notificationDao()
+    @Provides fun memoryDao(db: JarvisDatabase): MemoryDao = db.memoryDao()
+    @Provides fun toolLogDao(db: JarvisDatabase): ToolLogDao = db.toolLogDao()
+    @Provides fun routineDao(db: JarvisDatabase): RoutineDao = db.routineDao()
 }

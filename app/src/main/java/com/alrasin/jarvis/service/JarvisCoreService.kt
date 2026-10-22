@@ -2,8 +2,11 @@ package com.alrasin.jarvis.service
 
 import android.Manifest
 import android.annotation.SuppressLint
+import android.app.KeyguardManager
+import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
+import android.content.IntentFilter
 import android.content.pm.PackageManager
 import android.content.pm.ServiceInfo
 import android.media.AudioFormat
@@ -11,13 +14,18 @@ import android.media.AudioManager
 import android.media.AudioRecord
 import android.media.MediaRecorder
 import android.media.ToneGenerator
+import android.os.BatteryManager
 import android.os.PowerManager
 import androidx.lifecycle.LifecycleService
 import androidx.lifecycle.lifecycleScope
+import com.alrasin.jarvis.brain.Assistant
+import com.alrasin.jarvis.brain.ModelBrain
+import com.alrasin.jarvis.brain.Persona
 import com.alrasin.jarvis.core.JarvisLog
 import com.alrasin.jarvis.data.Settings
 import com.alrasin.jarvis.data.WakeEvent
 import com.alrasin.jarvis.data.WakeEventDao
+import com.alrasin.jarvis.ui.AssistantActivity
 import com.alrasin.jarvis.voice.AudioRing
 import com.alrasin.jarvis.voice.SpeechToText
 import com.alrasin.jarvis.voice.TextToSpeech
@@ -30,6 +38,11 @@ import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.channels.Channel
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.runBlocking
+import java.util.concurrent.atomic.AtomicInteger
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.currentCoroutineContext
@@ -43,18 +56,30 @@ import java.util.Locale
 import javax.inject.Inject
 
 /**
- * Always-on core (PLAN 2.1) — for now: listens for "Hey Jimi" (3.1), asks "Was that you?" (3.6, D-023),
- * then hears the command, shows it and says "You said …" (3.2–3.4 echo loop).
+ * Always-on core (PLAN 2.1): listens for "Hey Jimi" (3.1), hears the command (3.2), sends it to the
+ * [Assistant] and speaks the answer sentence by sentence (3.3). After the answer it keeps listening for
+ * a few seconds without the wake word (follow-up, like Siri / Google Assistant). The panel
+ * ([AssistantActivity]) shows what was heard so the user can fix it without a pop-up.
  */
 @AndroidEntryPoint
 class JarvisCoreService : LifecycleService() {
     @Inject lateinit var settings: Settings
     @Inject lateinit var dao: WakeEventDao
+    @Inject lateinit var assistant: Assistant
+    @Inject lateinit var models: ModelBrain
 
     @Volatile private var threshold = Settings.DEFAULT_THRESHOLD
     @Volatile private var missedRequested = false
+    /** True while thinking or speaking: the mic loop ignores audio (it would hear our own voice). */
     @Volatile private var speaking = false
+    /** Set to "follow_up" or "tap": the mic loop opens a command session without the wake word. */
+    @Volatile private var listenRequest: String? = null
+    @Volatile private var followUp = true
+    @Volatile private var showPanel = true
     private var tts: Deferred<TextToSpeech?>? = null
+    private val speech = Channel<String>(Channel.UNLIMITED)
+    private val speechLeft = AtomicInteger(0)
+    private var batteryWarnedAt = 100
     private var listenJob: Job? = null
     private var wakeLock: PowerManager.WakeLock? = null
 
@@ -67,14 +92,135 @@ class JarvisCoreService : LifecycleService() {
                 return START_NOT_STICKY
             }
             ACTION_MISSED -> missedRequested = true
+            ACTION_SAY -> intent.getStringExtra(EXTRA_TEXT)?.let { announce(it) }
+            ACTION_ASK -> intent.getStringExtra(EXTRA_TEXT)?.let {
+                ask(it, it, intent.getStringExtra(EXTRA_SOURCE) ?: "typed", null, null)
+            }
+            ACTION_LISTEN -> listenRequest = "tap"
+            ACTION_SHUT_UP -> shutUp()
         }
         startForeground(
             Notifications.ID_SERVICE,
             Notifications.listening(this, "Say \"Hey Jimi\""),
             ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE,
         )
-        if (listenJob == null) startListening()
+        ensureVoice()
+        val on = intent?.action !in QUIET_ACTIONS || runBlocking { settings.listeningEnabled.first() }
+        if (listenJob == null && on) startListening()
         return START_STICKY
+    }
+
+    /** Loads the voice once and starts the speaker loop (sentences are queued in [speech]). */
+    private fun ensureVoice() {
+        if (tts != null) return
+        tts = lifecycleScope.async(Dispatchers.IO) {
+            runCatching { TextToSpeech(this@JarvisCoreService) }
+                .onFailure { JarvisLog.e("voice not loaded (run tools/fetch_speech.sh)", it) }
+                .getOrNull()
+        }
+        lifecycleScope.launch(Dispatchers.IO) {
+            for (s in speech) {
+                try {
+                    tts?.await()?.speak(s)
+                } catch (t: Throwable) {
+                    JarvisLog.e("speak failed", t)
+                } finally {
+                    speechLeft.decrementAndGet()
+                }
+            }
+        }
+        lifecycleScope.launch { settings.followUp.collect { followUp = it } }
+        lifecycleScope.launch { settings.showPanel.collect { showPanel = it } }
+        registerReceiver(battery, IntentFilter(Intent.ACTION_BATTERY_CHANGED))
+        models.warmUp()
+    }
+
+    private fun say(text: String) {
+        if (text.isBlank()) return
+        speechLeft.incrementAndGet()
+        speech.trySend(text)
+    }
+
+    private suspend fun awaitSpeech() {
+        while (speechLeft.get() > 0) delay(50)
+    }
+
+    @OptIn(ExperimentalCoroutinesApi::class)
+    private fun shutUp() {
+        while (speech.tryReceive().isSuccess) speechLeft.decrementAndGet()
+        tts?.takeIf { it.isCompleted }?.getCompleted()?.stop()
+        listenRequest = null
+    }
+
+    /** Something Jimi says on its own (reminder, low battery). Not a conversation turn. */
+    private fun announce(text: String) {
+        _reply.value = text
+        Notifications.showReply(this, "", text)
+        lifecycleScope.launch {
+            speaking = true
+            say(text)
+            awaitSpeech()
+            delay(TAIL_MS)
+            speaking = false
+        }
+    }
+
+    private val battery = object : BroadcastReceiver() {
+        override fun onReceive(context: Context, intent: Intent) {
+            val level = intent.getIntExtra(BatteryManager.EXTRA_LEVEL, -1) * 100 /
+                intent.getIntExtra(BatteryManager.EXTRA_SCALE, 100).coerceAtLeast(1)
+            val plugged = intent.getIntExtra(BatteryManager.EXTRA_PLUGGED, 0) != 0
+            if (plugged || level > 20) { batteryWarnedAt = 100; return }
+            val step = if (level <= 5) 5 else 15
+            if (level <= step && batteryWarnedAt > step) {
+                batteryWarnedAt = step
+                announce("${Persona.ADDRESS}, battery is at $level percent. Please charge me.")
+            }
+        }
+    }
+
+    /** Runs one command through the assistant and speaks the answer. Then maybe listens for a follow-up. */
+    private fun ask(text: String, raw: String, source: String, wakeId: Long?, audioPath: String?) {
+        speaking = true
+        _phase.value = PHASE_THINKING
+        _heard.value = text
+        _reply.value = ""
+        lifecycleScope.launch(Dispatchers.Default) {
+            var next: String? = null
+            try {
+                val locked = getSystemService(KeyguardManager::class.java).isKeyguardLocked
+                val input = Assistant.Input(text, raw, source, locked, voiceOk = null, wakeId = wakeId, audioPath = audioPath)
+                val r = assistant.handle(input) { sentence ->
+                    _phase.value = PHASE_SPEAKING
+                    say(sentence)
+                }
+                JarvisLog.i("reply (${r.tool ?: "talk"}): ${r.text}")
+                _reply.value = r.text
+                _turnId.value = r.turnId
+                Notifications.showReply(this@JarvisCoreService, text, r.text)
+                _phase.value = PHASE_SPEAKING
+                if (!r.spokenAlready) say(r.text)
+                awaitSpeech()
+                if (r.expectAnswer || (followUp && !r.endConversation && source != "typed")) next = "follow_up"
+            } catch (t: Throwable) {
+                JarvisLog.e("command failed", t)
+            } finally {
+                delay(TAIL_MS)   // let the speaker go quiet before the mic listens again
+                listenRequest = next
+                if (next == null) _phase.value = PHASE_WAKE
+                speaking = false
+            }
+        }
+    }
+
+    private fun showPanel() {
+        if (!showPanel) return
+        runCatching {
+            startActivity(
+                Intent(this, AssistantActivity::class.java)
+                    .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP),
+            )
+        }.onFailure { JarvisLog.e("panel not shown (allow 'display over other apps')", it) }
     }
 
     private fun startListening() {
@@ -107,12 +253,8 @@ class JarvisCoreService : LifecycleService() {
             .onSuccess { JarvisLog.i("speech-to-text: ${it.modelName}") }
             .onFailure { JarvisLog.e("speech-to-text not loaded (run tools/fetch_speech.sh)", it) }
             .getOrNull()
-        tts = lifecycleScope.async(Dispatchers.IO) {
-            runCatching { TextToSpeech(this@JarvisCoreService) }
-                .onFailure { JarvisLog.e("voice not loaded (run tools/fetch_speech.sh)", it) }
-                .getOrNull()
-        }
         var command: SpeechToText.Session? = null
+        var commandSource = "voice"
         var commandChunks = 0
         val commandAudio = ArrayList<ShortArray>()
         var wasBusy = false
@@ -149,24 +291,42 @@ class JarvisCoreService : LifecycleService() {
                     if (cmd.done || ++commandChunks >= COMMAND_MAX_CHUNKS) {
                         command = null
                         cmd.close()
-                        saveCommand(commandAudio, cmd.text)
-                        onCommand(WakePhrase.strip(cmd.text), clips.lastWakeId, clips.lastWakePeak, tone)
+                        val path = saveCommand(commandAudio, cmd.raw)
+                        val wakeId = if (commandSource == "voice") clips.lastWakeId else null
+                        onCommand(WakePhrase.strip(cmd.text), cmd.raw, commandSource, wakeId, clips.lastWakePeak, path, tone)
                     }
                     continue
                 }
                 if (speaking) { wasBusy = true; continue }
+                val req = listenRequest
+                if (req != null && stt != null) {
+                    listenRequest = null
+                    tone.startTone(ToneGenerator.TONE_PROP_BEEP, 120)
+                    command = stt.session(null, waitStart = if (req == "follow_up") FOLLOW_UP_WAIT else SpeechToText.WAIT_START)
+                    commandSource = req
+                    commandAudio.clear()
+                    commandChunks = 0
+                    wasBusy = true
+                    _heard.value = ""
+                    _phase.value = if (req == "follow_up") PHASE_FOLLOW_UP else PHASE_HEARING
+                    if (req == "tap") showPanel()
+                    continue
+                }
                 if (wasBusy) { wasBusy = false; detector.reset() }   // drop audio from before the command
                 val score = detector.process(chunk)
                 _lastScore.value = score
                 if (clips.onChunk(score, threshold, ring, tone) && stt != null) {
                     val preRoll = ring.last(PRE_ROLL_SAMPLES)
                     command = stt.session(preRoll)
+                    commandSource = "voice"
                     commandAudio.clear()
                     commandAudio.add(preRoll)
                     commandChunks = 0
                     wasBusy = true
                     _heard.value = ""
+                    _reply.value = ""
                     _phase.value = PHASE_HEARING
+                    showPanel()
                 }
             }
         } finally {
@@ -182,40 +342,33 @@ class JarvisCoreService : LifecycleService() {
     }
 
     /** Keeps each command's audio + raw STT text, to test better STT models on the user's real voice. */
-    private fun saveCommand(parts: List<ShortArray>, rawText: String) {
+    private fun saveCommand(parts: List<ShortArray>, rawText: String): String? =
         runCatching {
             val audio = ShortArray(parts.sumOf { it.size })
             var pos = 0
             for (p in parts) { p.copyInto(audio, pos); pos += p.size }
             val dir = File(getExternalFilesDir(null), "commands").apply { mkdirs() }
             val name = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.US).format(Date())
-            Wav.write(File(dir, "$name.wav"), audio)
+            val wav = File(dir, "$name.wav")
+            Wav.write(wav, audio)
             File(dir, "$name.txt").writeText(rawText + "\n")
-        }.onFailure { JarvisLog.e("could not save command audio", it) }
-    }
+            wav.path
+        }.onFailure { JarvisLog.e("could not save command audio", it) }.getOrNull()
 
-    /** Echo loop (PLAN 3.4): show what was heard (app + notification, lock screen ok) and say it back. */
-    private fun onCommand(text: String, wakeId: Long?, wakeScore: Float, tone: ToneGenerator) {
-        JarvisLog.i("heard: \"$text\"")
-        _heard.value = text.ifEmpty { "(nothing heard)" }
+    /** A command was heard: answer it. Empty after a follow-up means the conversation is over. */
+    private fun onCommand(
+        text: String, raw: String, source: String, wakeId: Long?, wakeScore: Float, audioPath: String?, tone: ToneGenerator,
+    ) {
+        JarvisLog.i("heard ($source): \"$text\"")
+        if (source == "voice") _wakeId.value = wakeId
         if (wakeId != null) Notifications.showWakeCheck(this, wakeId, wakeScore, heard = text.ifEmpty { "(nothing)" })
         if (text.isEmpty()) {
-            tone.startTone(ToneGenerator.TONE_PROP_NACK, 200)
+            _heard.value = if (source == "follow_up") "" else "(nothing heard)"
+            if (source != "follow_up") tone.startTone(ToneGenerator.TONE_PROP_NACK, 200)
             _phase.value = PHASE_WAKE
             return
         }
-        speaking = true
-        _phase.value = PHASE_SPEAKING
-        lifecycleScope.launch(Dispatchers.IO) {
-            try {
-                tts?.await()?.speak("You said: $text")
-            } catch (t: Throwable) {
-                JarvisLog.e("speak failed", t)
-            } finally {
-                speaking = false
-                _phase.value = PHASE_WAKE
-            }
-        }
+        ask(text, raw, source, wakeId, audioPath)
     }
 
     /** Decides when to save a clip: real wakes, near misses, and "Missed it" taps. */
@@ -286,6 +439,8 @@ class JarvisCoreService : LifecycleService() {
     @OptIn(ExperimentalCoroutinesApi::class)
     override fun onDestroy() {
         listenJob?.cancel()
+        runCatching { unregisterReceiver(battery) }
+        speech.close()
         tts?.let { d -> if (d.isCompleted && !speaking) d.getCompleted()?.close() else d.cancel() }
         wakeLock?.takeIf { it.isHeld }?.release()
         _running.value = false
@@ -295,6 +450,15 @@ class JarvisCoreService : LifecycleService() {
     companion object {
         const val ACTION_STOP = "com.alrasin.jarvis.STOP"
         const val ACTION_MISSED = "com.alrasin.jarvis.MISSED"
+        const val ACTION_SAY = "com.alrasin.jarvis.SAY"
+        const val ACTION_ASK = "com.alrasin.jarvis.ASK"
+        const val ACTION_LISTEN = "com.alrasin.jarvis.LISTEN"
+        const val ACTION_SHUT_UP = "com.alrasin.jarvis.SHUT_UP"
+        const val EXTRA_TEXT = "text"
+        const val EXTRA_SOURCE = "source"
+        private val QUIET_ACTIONS = setOf(ACTION_SAY, ACTION_ASK, ACTION_SHUT_UP)
+        private const val FOLLOW_UP_WAIT = 6f     // seconds to start talking after an answer
+        private const val TAIL_MS = 350L
         private const val RING_SECONDS = 4
         private const val CLIP_SAMPLES = 40_000       // 2.5 s per wake clip
         private const val MISSED_SECONDS = 3
@@ -308,6 +472,8 @@ class JarvisCoreService : LifecycleService() {
         const val PHASE_WAKE = "Say \"Hey Jimi\""
         const val PHASE_HEARING = "Listening to you…"
         const val PHASE_SPEAKING = "Speaking…"
+        const val PHASE_THINKING = "Thinking…"
+        const val PHASE_FOLLOW_UP = "Anything else?"
 
         private val _running = MutableStateFlow(false)
         val running: StateFlow<Boolean> = _running
@@ -320,6 +486,14 @@ class JarvisCoreService : LifecycleService() {
         private val _heard = MutableStateFlow("")
         /** Live (partial) text while hearing a command, then the final text. */
         val heard: StateFlow<String> = _heard
+        private val _reply = MutableStateFlow("")
+        val reply: StateFlow<String> = _reply
+        private val _turnId = MutableStateFlow(0L)
+        /** conversation_turn id of the last answer (for ✓ / ✗ in the panel). */
+        val turnId: StateFlow<Long> = _turnId
+        private val _wakeId = MutableStateFlow<Long?>(null)
+        /** wake_event id of the last voice wake (for "I didn't call"). */
+        val wakeId: StateFlow<Long?> = _wakeId
 
         fun start(context: Context) =
             context.startForegroundService(Intent(context, JarvisCoreService::class.java))
@@ -328,6 +502,23 @@ class JarvisCoreService : LifecycleService() {
         fun missed(context: Context) = context.startService(
             Intent(context, JarvisCoreService::class.java).setAction(ACTION_MISSED)
         )
+
+        private fun send(context: Context, action: String, text: String? = null, source: String? = null) =
+            context.startForegroundService(
+                Intent(context, JarvisCoreService::class.java).setAction(action)
+                    .putExtra(EXTRA_TEXT, text).putExtra(EXTRA_SOURCE, source),
+            )
+
+        /** Jimi says [text] out loud (reminders, alerts). */
+        fun say(context: Context, text: String) = send(context, ACTION_SAY, text)
+
+        /** Runs typed / corrected text as a command. [source]: typed | fix. */
+        fun ask(context: Context, text: String, source: String = "typed") = send(context, ACTION_ASK, text, source)
+
+        /** Start listening now, no wake word (mic button). */
+        fun listen(context: Context) = send(context, ACTION_LISTEN)
+
+        fun shutUp(context: Context) = send(context, ACTION_SHUT_UP)
 
         fun stop(context: Context) = context.startService(
             Intent(context, JarvisCoreService::class.java).setAction(ACTION_STOP)

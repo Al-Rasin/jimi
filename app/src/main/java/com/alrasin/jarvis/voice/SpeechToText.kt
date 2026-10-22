@@ -16,6 +16,10 @@ import java.io.File
  * A transducer model folder in `<external files>/models/stt/` (encoder*, decoder*, joiner*.onnx + tokens.txt) is used
  * instead when present — or [dir] for tests — so other models can be tried without a rebuild.
  * One [Session] per command: feed 16 kHz chunks, read [Session.text], stop when [Session.done].
+ *
+ * End of command (D-027, like phone assistants): wait up to [Session] `waitStart` seconds for the command to start,
+ * then stop after [END_SILENCE] s of silence. Words from the pre-roll (the "Hey Jimi" itself) are dropped by
+ * their timestamps, so they neither show up in the text nor count as "the user already spoke".
  */
 class SpeechToText(context: Context, dir: File? = null) : AutoCloseable {
     private val modelDir = dir ?: overrideDir(context).takeIf { File(it, "tokens.txt").isFile }
@@ -35,37 +39,67 @@ class SpeechToText(context: Context, dir: File? = null) : AutoCloseable {
                 numThreads = 2,
             ),
             endpointConfig = EndpointConfig(
-                // nothing said yet: give up after ~3 s (this timer also counts the lead silence + pre-roll)
-                rule1 = EndpointRule(false, 5.0f, 0f),
-                // something said: stop after 0.8 s of silence
-                rule2 = EndpointRule(true, 0.8f, 0f),
-                // hard limit
-                rule3 = EndpointRule(false, 0f, MAX_SECONDS),
+                // the "nothing said yet" and hard limits are done in Session (they must ignore the wake words)
+                rule1 = EndpointRule(false, 60f, 0f),
+                // something said: silence this long ends the command (only used once command words exist)
+                rule2 = EndpointRule(true, END_SILENCE, 0f),
+                rule3 = EndpointRule(false, 0f, 60f),
             ),
             enableEndpoint = true,
             decodingMethod = "greedy_search",
         ),
     )
 
-    /** [preRoll]: audio from just before the wake, so a command said right after "Hey Jimi" is not cut. */
-    fun session(preRoll: ShortArray? = null) = Session(recognizer.createStream()).also {
-        // the model drops the first words if speech starts at sample 0
-        it.accept(ShortArray(LEAD_SILENCE))
-        if (preRoll != null) it.accept(preRoll)
-    }
+    /**
+     * [preRoll]: audio from just before the wake, so a command said right after "Hey Jimi" is not cut.
+     * [waitStart]: seconds to wait for the user to start talking.
+     */
+    fun session(preRoll: ShortArray? = null, waitStart: Float = WAIT_START) = Session(
+        recognizer.createStream(),
+        startAt = (LEAD_SILENCE + (preRoll?.size ?: 0)) / SAMPLE_RATE.toFloat(),
+        cut = (LEAD_SILENCE + (preRoll?.size ?: 0)) / SAMPLE_RATE.toFloat() + if (preRoll != null) WAKE_MARGIN else 0f,
+        waitStart = waitStart,
+    ).also {
+            // the model drops the first words if speech starts at sample 0
+            it.feed(ShortArray(LEAD_SILENCE), LEAD_SILENCE)
+            if (preRoll != null) it.feed(preRoll, preRoll.size)
+        }
 
-    inner class Session(private val stream: OnlineStream) : AutoCloseable {
+    /** [startAt]: stream time (s) where live audio starts. Words starting before [cut] are the wake phrase. */
+    inner class Session(
+        private val stream: OnlineStream,
+        private val startAt: Float,
+        private val cut: Float,
+        private val waitStart: Float,
+    ) : AutoCloseable {
+        /** Command text (wake phrase removed). */
         var text = ""
+            private set
+        /** Everything the model heard, wake phrase included. */
+        var raw = ""
             private set
         var done = false
             private set
+        private var samples = 0L
 
         fun accept(chunk: ShortArray, count: Int = chunk.size) {
             if (done) return
+            feed(chunk, count)
+            val elapsed = samples / SAMPLE_RATE.toFloat() - startAt
+            done = when {
+                elapsed >= MAX_SECONDS -> true
+                text.isEmpty() -> elapsed >= waitStart
+                else -> recognizer.isEndpoint(stream)
+            }
+        }
+
+        internal fun feed(chunk: ShortArray, count: Int) {
             stream.acceptWaveform(FloatArray(count) { chunk[it] / 32768f }, SAMPLE_RATE)
+            samples += count
             while (recognizer.isReady(stream)) recognizer.decode(stream)
-            text = normalize(recognizer.getResult(stream).text)
-            if (recognizer.isEndpoint(stream)) done = true
+            val r = recognizer.getResult(stream)
+            raw = normalize(r.text)
+            text = commandText(r.tokens, r.timestamps, cut)
         }
 
         override fun close() = stream.release()
@@ -77,6 +111,22 @@ class SpeechToText(context: Context, dir: File? = null) : AutoCloseable {
         private const val DIR = "stt"
 
         fun overrideDir(context: Context) = File(context.getExternalFilesDir(null), "models/stt")
+
+        /**
+         * Joins [tokens] into words (a token starting with a space starts a word), drops words that start before
+         * [cut] (wake phrase in the pre-roll), then strips a wake phrase the user may say again.
+         */
+        fun commandText(tokens: Array<String>, times: FloatArray, cut: Float): String {
+            val sb = StringBuilder()
+            var keep = false
+            for (i in tokens.indices) {
+                val t = tokens[i]
+                val newWord = i == 0 || t.startsWith(" ") || t.startsWith("\u2581")
+                if (newWord) keep = (times.getOrElse(i) { Float.MAX_VALUE }) >= cut
+                if (keep) sb.append(if (newWord) " " + t.trimStart(' ', '\u2581') else t)
+            }
+            return WakePhrase.strip(normalize(sb.toString()))
+        }
 
         /** Lower case, no punctuation (Kroko writes "Hey, Jimmy."), keeps apostrophes: "what's". */
         fun normalize(text: String) =
@@ -90,7 +140,10 @@ class SpeechToText(context: Context, dir: File? = null) : AutoCloseable {
             return f.path
         }
         const val SAMPLE_RATE = 16_000
-        const val MAX_SECONDS = 10f
+        const val MAX_SECONDS = 20f
+        const val WAIT_START = 7f
+        const val END_SILENCE = 1.2f
+        private const val WAKE_MARGIN = 0.35f
         private const val LEAD_SILENCE = SAMPLE_RATE / 2
     }
 }

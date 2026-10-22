@@ -32,3 +32,6 @@ secrets.properties
 __pycache__/
 *.pyc
 .venv*/
+
+# llama.cpp source (tools/fetch_llama.sh)
+app/src/main/cpp/llama.cpp/

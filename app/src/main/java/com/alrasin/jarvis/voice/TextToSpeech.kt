@@ -17,6 +17,7 @@ import java.io.File
  */
 class TextToSpeech(context: Context, modelDir: File? = null, threads: Int = 2) : AutoCloseable {
     private val tts: OfflineTts
+    @Volatile private var stopped = false
 
     init {
         val data = copyEspeakData(context)
@@ -39,10 +40,15 @@ class TextToSpeech(context: Context, modelDir: File? = null, threads: Int = 2) :
 
     fun generate(text: String) = tts.generate(text, sid = 0, speed = 1.0f)
 
-    /** Blocks until the sentence has been played. */
-    fun speak(text: String) {
+    /** Stops the sentence being played now (user tapped stop / said "stop"). */
+    fun stop() { stopped = true }
+
+    /** Blocks until the sentence has been played or [stop] is called. Returns false if stopped. */
+    fun speak(text: String): Boolean {
+        stopped = false
         val audio = generate(text)
-        if (audio.samples.isEmpty()) return
+        if (stopped) return false
+        if (audio.samples.isEmpty()) return true
         val track = AudioTrack.Builder()
             .setAudioAttributes(
                 AudioAttributes.Builder()
@@ -63,9 +69,10 @@ class TextToSpeech(context: Context, modelDir: File? = null, threads: Int = 2) :
         try {
             track.write(audio.samples, 0, audio.samples.size, AudioTrack.WRITE_BLOCKING)
             track.play()
-            val ms = audio.samples.size * 1000L / audio.sampleRate
-            Thread.sleep(ms + 150)
+            val end = System.currentTimeMillis() + audio.samples.size * 1000L / audio.sampleRate + 150
+            while (!stopped && System.currentTimeMillis() < end) Thread.sleep(50)
             track.stop()
+            return !stopped
         } finally {
             track.release()
         }

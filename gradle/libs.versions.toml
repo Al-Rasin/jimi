@@ -13,6 +13,9 @@ datastore = "1.1.1"
 onnxruntime = "1.20.0"
 coroutines = "1.9.0"
 junit = "4.13.2"
+libsu = "6.0.0"
+okhttp = "4.12.0"
+jsoup = "1.18.3"
 
 [libraries]
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
@@ -33,6 +36,9 @@ hilt-compiler = { group = "com.google.dagger", name = "hilt-android-compiler", v
 onnxruntime-android = { group = "com.microsoft.onnxruntime", name = "onnxruntime-android", version.ref = "onnxruntime" }
 kotlinx-coroutines-android = { group = "org.jetbrains.kotlinx", name = "kotlinx-coroutines-android", version.ref = "coroutines" }
 junit = { group = "junit", name = "junit", version.ref = "junit" }
+libsu-core = { group = "com.github.topjohnwu.libsu", name = "core", version.ref = "libsu" }
+okhttp = { group = "com.squareup.okhttp3", name = "okhttp", version.ref = "okhttp" }
+jsoup = { group = "org.jsoup", name = "jsoup", version.ref = "jsoup" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }
