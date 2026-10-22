@@ -9,6 +9,7 @@ training sees byte-for-byte what the app sends. Phrases in cases.jsonl (the eval
     python3 training/toolcall/make_dataset.py [--per-tool 60] [--seed 1]
 """
 import argparse
+from collections import Counter
 import datetime as dt
 import json
 import pathlib
@@ -66,6 +67,47 @@ CHATS = ["tell me a story", "why is the sky blue", "how do airplanes fly", "what
          "how old is the earth", "what is love", "I love you", "you are funny", "good job",
          "how to be more productive", "explain how vaccines work", "convert 10 km to miles",
          "how do I make friends", "is it healthy to skip breakfast", "say something nice"]
+# Broad negative examples teach chat intent even when tool-related nouns occur.
+CHAT_SUBJECTS = [
+    "the moon", "cats", "dogs", "penguins", "octopuses", "bees", "butterflies", "dinosaurs",
+    "rainbows", "clouds", "snowflakes", "oceans", "volcanoes", "deserts", "forests", "stars",
+    "Saturn", "comets", "rain", "trees", "flowers", "mushrooms", "chocolate", "coffee",
+    "tea", "bread", "cheese", "bananas", "robots", "books", "pencils", "bicycles",
+    "trains", "kites", "balloons", "mirrors", "bubbles", "magnets", "music", "dreams",
+]
+CHATS += [template.format(subject=subject)
+          for subject in CHAT_SUBJECTS
+          for template in (
+              "tell me a fun fact about {subject}", "share something surprising about {subject}",
+              "tell me a joke about {subject}", "make up a silly story about {subject}",
+              "write a little poem about {subject}", "give me a riddle about {subject}",
+              "what do you like about {subject}", "why do people find {subject} interesting",
+          )]
+CHATS += [template.format(feeling=feeling)
+          for feeling in ("lonely", "happy", "nervous", "excited", "tired", "hopeful", "frustrated", "shy",
+                          "confused", "proud", "disappointed", "homesick")
+          for template in ("I feel {feeling}", "do you ever feel {feeling}",
+                           "what would you say to someone feeling {feeling}")]
+CHATS += [
+    "do you love me", "what can you do", "hello", "hi", "hey there", "hello Jimi",
+    "hi Jimi", "hey jimmy", "good afternoon", "nice to meet you", "how is your day going",
+    "are you there Jimi", "Jimi are you awake", "what is your name", "why are you called Jimi",
+    "are you a person", "are you a robot", "do you have feelings", "can you feel love",
+    "do you get lonely", "do you like talking to me", "are we friends", "can we be friends",
+    "do you have a family", "do you sleep", "do you dream", "what makes you happy",
+    "what makes you laugh", "what is your favourite colour", "what is your favourite animal",
+    "what kind of music do you like", "do you prefer cats or dogs", "what do you think of poetry",
+    "is kindness important", "what does friendship mean to you", "why do people laugh",
+    "can you explain what you do", "how do you understand my voice", "can you work offline",
+    "are you always listening", "how are you different from a person", "can you make mistakes",
+    "tell me about yourself Jimi", "what are your limitations", "can you understand jokes",
+    "tell me a joke about messages", "write a poem about a flashlight", "why do phones need batteries",
+    "why is loud music exciting", "what is a polite way to end a conversation",
+    "I just want to talk", "I had a wonderful day", "that was helpful", "you made me smile",
+    "tell me something cheerful", "give me encouragement", "let us imagine a flying cat",
+]
+CHATS = list(dict.fromkeys(CHATS))
+
 TARGETS = {
     "flashlight": ["flashlight", "torch", "flash light", "the flashlight", "the torch"],
     "wifi": ["wifi", "wi-fi", "the wifi", "wireless"],
@@ -359,36 +401,78 @@ def context(now):
     return line
 
 
-def noisy(text):
-    """Speech-to-text style: lower case, no punctuation, sometimes filler words."""
-    t = text.lower().replace("'", "'")
-    t = re.sub(r"[?!,:]|\.(?=\s|$)", "", t)   # keep the dot in "google.com"
-    if r.random() < 0.15:
-        t = pick(["hey jimi ", "jimi ", "please ", "can you ", "okay "]) + t
-    if r.random() < 0.08:
-        t = t + pick([" please", " now", " for me"])
-    return t
+WAKE_PREFIXES = ("hey jimi", "jimi", "hey jimmy", "hi jimmy", "izumi", "hayzumi", "a")
+FILLERS = ("um", "please", "can you", "okay")
+
+
+def normalize(text):
+    return " ".join(re.sub(r"[?!,:]|\.(?=\s|$)", "", text.lower()).split())
+
+
+def holdout_key(text):
+    text = normalize(text)
+    while True:
+        old = text
+        for prefix in WAKE_PREFIXES + FILLERS:
+            if text.startswith(prefix + " "):
+                text = text[len(prefix) + 1:]
+        for suffix in (" please", " now", " for me"):
+            if text.endswith(suffix):
+                text = text[:-len(suffix)]
+        if old == text:
+            return text
+
+
+def augment_tool(text, tool, rng):
+    """Change speech surface only; leave free-text arguments untouched."""
+    text = normalize(text)
+    if tool == "toggle":
+        text = re.sub(r"\bflashlight\b", rng.choice(("flashlight", "flushlight", "flash lite")), text)
+        if rng.random() < 0.5:
+            text = re.sub(r"\bturn on\b", "down on", text)
+        if rng.random() < 0.5:
+            text = re.sub(r"\boff\b", "of", text)
+    if tool == "set_volume" and rng.random() < 0.6:
+        text = re.sub(r"\bvolume\b", "sound", text)
+    # Only drop redundant leading words, never an action verb or payload.
+    if rng.random() < 0.2:
+        first, _, rest = text.partition(" ")
+        if first in ("please", "can") or (tool == "toggle" and first in ("turn", "switch")):
+            text = rest
+    if rng.random() < 0.3:
+        text = rng.choice(FILLERS) + " " + text
+    if rng.random() < 0.4:
+        text = rng.choice(WAKE_PREFIXES) + " " + text
+    if rng.random() < 0.08:
+        text += rng.choice((" please", " now", " for me"))
+    return text
 
 
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--per-tool", type=int, default=60)
-    ap.add_argument("--chat", type=int, default=300)
+    ap.add_argument("--chat", type=int, default=600)
     ap.add_argument("--seed", type=int, default=1)
     ap.add_argument("--valid", type=float, default=0.05)
+    ap.add_argument("--out", type=pathlib.Path, default=OUT)
+    ap.add_argument("--prefix", type=pathlib.Path, default=PREFIX)
     a = ap.parse_args()
     r.seed(a.seed)
 
-    prefix = PREFIX.read_text()
+    prefix = a.prefix.read_text()
     tools = tools_in_prompt(prefix)
-    held_out = {json.loads(l)["text"].lower() for l in open(EVAL) if l.strip()}
+    held_out = {holdout_key(json.loads(line)["text"])
+                for path in (EVAL, EVAL.with_name("cases_v2.jsonl"))
+                for line in path.read_text().splitlines() if line.strip()}
     rows, seen = [], set()
 
     def add(text, tool, args, now):
-        text = noisy(text)
-        if text in held_out or (text, tool) in seen:
+        if holdout_key(text) in held_out:
             return False
-        seen.add((text, tool))
+        text = augment_tool(text, tool, r) if tool else normalize(text)
+        if holdout_key(text) in held_out or text in seen:
+            return False
+        seen.add(text)
         order = dict(tools)[tool] if tool else []
         unknown = set(args) - set(order)
         assert not unknown, (tool, unknown)
@@ -410,20 +494,24 @@ def main():
             made += add(text, tool, args, now)
         print(f"{name:22} {made}")
     made = 0
-    for _ in range(a.chat * 5):
+    chats = CHATS.copy()
+    r.shuffle(chats)
+    for text in chats:
         if made >= a.chat:
             break
-        made += add(pick(CHATS), None, {}, rand_now())
+        made += add(text, None, {}, rand_now())
     print(f"{'(chat)':22} {made}")
 
+    counts = Counter(row["tool"] for row in rows)
+    print(f"Total: {len(rows)}; chat share: {counts[None] / len(rows):.1%}")
     r.shuffle(rows)
     n_valid = max(20, int(len(rows) * a.valid))
-    OUT.mkdir(parents=True, exist_ok=True)
+    a.out.mkdir(parents=True, exist_ok=True)
     for name, part in (("valid", rows[:n_valid]), ("train", rows[n_valid:])):
-        with open(OUT / f"{name}.jsonl", "w") as f:
+        with open(a.out / f"{name}.jsonl", "w") as f:
             for row in part:
                 f.write(json.dumps(row, ensure_ascii=False) + "\n")
-        print(f"{name}: {len(part)} rows → {OUT / (name + '.jsonl')}")
+        print(f"{name}: {len(part)} rows → {a.out / (name + '.jsonl')}")
 
 
 if __name__ == "__main__":

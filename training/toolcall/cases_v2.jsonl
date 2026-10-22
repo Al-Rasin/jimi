@@ -1,0 +1,60 @@
+{"text": "could you share an odd fact about sea otters", "tool": null}
+{"text": "invent a joke involving a sleepy kitten", "tool": null}
+{"text": "does Jimi care about its human", "tool": null}
+{"text": "what sorts of things are you able to help with", "tool": null}
+{"text": "hello there my digital friend", "tool": null}
+{"text": "hi jimmy how has your day been", "tool": null}
+{"text": "izumi do robots ever feel shy", "tool": null}
+{"text": "hayzumi tell me a bedtime tale about a whale", "tool": null}
+{"text": "um why do we find puppies cute", "tool": null}
+{"text": "please write two lines about the night sky", "tool": null}
+{"text": "can you explain why ice floats", "tool": null}
+{"text": "what is your opinion of handwritten letters", "tool": null}
+{"text": "would you rather be a bird or a fish", "tool": null}
+{"text": "I could use a little reassurance", "tool": null}
+{"text": "I am feeling left out of things", "tool": null}
+{"text": "are you capable of being disappointed", "tool": null}
+{"text": "why did your creator choose the name Jimi", "tool": null}
+{"text": "what is it like being an assistant", "tool": null}
+{"text": "do you have a favourite season", "tool": null}
+{"text": "give me a funny pun involving an alarm clock", "tool": null}
+{"text": "invent a story where a phone learns to dance", "tool": null}
+{"text": "why do songs sometimes make people cry", "tool": null}
+{"text": "what makes a message sound friendly", "tool": null}
+{"text": "how would you describe love to a robot", "tool": null}
+{"text": "hey jimmy I hope you are having a lovely afternoon", "tool": null}
+{"text": "hey jimmy um down on the flushlight please", "tool": "toggle", "args": {"target": "flashlight", "state": "on"}}
+{"text": "hi jimmy turn the flash lite of", "tool": "toggle", "args": {"target": "flashlight", "state": "off"}}
+{"text": "izumi please sound up", "tool": "set_volume", "args": {"level": "up"}}
+{"text": "hayzumi sound down for me", "tool": "set_volume", "args": {"level": "down"}}
+{"text": "a can you set sound to 30", "tool": "set_volume", "args": {"level": "30"}}
+{"text": "on the torch please", "tool": "toggle", "args": {"target": "flashlight", "state": "on"}}
+{"text": "hey jimmy switch wifi of please", "tool": "toggle", "args": {"target": "wifi", "state": "off"}}
+{"text": "hi jimmy down on bluetooth", "tool": "toggle", "args": {"target": "bluetooth", "state": "on"}}
+{"text": "izumi um open calculator please", "tool": "open_app", "args": {"app": "calculator"}}
+{"text": "hayzumi can you close telegram", "tool": "close_app", "args": {"app": "telegram"}}
+{"text": "a um lock my phone now", "tool": "lock_phone", "args": {}}
+{"text": "hey jimmy please read my unread texts", "tool": "read_messages", "args": {}}
+{"text": "hi jimmy can you pause this video", "tool": "media_control", "args": {"action": "pause"}}
+{"text": "izumi please skip to the next track", "tool": "media_control", "args": {"action": "next"}}
+{"text": "hayzumi um set a timer for 9 minutes", "tool": "set_timer", "args": {"seconds": "540"}}
+{"text": "a please set an alarm at 8:20 am", "tool": "set_alarm", "args": {"time": "08:20"}}
+{"text": "hey jimmy um call my sister please", "tool": "call", "args": {"contact": "my sister"}}
+{"text": "hi jimmy please make the display dimmer", "tool": "set_brightness", "args": {"level": "down"}}
+{"text": "izumi can you scroll down a little", "tool": "scroll", "args": {"direction": "down"}}
+{"text": "hayzumi please take a screen shot", "tool": "take_screenshot", "args": {}}
+{"text": "bring up the camera application", "tool": "open_app", "args": {"app": "camera"}}
+{"text": "shut down the instagram app", "tool": "close_app", "args": {"app": "instagram"}}
+{"text": "navigate to example.org", "tool": "open_url", "args": {"url": "example.org"}}
+{"text": "I need a countdown for 11 minutes", "tool": "set_timer", "args": {"seconds": "660"}}
+{"text": "wake me tomorrow morning at 9:25", "tool": "set_alarm", "args": {"time": "09:25"}}
+{"text": "put on some piano jazz on spotify", "tool": "play_media", "args": {"query": "piano jazz", "app": "spotify"}}
+{"text": "make the volume seventy percent", "tool": "set_volume", "args": {"level": "70"}}
+{"text": "enable my mobile hotspot please", "tool": "toggle", "args": {"target": "hotspot", "state": "on"}}
+{"text": "set the display brightness to forty percent", "tool": "set_brightness", "args": {"level": "40"}}
+{"text": "how much battery charge remains right now", "tool": "device_status", "args": {"what": "battery"}}
+{"text": "show the applications I recently used", "tool": "open_recents", "args": {}}
+{"text": "read all the notes I saved", "tool": "read_notes", "args": {}}
+{"text": "remove every reminder I have", "tool": "delete_reminder", "args": {"text": "all"}}
+{"text": "dismiss all of the notifications on my phone", "tool": "clear_notifications", "args": {}}
+{"text": "what will the weather be in Tokyo tomorrow", "tool": "weather", "args": {"place": "Tokyo", "day": "tomorrow"}}
