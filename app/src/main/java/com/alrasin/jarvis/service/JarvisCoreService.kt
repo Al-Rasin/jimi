@@ -335,10 +335,12 @@ class JarvisCoreService : LifecycleService() {
                 if (cmd != null) {
                     clips.onChunk(0f, threshold, ring, tone)   // only finishes the pending wake clip
                     cmd.accept(chunk)
+                    _micLevel.value = level(chunk)
                     commandAudio.add(chunk.copyOf())
                     _heard.value = WakePhrase.strip(cmd.text)
                     if (cmd.done || ++commandChunks >= COMMAND_MAX_CHUNKS) {
                         command = null
+                        _micLevel.value = 0f
                         cmd.close()
                         val audio = join(commandAudio)
                         val path = saveCommand(audio, cmd.raw)
@@ -573,6 +575,19 @@ class JarvisCoreService : LifecycleService() {
         val lastScore: StateFlow<Float> = _lastScore
         private val _phase = MutableStateFlow(PHASE_WAKE)
         val phase: StateFlow<String> = _phase
+        private val _micLevel = MutableStateFlow(0f)
+        /** Loudness 0..1 while hearing a command (panel animation). */
+        val micLevel: StateFlow<Float> = _micLevel
+
+        /** RMS of a chunk mapped to 0..1 on a dB scale (-50 dB → 0, -10 dB → 1). */
+        fun level(chunk: ShortArray): Float {
+            var sum = 0.0
+            for (s in chunk) sum += s.toDouble() * s
+            val rms = kotlin.math.sqrt(sum / chunk.size.coerceAtLeast(1)) / 32768.0
+            val db = 20 * kotlin.math.log10(rms.coerceAtLeast(1e-6))
+            return ((db + 50) / 40).toFloat().coerceIn(0f, 1f)
+        }
+
         private val _heard = MutableStateFlow("")
         /** Live (partial) text while hearing a command, then the final text. */
         val heard: StateFlow<String> = _heard

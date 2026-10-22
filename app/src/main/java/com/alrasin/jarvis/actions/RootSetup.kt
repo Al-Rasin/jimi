@@ -31,6 +31,14 @@ object RootSetup {
         step("battery: never sleep", "dumpsys deviceidle whitelist +$pkg")
         step("do not disturb access", "cmd notification allow_dnd $pkg")
         step("notification access", "cmd notification allow_listener ${JarvisNotificationListener.COMPONENT}")
+        val vis = "$pkg/com.alrasin.jarvis.assist.JarvisVoiceInteractionService"
+        step(
+            "default assistant (instead of Google / Gemini)",
+            "cmd role add-role-holder android.app.role.ASSISTANT $pkg 0 2>/dev/null || true",
+            "settings put secure assistant $vis",
+            "settings put secure voice_interaction_service $vis",
+            "settings put secure voice_recognition_service $pkg/com.alrasin.jarvis.assist.JarvisRecognitionService",
+        )
         val a11y = JarvisAccessibilityService.COMPONENT
         step(
             "accessibility",

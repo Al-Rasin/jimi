@@ -23,6 +23,7 @@ class PanelViewModel @Inject constructor(
     val phase = JarvisCoreService.phase
     val heard = JarvisCoreService.heard
     val reply = JarvisCoreService.reply
+    val micLevel = JarvisCoreService.micLevel
     val turnId = JarvisCoreService.turnId
     val wakeId = JarvisCoreService.wakeId
 

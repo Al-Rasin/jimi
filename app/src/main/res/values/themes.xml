@@ -1,11 +1,11 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <!-- Assistant panel: see-through, dims the app behind it, sheet at the bottom. -->
+    <!-- Assistant panel: see-through, dims the app behind it; the sheet animates itself, the window only fades. -->
     <style name="Theme.Jarvis.Panel" parent="@android:style/Theme.Material.NoActionBar">
         <item name="android:windowIsTranslucent">true</item>
         <item name="android:windowBackground">@android:color/transparent</item>
         <item name="android:backgroundDimEnabled">true</item>
         <item name="android:backgroundDimAmount">0.45</item>
-        <item name="android:windowAnimationStyle">@android:style/Animation.InputMethod</item>
+        <item name="android:windowAnimationStyle">@android:style/Animation.Toast</item>
     </style>
 </resources>
