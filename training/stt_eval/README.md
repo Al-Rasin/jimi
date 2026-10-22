@@ -132,3 +132,51 @@ change the ratio. Verify candidates on the phone before replacing D-026.
 Local per-file CSVs and logs are under
 `training/outputs/stt_eval/`. The run used bundled speech because phone recordings
 were absent and macOS speech synthesis produced empty audio in this session.
+
+Noise experiment per-file CSVs and logs are under
+`training/outputs/denoise/`. The run used labelled bundled speech because the
+existing synthetic command WAVs were empty and phone transcripts were unverified.
+
+
+## Noise and GTCRN denoising
+
+Download `gtcrn_simple.onnx` from the official
+[speech enhancement release](https://github.com/k2-fsa/sherpa-onnx/releases/tag/speech-enhancement-models)
+into git-ignored `models/denoise/`. The Python API requires sherpa-onnx 1.13.8.
+
+```sh
+python training/stt_eval/eval_stt.py \
+  --wav-dir training/data/stt_test/manual \
+  --model-dir models/stt/kroko --kind zipformer-streaming \
+  --ref training/data/stt_test/manual/ref.tsv \
+  --noise-dir training/data/noise --snr 0 5 10 --seed 0 \
+  --denoise-model models/denoise/gtcrn_simple.onnx \
+  --csv training/outputs/stt_eval/denoise.csv
+```
+
+Noise WAVs must also be 16 kHz mono PCM16 and are selected nonrecursively.
+`--noise-dir` defaults to SNRs 0/5/10 dB. An empty noise directory, or supplying
+`--snr` without `--noise-dir`, generates white noise instead. A nonexistent
+noise directory is an error, to catch typos. No generated audio is written.
+To compare different noise types, run separately with one noise type per folder.
+
+Each run includes a clean baseline, then noisy and (when a model is supplied)
+noisy+denoised conditions at every requested SNR. Supplying only
+`--denoise-model` compares clean versus clean+denoised. Both noisy conditions
+use the identical mixture. A sorted corpus, sorted noise filenames, and
+`--seed` (default 0) reproduce selection and offsets. Each speech file uses
+one randomly chosen noise recording and circular offset, repeated if shorter
+than the speech; that same noise segment is reused across SNRs.
+
+SNR uses whole-utterance RMS, including silence, rather than active-speech
+RMS. The mixture is jointly peak-normalized only when it exceeds full scale;
+there is no clipping, and SNR is preserved. Silent speech or noise cannot
+have a defined SNR and fails explicitly. No source WAVs are changed.
+
+CSV adds condition, SNR, noise source, seed, model, denoise load/processing
+seconds, denoise RTF, and combined STT+denoise RTF. Console corpus WER and RTF
+are reported **separately for each condition/SNR**, never pooled. Denoiser
+loading and one warm-up are excluded; denoise RTF uses original speech duration.
+The complete utterance is enhanced before streaming STT, so this experiment
+does not measure live microphone latency. Desktop noise results are a smoke
+test; real user speech and phone timing are required before enabling this.
