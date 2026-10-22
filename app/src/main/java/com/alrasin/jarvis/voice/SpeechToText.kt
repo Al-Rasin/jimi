@@ -90,7 +90,7 @@ class SpeechToText(context: Context, dir: File? = null, hotwords: Collection<Str
     inner class Session(
         private val stream: OnlineStream,
         waitStart: Float,
-        private val stripWake: Boolean,
+        val stripWake: Boolean,
     ) : AutoCloseable {
         /** Command text (wake phrase removed). */
         var text = ""

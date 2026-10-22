@@ -21,6 +21,7 @@ class Settings @Inject constructor(@ApplicationContext private val context: Cont
     private val thresholdKey = floatPreferencesKey("wake_threshold")
     private val enabledKey = booleanPreferencesKey("listening_enabled")
     private val followUpKey = booleanPreferencesKey("follow_up")
+    private val sttSecondPassKey = booleanPreferencesKey("stt_second_pass")
     private val autoClearKey = booleanPreferencesKey("auto_clear_notifications")
     private val cityKey = stringPreferencesKey("home_city")
     private val panelKey = booleanPreferencesKey("show_panel")
@@ -46,6 +47,7 @@ class Settings @Inject constructor(@ApplicationContext private val context: Cont
 
     /** Listen again for ~6 s after a reply, no wake word needed (round 3). */
     val followUp: Flow<Boolean> = context.dataStore.data.map { it[followUpKey] ?: true }
+    val sttSecondPass: Flow<Boolean> = context.dataStore.data.map { it[sttSecondPassKey] ?: false }
     val autoClearNotifications: Flow<Boolean> = context.dataStore.data.map { it[autoClearKey] ?: false }
     val homeCity: Flow<String> = context.dataStore.data.map { it[cityKey] ?: "Dhaka" }
     /** Assistant panel over the lock screen / apps after a wake. */
@@ -77,6 +79,7 @@ class Settings @Inject constructor(@ApplicationContext private val context: Cont
     suspend fun setCloudForChat(v: Boolean) = context.dataStore.edit { it[cloudChatKey] = v }
     suspend fun setCloudSendFacts(v: Boolean) = context.dataStore.edit { it[cloudFactsKey] = v }
     suspend fun setFollowUp(v: Boolean) = context.dataStore.edit { it[followUpKey] = v }
+    suspend fun setSttSecondPass(v: Boolean) = context.dataStore.edit { it[sttSecondPassKey] = v }
     suspend fun setAutoClearNotifications(v: Boolean) = context.dataStore.edit { it[autoClearKey] = v }
     suspend fun setHomeCity(v: String) = context.dataStore.edit { it[cityKey] = v }
     suspend fun setShowPanel(v: Boolean) = context.dataStore.edit { it[panelKey] = v }
