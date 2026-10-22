@@ -6,8 +6,6 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
-import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.darkColorScheme
 import dagger.hilt.android.AndroidEntryPoint
 
 @AndroidEntryPoint
@@ -33,7 +31,7 @@ class MainActivity : ComponentActivity() {
         }
         intent.getStringExtra("tts_dir")?.let { vm.voiceBench(it) }
         setContent {
-            MaterialTheme(colorScheme = darkColorScheme()) {
+            JimiTheme {
                 AppShell(appVm, vm)
             }
         }

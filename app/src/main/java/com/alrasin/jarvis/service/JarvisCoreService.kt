@@ -449,7 +449,7 @@ class JarvisCoreService : LifecycleService() {
         if (source == "voice") _wakeId.value = wakeId
         if (wakeId != null) Notifications.showWakeCheck(this, wakeId, wakeScore, heard = text.ifEmpty { "(nothing)" })
         if (text.isEmpty()) {
-            _heard.value = if (source == "follow_up") "" else "(nothing heard)"
+            _heard.value = if (source == "follow_up") "" else AssistantActivity.NOTHING_HEARD
             if (source != "follow_up") tone.startTone(ToneGenerator.TONE_PROP_NACK, 200)
             _phase.value = PHASE_WAKE
             return

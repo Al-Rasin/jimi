@@ -34,9 +34,15 @@ class Contacts(private val context: Context) {
         return Fuzzy.best(name, all(), { it.name }, min = 0.65)
     }
 
+    /** Contact name for a sender. Senders like "Teletalk" or short codes have too few digits to match: keep them as they are. */
     fun nameFor(number: String): String {
         val n = number.filter { it.isDigit() }.takeLast(9)
+        if (n.length < MIN_MATCH_DIGITS) return number
         return all().firstOrNull { it.number.filter { d -> d.isDigit() }.endsWith(n) }?.name ?: number
+    }
+
+    companion object {
+        const val MIN_MATCH_DIGITS = 7
     }
 }
 
@@ -80,14 +86,22 @@ fun commsTools(context: Context, contacts: Contacts): List<Tool> = listOf(
     SimpleTool("read_messages", "Read the latest text messages") { _, _ ->
         if (context.checkSelfPermission(Manifest.permission.READ_SMS) != PackageManager.PERMISSION_GRANTED)
             return@SimpleTool ToolResult.fail("I need the SMS permission. Open Jarvis setup.")
-        val msgs = ArrayList<Triple<String, String, Boolean>>()
-        context.contentResolver.query(Uri.parse("content://sms/inbox"), arrayOf("address", "body", "read"), null, null, "date DESC")?.use { c ->
-            while (c.moveToNext() && msgs.size < 5) msgs.add(Triple(c.getString(0) ?: "", c.getString(1) ?: "", c.getInt(2) == 1))
+        val inbox = Uri.parse("content://sms/inbox")
+        // MIUI's Messages app leaves read = 0 on messages the user has opened; it only sets seen = 1
+        val unreadWhere = "read = 0 AND seen = 0"
+        val unreadCount = context.contentResolver.query(inbox, arrayOf("_id"), unreadWhere, null, null)?.use { it.count } ?: 0
+        val msgs = ArrayList<Pair<String, String>>()
+        val where = if (unreadCount > 0) unreadWhere else null
+        context.contentResolver.query(inbox, arrayOf("address", "body"), where, null, "date DESC")?.use { c ->
+            while (c.moveToNext() && msgs.size < 3) msgs.add((c.getString(0) ?: "") to (c.getString(1) ?: ""))
         }
         if (msgs.isEmpty()) return@SimpleTool ToolResult.ok("No messages.")
-        val unread = msgs.filter { !it.third }
-        val list = (unread.ifEmpty { msgs.take(3) }).map { "${contacts.nameFor(it.first)}: ${it.second.take(160)}" }
-        val head = if (unread.isNotEmpty()) "${unread.size} unread." else "No unread messages. Latest:"
+        val list = msgs.map { "${contacts.nameFor(it.first)}: ${it.second.take(160)}" }
+        val head = when {
+            unreadCount > msgs.size -> "$unreadCount unread. Newest ${msgs.size}:"
+            unreadCount > 0 -> "$unreadCount unread."
+            else -> "No unread messages. Latest:"
+        }
         ToolResult.ok("$head ${list.joinToString(". ")}", list.joinToString("\n"))
     },
     SimpleTool("compose_email", "Write an email (opens the mail app)", listOf(arg("to", "address or contact", required = false), arg("subject", "subject", required = false), arg("body", "text", required = false))) { c, _ ->

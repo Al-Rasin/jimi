@@ -25,6 +25,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.sp
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -45,7 +46,6 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.darkColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -76,13 +76,14 @@ class AssistantActivity : ComponentActivity() {
         setShowWhenLocked(true)
         setTurnScreenOn(true)
         setContent {
-            MaterialTheme(colorScheme = darkColorScheme()) {
+            JimiTheme {
                 Panel(vm, onClose = ::finish)
             }
         }
     }
 
     companion object {
+        const val NOTHING_HEARD = "(nothing heard)"
         const val IDLE_MS = 30_000L
     }
 }
@@ -93,6 +94,7 @@ private fun Panel(vm: PanelViewModel, onClose: () -> Unit) {
     val heard by vm.heard.collectAsStateWithLifecycle()
     val reply by vm.reply.collectAsStateWithLifecycle()
     val level by vm.micLevel.collectAsStateWithLifecycle()
+    val past by vm.exchanges.collectAsStateWithLifecycle()
     var fixing by remember { mutableStateOf(false) }
     var fixText by remember { mutableStateOf("") }
     var typed by remember { mutableStateOf("") }
@@ -101,12 +103,7 @@ private fun Panel(vm: PanelViewModel, onClose: () -> Unit) {
     var shown by remember { mutableStateOf(false) }
     var closing by remember { mutableStateOf(false) }
     val idle = phase == JarvisCoreService.PHASE_WAKE
-    val mood = when (phase) {
-        JarvisCoreService.PHASE_HEARING, JarvisCoreService.PHASE_FOLLOW_UP -> OrbMood.HEARING
-        JarvisCoreService.PHASE_THINKING -> OrbMood.THINKING
-        JarvisCoreService.PHASE_SPEAKING -> OrbMood.SPEAKING
-        else -> OrbMood.IDLE
-    }
+    val mood = moodOf(phase)
     val replyShown = rememberTypewriter(reply)
 
     fun close() { shown = false; closing = true }
@@ -140,7 +137,7 @@ private fun Panel(vm: PanelViewModel, onClose: () -> Unit) {
             exit = slideOutVertically(tween(240)) { it } + fadeOut(tween(240)),
         ) {
             Column(Modifier.fillMaxWidth().imePadding()) {
-                GlowEdge(active = !idle, modifier = Modifier.fillMaxWidth().height(36.dp).padding(horizontal = 24.dp))
+                GlowEdge(active = !idle, modifier = Modifier.fillMaxWidth().height(48.dp))
                 Surface(
                     modifier = Modifier.fillMaxWidth()
                         .clickable(remember { MutableInteractionSource() }, null) { touch() },
@@ -152,39 +149,53 @@ private fun Panel(vm: PanelViewModel, onClose: () -> Unit) {
                         Modifier.padding(start = 20.dp, end = 20.dp, top = 10.dp, bottom = 18.dp).animateContentSize(),
                         verticalArrangement = Arrangement.spacedBy(12.dp),
                     ) {
-                        Box(
-                            Modifier.align(Alignment.CenterHorizontally).size(36.dp, 4.dp)
-                                .background(PanelColors.Dim.copy(alpha = 0.4f), RoundedCornerShape(2.dp)),
-                        )
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Orb(mood, level, size = 60.dp)
-                            Column(Modifier.weight(1f).padding(start = 12.dp)) {
+                        Box(Modifier.fillMaxWidth()) {
+                            Box(
+                                Modifier.align(Alignment.TopCenter).size(36.dp, 4.dp)
+                                    .background(PanelColors.Dim.copy(alpha = 0.4f), RoundedCornerShape(2.dp)),
+                            )
+                            Column(Modifier.fillMaxWidth().padding(top = 8.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                                Orb(mood, level, size = 96.dp)
                                 AnimatedContent(if (idle) "Jimi" else phase, label = "phase") { p ->
                                     Text(
                                         p,
-                                        style = MaterialTheme.typography.labelLarge.copy(
-                                            brush = Brush.linearGradient(listOf(PanelColors.Cyan, PanelColors.Violet)),
-                                            letterSpacing = 1.sp,
-                                        ),
+                                        style = MaterialTheme.typography.labelLarge.copy(brush = EnergyBrush, letterSpacing = 1.sp),
                                     )
                                 }
-                                Text(
-                                    if (heard.isBlank()) "How can I help, Boss?" else heard,
-                                    style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Light),
-                                    color = if (heard.isBlank()) PanelColors.Dim else PanelColors.Text,
-                                )
                             }
-                            if (phase == JarvisCoreService.PHASE_SPEAKING) {
-                                TextButton(onClick = { touch(); vm.shutUp() }) { Text("Stop", color = PanelColors.Cyan) }
+                            Row(Modifier.align(Alignment.TopEnd)) {
+                                if (phase == JarvisCoreService.PHASE_SPEAKING) {
+                                    TextButton(onClick = { touch(); vm.shutUp() }) { Text("Stop", color = PanelColors.Cyan) }
+                                }
+                                TextButton(onClick = ::close) { Text("✕", color = PanelColors.Dim, fontSize = 18.sp) }
                             }
-                            TextButton(onClick = ::close) { Text("✕", color = PanelColors.Dim, fontSize = 18.sp) }
                         }
-                        if (replyShown.isNotBlank()) {
-                            Text(
-                                replyShown,
-                                style = MaterialTheme.typography.bodyLarge.copy(lineHeight = 24.sp),
-                                modifier = Modifier.heightIn(max = 280.dp).verticalScroll(rememberScrollState()),
-                            )
+                        val scroll = rememberScrollState()
+                        LaunchedEffect(replyShown, heard, past.size) { scroll.animateScrollTo(scroll.maxValue) }
+                        Column(
+                            Modifier.fillMaxWidth().heightIn(max = 340.dp).verticalScroll(scroll),
+                            verticalArrangement = Arrangement.spacedBy(8.dp),
+                        ) {
+                            past.forEach { (h, r) -> Bubble(h, mine = true); Bubble(r, mine = false) }
+                            val live = heard to reply
+                            if (past.lastOrNull() != live) {
+                                if (heard.isBlank() && past.isEmpty()) {
+                                    Text(
+                                        "How can I help, Boss?",
+                                        style = MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.Light),
+                                        color = PanelColors.Dim,
+                                        textAlign = TextAlign.Center,
+                                        modifier = Modifier.fillMaxWidth().padding(vertical = 6.dp),
+                                    )
+                                }
+                                if (heard == AssistantActivity.NOTHING_HEARD) {
+                                    Text("I didn't catch that, Boss.", color = PanelColors.Dim, modifier = Modifier.padding(start = 34.dp))
+                                } else {
+                                    Bubble(heard, mine = true)
+                                }
+                                // the reply of the last finished turn stays in the service until the next answer
+                                if (past.lastOrNull()?.second != reply) Bubble(replyShown, mine = false)
+                            }
                         }
                         if (heard.isNotBlank() && !fixing) {
                             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -206,31 +217,9 @@ private fun Panel(vm: PanelViewModel, onClose: () -> Unit) {
                                 TextButton(onClick = { fixing = false }) { Text("Cancel") }
                             }
                         }
-                        Row(
-                            Modifier.fillMaxWidth().background(PanelColors.Field, RoundedCornerShape(28.dp)).padding(start = 18.dp, end = 6.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                        ) {
-                            BasicTextField(
-                                value = typed, onValueChange = { touch(); typed = it }, singleLine = true,
-                                textStyle = MaterialTheme.typography.bodyLarge.copy(color = PanelColors.Text),
-                                cursorBrush = SolidColor(PanelColors.Cyan),
-                                modifier = Modifier.weight(1f).padding(vertical = 16.dp),
-                                decorationBox = { inner ->
-                                    if (typed.isEmpty()) Text("Type to Jimi", color = PanelColors.Dim)
-                                    inner()
-                                },
-                            )
-                            Box(
-                                Modifier.size(44.dp).clip(CircleShape)
-                                    .background(Brush.linearGradient(listOf(PanelColors.Cyan, PanelColors.Violet, PanelColors.Pink)))
-                                    .clickable {
-                                        touch()
-                                        if (typed.isBlank()) vm.listen() else { vm.ask(typed.trim()); typed = "" }
-                                    },
-                                contentAlignment = Alignment.Center,
-                            ) {
-                                Text(if (typed.isBlank()) "🎤" else "➤", color = Color.White, fontSize = 18.sp)
-                            }
+                        InputPill(typed, { touch(); typed = it }) {
+                            touch()
+                            if (typed.isBlank()) vm.listen() else { vm.ask(typed.trim()); typed = "" }
                         }
                     }
                 }

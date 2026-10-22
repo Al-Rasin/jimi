@@ -85,6 +85,8 @@ class AppViewModel @Inject constructor(
 
     fun ask(text: String) = JarvisCoreService.ask(app, text)
 
+    fun listen() = JarvisCoreService.listen(app)
+
     fun rate(id: Long, ok: Boolean) = viewModelScope.launch { turns.rate(id, ok, null) }
 
     fun fix(id: Long, text: String) = viewModelScope.launch {

@@ -1,12 +1,34 @@
 <vector xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:aapt="http://schemas.android.com/aapt"
     android:width="108dp"
     android:height="108dp"
     android:viewportWidth="108"
     android:viewportHeight="108">
-    <!-- 24dp mic path scaled x2 and centered in the 72dp safe zone -->
-    <group android:translateX="30" android:translateY="30" android:scaleX="2" android:scaleY="2">
-        <path
-            android:fillColor="#FFFFFFFF"
-            android:pathData="M12,14c1.66,0 3,-1.34 3,-3V5c0,-1.66 -1.34,-3 -3,-3S9,3.34 9,5v6c0,1.66 1.34,3 3,3zM17.3,11c0,3 -2.54,5.1 -5.3,5.1S6.7,14 6.7,11H5c0,3.41 2.72,6.23 6,6.72V21h2v-3.28c3.28,-0.48 6,-3.3 6,-6.72h-1.7z" />
-    </group>
+    <!-- Jimi orb: soft violet glow, cyan → violet → pink core, white shine (same look as the in-app orb). -->
+    <path android:pathData="M54,54m-34,0a34,34 0,1 1,68 0a34,34 0,1 1,-68 0">
+        <aapt:attr name="android:fillColor">
+            <gradient android:type="radial" android:centerX="54" android:centerY="54" android:gradientRadius="34">
+                <item android:offset="0.55" android:color="#66A35BFF" />
+                <item android:offset="1" android:color="#00A35BFF" />
+            </gradient>
+        </aapt:attr>
+    </path>
+    <path android:pathData="M54,54m-22,0a22,22 0,1 1,44 0a22,22 0,1 1,-44 0">
+        <aapt:attr name="android:fillColor">
+            <gradient android:type="linear" android:startX="34" android:startY="34" android:endX="74" android:endY="74">
+                <item android:offset="0" android:color="#FF4FD8FF" />
+                <item android:offset="0.45" android:color="#FF5B7CFF" />
+                <item android:offset="0.75" android:color="#FFA35BFF" />
+                <item android:offset="1" android:color="#FFFF5BC8" />
+            </gradient>
+        </aapt:attr>
+    </path>
+    <path android:pathData="M47,46m-11,0a11,11 0,1 1,22 0a11,11 0,1 1,-22 0">
+        <aapt:attr name="android:fillColor">
+            <gradient android:type="radial" android:centerX="47" android:centerY="46" android:gradientRadius="11">
+                <item android:offset="0" android:color="#99FFFFFF" />
+                <item android:offset="1" android:color="#00FFFFFF" />
+            </gradient>
+        </aapt:attr>
+    </path>
 </vector>

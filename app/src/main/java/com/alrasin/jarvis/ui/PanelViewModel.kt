@@ -11,6 +11,8 @@ import com.alrasin.jarvis.service.Notifications
 import com.alrasin.jarvis.service.WakeFeedback
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
@@ -26,6 +28,17 @@ class PanelViewModel @Inject constructor(
     val micLevel = JarvisCoreService.micLevel
     val turnId = JarvisCoreService.turnId
     val wakeId = JarvisCoreService.wakeId
+
+    private val _exchanges = MutableStateFlow<List<Pair<String, String>>>(emptyList())
+    /** Finished heard → reply pairs since this panel opened (chat bubbles). */
+    val exchanges: StateFlow<List<Pair<String, String>>> = _exchanges
+
+    init {
+        val opened = turnId.value
+        viewModelScope.launch {
+            turnId.collect { id -> if (id > 0 && id != opened) _exchanges.value = _exchanges.value + (heard.value to reply.value) }
+        }
+    }
 
     /** ✓: the heard text was right. */
     fun right() = rate(true, null)

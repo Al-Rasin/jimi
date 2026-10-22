@@ -43,10 +43,10 @@ fun HomeScreen(vm: HomeViewModel) {
     val phase by vm.phase.collectAsStateWithLifecycle()
     val heard by vm.heard.collectAsStateWithLifecycle()
 
-    Surface(Modifier.fillMaxSize()) {
+    Surface(Modifier.fillMaxSize(), color = MaterialTheme.colorScheme.background) {
         LazyColumn(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             item {
-                Text("Jarvis", style = MaterialTheme.typography.headlineMedium)
+                GradientTitle("Wake word", 22)
                 Text(if (running) "Listening — $phase" else "Not listening")
                 if (model.isNotEmpty()) {
                     val jimi = model.startsWith("hey_jimi")

@@ -28,6 +28,7 @@ import androidx.compose.ui.graphics.drawscope.clipPath
 import androidx.compose.ui.graphics.drawscope.rotate
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import com.alrasin.jarvis.service.JarvisCoreService
 import kotlinx.coroutines.delay
 import kotlin.math.cos
 import kotlin.math.sin
@@ -46,6 +47,13 @@ object PanelColors {
 }
 
 enum class OrbMood { IDLE, HEARING, THINKING, SPEAKING }
+
+fun moodOf(phase: String) = when (phase) {
+    JarvisCoreService.PHASE_HEARING, JarvisCoreService.PHASE_FOLLOW_UP -> OrbMood.HEARING
+    JarvisCoreService.PHASE_THINKING -> OrbMood.THINKING
+    JarvisCoreService.PHASE_SPEAKING -> OrbMood.SPEAKING
+    else -> OrbMood.IDLE
+}
 
 /**
  * Living orb: a spinning colour core with liquid blobs inside. It breathes when idle, follows the
