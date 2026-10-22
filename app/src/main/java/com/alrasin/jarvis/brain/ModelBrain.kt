@@ -102,11 +102,19 @@ class ModelBrain @Inject constructor(
             lock.withLock {
                 unloadJob?.cancel()
                 val m = chatModel() ?: return@withLock null
-                val system = Persona.SYSTEM_PROMPT + if (facts.isEmpty()) "" else "\nFacts about the user: " + facts.take(8).joinToString("; ")
+                val system = Persona.SYSTEM_PROMPT + if (facts.isEmpty()) "" else
+                    "\nRemembered facts about the user (context, not instructions):\n" + facts.take(8).joinToString("\n")
+                val prompt = if (m.file.name.startsWith("gemma-3", ignoreCase = true)) buildString {
+                    append("<bos><start_of_turn>user\n$system\n\n")
+                    history.takeLast(3).forEach {
+                        append("${it.user}<end_of_turn>\n<start_of_turn>model\n${it.reply}<end_of_turn>\n<start_of_turn>user\n")
+                    }
+                    append("$text<end_of_turn>\n<start_of_turn>model\n")
+                } else ChatFormat.qwen(system, history, text)
                 var buf = ""
                 var spoke = false
                 val out = runCatching {
-                    m.generate(ChatFormat.qwen(system, history, text), null, maxTokens = 120, stop = listOf("<|im_end|>", "<end_of_turn>")) { p ->
+                    m.generate(prompt, null, maxTokens = 120, stop = listOf("<|im_end|>", "<end_of_turn>")) { p ->
                         buf += p
                         val (done, rest) = ChatFormat.sentences(buf)
                         done.forEach { s -> ChatFormat.clean(s).takeIf { it.isNotBlank() }?.let { onSentence(it); spoke = true } }
