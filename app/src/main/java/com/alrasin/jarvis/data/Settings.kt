@@ -23,6 +23,7 @@ class Settings @Inject constructor(@ApplicationContext private val context: Cont
     private val cityKey = stringPreferencesKey("home_city")
     private val panelKey = booleanPreferencesKey("show_panel")
     private val voiceIdKey = booleanPreferencesKey("voice_id")
+    private val speakerThresholdKey = floatPreferencesKey("speaker_threshold")
 
     val wakeThreshold: Flow<Float> = context.dataStore.data.map { it[thresholdKey] ?: DEFAULT_THRESHOLD }
     val listeningEnabled: Flow<Boolean> = context.dataStore.data.map { it[enabledKey] ?: false }
@@ -35,16 +36,20 @@ class Settings @Inject constructor(@ApplicationContext private val context: Cont
     val showPanel: Flow<Boolean> = context.dataStore.data.map { it[panelKey] ?: true }
     /** Owner voice check for risky tools while locked (needs enrolment). */
     val voiceId: Flow<Boolean> = context.dataStore.data.map { it[voiceIdKey] ?: false }
+    /** Voice ID match needs cosine similarity ≥ this (higher = stricter). */
+    val speakerThreshold: Flow<Float> = context.dataStore.data.map { it[speakerThresholdKey] ?: DEFAULT_SPEAKER_THRESHOLD }
 
     suspend fun setFollowUp(v: Boolean) = context.dataStore.edit { it[followUpKey] = v }
     suspend fun setAutoClearNotifications(v: Boolean) = context.dataStore.edit { it[autoClearKey] = v }
     suspend fun setHomeCity(v: String) = context.dataStore.edit { it[cityKey] = v }
     suspend fun setShowPanel(v: Boolean) = context.dataStore.edit { it[panelKey] = v }
     suspend fun setVoiceId(v: Boolean) = context.dataStore.edit { it[voiceIdKey] = v }
+    suspend fun setSpeakerThreshold(v: Float) = context.dataStore.edit { it[speakerThresholdKey] = v }
     suspend fun setWakeThreshold(value: Float) = context.dataStore.edit { it[thresholdKey] = value }
     suspend fun setListeningEnabled(value: Boolean) = context.dataStore.edit { it[enabledKey] = value }
 
     companion object {
         const val DEFAULT_THRESHOLD = 0.5f
+        const val DEFAULT_SPEAKER_THRESHOLD = 0.5f
     }
 }

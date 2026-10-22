@@ -5,6 +5,7 @@
 #   app/libs/sherpa-onnx-static-link-onnxruntime-<ver>.aar
 #   models/speech/app-assets/stt/{encoder,decoder,joiner}.onnx, tokens.txt   (Kroko streaming zipformer en, D-026)
 #   models/speech/app-assets/tts/en_GB-alan-medium.onnx, tokens.txt, espeak-ng-data/  (Piper voice "alan")
+#   models/speech/app-assets/speaker/campplus.onnx   (3D-Speaker CAM++ voice ID, PLAN 12.1)
 # Already-downloaded files are kept.
 set -euo pipefail
 cd "$(dirname "$0")/.."
@@ -15,11 +16,13 @@ DL=models/dl
 OUT=models/speech/app-assets
 STT=sherpa-onnx-streaming-zipformer-en-kroko-2025-08-06
 TTS=vits-piper-en_GB-alan-medium
-mkdir -p app/libs "$DL" "$OUT/stt" "$OUT/tts"
+SPK=3dspeaker_speech_campplus_sv_en_voxceleb_16k.onnx
+mkdir -p app/libs "$DL" "$OUT/stt" "$OUT/tts" "$OUT/speaker"
 
 [ -f "$AAR" ] || curl -fL -o "$AAR" "$REL/v$VER/$(basename "$AAR")"
 [ -f "$DL/$STT.tar.bz2" ] || curl -fL -o "$DL/$STT.tar.bz2" "$REL/asr-models/$STT.tar.bz2"
 [ -f "$DL/$TTS.tar.bz2" ] || curl -fL -o "$DL/$TTS.tar.bz2" "$REL/tts-models/$TTS.tar.bz2"
+[ -f "$OUT/speaker/campplus.onnx" ] || curl -fL -o "$OUT/speaker/campplus.onnx" "$REL/speaker-recongition-models/$SPK"
 
 if [ ! -f "$OUT/stt/tokens.txt" ]; then
   tar xjf "$DL/$STT.tar.bz2" -C "$DL"

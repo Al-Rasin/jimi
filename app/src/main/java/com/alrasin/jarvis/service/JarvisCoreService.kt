@@ -27,6 +27,7 @@ import com.alrasin.jarvis.data.WakeEvent
 import com.alrasin.jarvis.data.WakeEventDao
 import com.alrasin.jarvis.ui.AssistantActivity
 import com.alrasin.jarvis.voice.AudioRing
+import com.alrasin.jarvis.voice.SpeakerVerifier
 import com.alrasin.jarvis.voice.SpeechToText
 import com.alrasin.jarvis.voice.TextToSpeech
 import com.alrasin.jarvis.voice.WakePhrase
@@ -67,6 +68,7 @@ class JarvisCoreService : LifecycleService() {
     @Inject lateinit var dao: WakeEventDao
     @Inject lateinit var assistant: Assistant
     @Inject lateinit var models: ModelBrain
+    @Inject lateinit var speaker: SpeakerVerifier
 
     @Volatile private var threshold = Settings.DEFAULT_THRESHOLD
     @Volatile private var missedRequested = false
@@ -76,6 +78,10 @@ class JarvisCoreService : LifecycleService() {
     @Volatile private var listenRequest: String? = null
     @Volatile private var followUp = true
     @Volatile private var showPanel = true
+    @Volatile private var voiceId = false
+    @Volatile private var speakerThreshold = Settings.DEFAULT_SPEAKER_THRESHOLD
+    /** Set by the Settings tab: the mic loop records [ENROLL_CHUNKS] of the owner's voice for voice ID. */
+    @Volatile private var enrollRequested = false
     private var tts: Deferred<TextToSpeech?>? = null
     private val speech = Channel<String>(Channel.UNLIMITED)
     private val speechLeft = AtomicInteger(0)
@@ -94,10 +100,11 @@ class JarvisCoreService : LifecycleService() {
             ACTION_MISSED -> missedRequested = true
             ACTION_SAY -> intent.getStringExtra(EXTRA_TEXT)?.let { announce(it) }
             ACTION_ASK -> intent.getStringExtra(EXTRA_TEXT)?.let {
-                ask(it, it, intent.getStringExtra(EXTRA_SOURCE) ?: "typed", null, null)
+                ask(it, it, intent.getStringExtra(EXTRA_SOURCE) ?: "typed", null, null, null)
             }
             ACTION_LISTEN -> listenRequest = "tap"
             ACTION_SHUT_UP -> shutUp()
+            ACTION_ENROLL -> enrollRequested = true
         }
         startForeground(
             Notifications.ID_SERVICE,
@@ -131,6 +138,8 @@ class JarvisCoreService : LifecycleService() {
         }
         lifecycleScope.launch { settings.followUp.collect { followUp = it } }
         lifecycleScope.launch { settings.showPanel.collect { showPanel = it } }
+        lifecycleScope.launch { settings.voiceId.collect { voiceId = it } }
+        lifecycleScope.launch { settings.speakerThreshold.collect { speakerThreshold = it } }
         registerReceiver(battery, IntentFilter(Intent.ACTION_BATTERY_CHANGED))
         models.warmUp()
     }
@@ -180,7 +189,7 @@ class JarvisCoreService : LifecycleService() {
     }
 
     /** Runs one command through the assistant and speaks the answer. Then maybe listens for a follow-up. */
-    private fun ask(text: String, raw: String, source: String, wakeId: Long?, audioPath: String?) {
+    private fun ask(text: String, raw: String, source: String, wakeId: Long?, audioPath: String?, audio: ShortArray?) {
         speaking = true
         _phase.value = PHASE_THINKING
         _heard.value = text
@@ -189,7 +198,7 @@ class JarvisCoreService : LifecycleService() {
             var next: String? = null
             try {
                 val locked = getSystemService(KeyguardManager::class.java).isKeyguardLocked
-                val input = Assistant.Input(text, raw, source, locked, voiceOk = null, wakeId = wakeId, audioPath = audioPath)
+                val input = Assistant.Input(text, raw, source, locked, voiceOk(locked, audio), wakeId = wakeId, audioPath = audioPath)
                 val r = assistant.handle(input) { sentence ->
                     _phase.value = PHASE_SPEAKING
                     say(sentence)
@@ -199,6 +208,7 @@ class JarvisCoreService : LifecycleService() {
                 _turnId.value = r.turnId
                 Notifications.showReply(this@JarvisCoreService, text, r.text)
                 _phase.value = PHASE_SPEAKING
+                if (r.tool == "panic") shutUp()
                 if (!r.spokenAlready) say(r.text)
                 awaitSpeech()
                 if (r.expectAnswer || (followUp && !r.endConversation && source != "typed")) next = "follow_up"
@@ -211,6 +221,18 @@ class JarvisCoreService : LifecycleService() {
                 speaking = false
             }
         }
+    }
+
+    /**
+     * Voice ID (PLAN 12.2): only checked while locked with the setting on. No audio, no model or no enrolment
+     * counts as "not the owner" then, so risky tools are refused rather than allowed.
+     */
+    private fun voiceOk(locked: Boolean, audio: ShortArray?): Boolean? {
+        if (!locked || !voiceId) return null
+        val score = audio?.let { runCatching { speaker.score(it) }.getOrNull() }
+        JarvisLog.i("voice ID score ${score?.let { "%.2f".format(it) } ?: "none"} (need ${"%.2f".format(speakerThreshold)})")
+        _lastVoiceScore.value = score
+        return score != null && score >= speakerThreshold
     }
 
     private fun showPanel() {
@@ -258,6 +280,7 @@ class JarvisCoreService : LifecycleService() {
         var commandChunks = 0
         val commandAudio = ArrayList<ShortArray>()
         var wasBusy = false
+        var enrollAudio: ArrayList<ShortArray>? = null
         val chunk = ShortArray(WakeWordDetector.CHUNK)
         val ring = AudioRing(WakeWordDetector.SAMPLE_RATE * RING_SECONDS)
         val minBuf = AudioRecord.getMinBufferSize(
@@ -291,13 +314,32 @@ class JarvisCoreService : LifecycleService() {
                     if (cmd.done || ++commandChunks >= COMMAND_MAX_CHUNKS) {
                         command = null
                         cmd.close()
-                        val path = saveCommand(commandAudio, cmd.raw)
+                        val audio = join(commandAudio)
+                        val path = saveCommand(audio, cmd.raw)
                         val wakeId = if (commandSource == "voice") clips.lastWakeId else null
-                        onCommand(WakePhrase.strip(cmd.text), cmd.raw, commandSource, wakeId, clips.lastWakePeak, path, tone)
+                        onCommand(WakePhrase.strip(cmd.text), cmd.raw, commandSource, wakeId, clips.lastWakePeak, path, audio, tone)
                     }
                     continue
                 }
                 if (speaking) { wasBusy = true; continue }
+                val enrolling = enrollAudio
+                if (enrolling != null) {
+                    enrolling.add(chunk.copyOf())
+                    if (enrolling.size >= ENROLL_CHUNKS) {
+                        enrollAudio = null
+                        tone.startTone(ToneGenerator.TONE_PROP_ACK, 200)
+                        finishEnroll(join(enrolling))
+                    }
+                    continue
+                }
+                if (enrollRequested) {
+                    enrollRequested = false
+                    enrollAudio = ArrayList()
+                    wasBusy = true
+                    _enrollStatus.value = "Recording… keep talking for $ENROLL_SECONDS seconds."
+                    tone.startTone(ToneGenerator.TONE_PROP_BEEP, 120)
+                    continue
+                }
                 val req = listenRequest
                 if (req != null && stt != null) {
                     listenRequest = null
@@ -342,11 +384,8 @@ class JarvisCoreService : LifecycleService() {
     }
 
     /** Keeps each command's audio + raw STT text, to test better STT models on the user's real voice. */
-    private fun saveCommand(parts: List<ShortArray>, rawText: String): String? =
+    private fun saveCommand(audio: ShortArray, rawText: String): String? =
         runCatching {
-            val audio = ShortArray(parts.sumOf { it.size })
-            var pos = 0
-            for (p in parts) { p.copyInto(audio, pos); pos += p.size }
             val dir = File(getExternalFilesDir(null), "commands").apply { mkdirs() }
             val name = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.US).format(Date())
             val wav = File(dir, "$name.wav")
@@ -355,9 +394,28 @@ class JarvisCoreService : LifecycleService() {
             wav.path
         }.onFailure { JarvisLog.e("could not save command audio", it) }.getOrNull()
 
+    private fun join(parts: List<ShortArray>): ShortArray {
+        val audio = ShortArray(parts.sumOf { it.size })
+        var pos = 0
+        for (p in parts) { p.copyInto(audio, pos); pos += p.size }
+        return audio
+    }
+
+    private fun finishEnroll(audio: ShortArray) {
+        lifecycleScope.launch(Dispatchers.Default) {
+            val ok = runCatching { speaker.enroll(audio) }.onFailure { JarvisLog.e("enrol failed", it) }.getOrDefault(false)
+            _enrollStatus.value = when {
+                ok -> "Saved. ${speaker.samples} recording(s) of your voice."
+                !speaker.available -> "Voice ID model missing (run tools/fetch_speech.sh)."
+                else -> "Didn't work, try again."
+            }
+        }
+    }
+
     /** A command was heard: answer it. Empty after a follow-up means the conversation is over. */
     private fun onCommand(
-        text: String, raw: String, source: String, wakeId: Long?, wakeScore: Float, audioPath: String?, tone: ToneGenerator,
+        text: String, raw: String, source: String, wakeId: Long?, wakeScore: Float, audioPath: String?, audio: ShortArray,
+        tone: ToneGenerator,
     ) {
         JarvisLog.i("heard ($source): \"$text\"")
         if (source == "voice") _wakeId.value = wakeId
@@ -368,7 +426,7 @@ class JarvisCoreService : LifecycleService() {
             _phase.value = PHASE_WAKE
             return
         }
-        ask(text, raw, source, wakeId, audioPath)
+        ask(text, raw, source, wakeId, audioPath, audio)
     }
 
     /** Decides when to save a clip: real wakes, near misses, and "Missed it" taps. */
@@ -454,6 +512,7 @@ class JarvisCoreService : LifecycleService() {
         const val ACTION_ASK = "com.alrasin.jarvis.ASK"
         const val ACTION_LISTEN = "com.alrasin.jarvis.LISTEN"
         const val ACTION_SHUT_UP = "com.alrasin.jarvis.SHUT_UP"
+        const val ACTION_ENROLL = "com.alrasin.jarvis.ENROLL"
         const val EXTRA_TEXT = "text"
         const val EXTRA_SOURCE = "source"
         private val QUIET_ACTIONS = setOf(ACTION_SAY, ACTION_ASK, ACTION_SHUT_UP)
@@ -467,6 +526,8 @@ class JarvisCoreService : LifecycleService() {
         private const val NEAR_MIN = 0.2f
         private const val NEAR_COOLDOWN_MS = 30_000L
         private const val PRE_ROLL_SAMPLES = 16_000   // 1 s before the wake: "…jimi turn" → "turn" is kept
+        private const val ENROLL_SECONDS = 8
+        private const val ENROLL_CHUNKS = ENROLL_SECONDS * WakeWordDetector.SAMPLE_RATE / WakeWordDetector.CHUNK
         private const val COMMAND_MAX_CHUNKS = 150   // ~12 s safety stop (STT also stops itself at 10 s)
 
         const val PHASE_WAKE = "Say \"Hey Jimi\""
@@ -494,6 +555,11 @@ class JarvisCoreService : LifecycleService() {
         private val _wakeId = MutableStateFlow<Long?>(null)
         /** wake_event id of the last voice wake (for "I didn't call"). */
         val wakeId: StateFlow<Long?> = _wakeId
+        private val _enrollStatus = MutableStateFlow("")
+        val enrollStatus: StateFlow<String> = _enrollStatus
+        private val _lastVoiceScore = MutableStateFlow<Float?>(null)
+        /** Voice ID score of the last locked command (to tune the threshold). */
+        val lastVoiceScore: StateFlow<Float?> = _lastVoiceScore
 
         fun start(context: Context) =
             context.startForegroundService(Intent(context, JarvisCoreService::class.java))
@@ -519,6 +585,9 @@ class JarvisCoreService : LifecycleService() {
         fun listen(context: Context) = send(context, ACTION_LISTEN)
 
         fun shutUp(context: Context) = send(context, ACTION_SHUT_UP)
+
+        /** Record the owner's voice for voice ID (Settings tab). */
+        fun enroll(context: Context) = send(context, ACTION_ENROLL)
 
         fun stop(context: Context) = context.startService(
             Intent(context, JarvisCoreService::class.java).setAction(ACTION_STOP)

@@ -63,6 +63,8 @@ class Assistant @Inject constructor(
     private var pending: Pair<ToolCall, Long>? = null
     private var lastReply = ""
     private val history = ArrayDeque<Exchange>()
+    /** After the panic word: risky tools are refused while locked, until the phone is unlocked by hand. */
+    @Volatile private var lockdown = false
 
     /** [speak] is called for chat sentences while the model is still writing. */
     suspend fun handle(input: Input, speak: (String) -> Unit = {}): Reply = lock.withLock {
@@ -85,6 +87,7 @@ class Assistant @Inject constructor(
     }
 
     private suspend fun route(text: String, input: Input, speak: (String) -> Unit): Reply {
+        if (!input.locked) lockdown = false
         pending?.let { (call, at) ->
             pending = null
             if (System.currentTimeMillis() - at < PENDING_MS) {
@@ -113,9 +116,10 @@ class Assistant @Inject constructor(
             "cancel" -> return Reply("Okay.", tool = "cancel", endConversation = true)
             "repeat_last" -> return Reply(lastReply.ifEmpty { "I haven't said anything yet." }, tool = "repeat_last")
             "run_routine" -> return runRoutine(call.arg("name") ?: "", input)
+            "panic" -> return panic(input)
         }
         val ctx = ToolContext(context, input.heard, input.locked)
-        return when (val o = executor.execute(call, ctx, confirmed, input.voiceOk)) {
+        return when (val o = executor.execute(call, ctx, confirmed, voiceOk(input))) {
             is Outcome.NeedConfirm -> {
                 pending = call to System.currentTimeMillis()
                 Reply(o.question, tool = call.tool, expectAnswer = true)
@@ -129,6 +133,19 @@ class Assistant @Inject constructor(
                 Reply(o.result.say, o.result.data, call.tool)
             }
         }
+    }
+
+    private fun voiceOk(input: Input): Boolean? = if (lockdown && input.locked) false else input.voiceOk
+
+    /** Panic word (PLAN 12.4): forget the pending question, lock the screen, refuse risky tools until unlocked. */
+    private suspend fun panic(input: Input): Reply {
+        pending = null
+        lockdown = true
+        val call = ToolCall("lock_phone", emptyMap())
+        val r = executor.execute(call, ToolContext(context, input.heard, input.locked), confirmed = true, voiceOk = null)
+        log(input.heard, call, "panic", (r as? Outcome.Done)?.result ?: ToolResult.fail("not run"))
+        JarvisLog.i("panic: locked down")
+        return Reply("Locked down.", tool = "panic", endConversation = true)
     }
 
     private suspend fun log(heard: String, call: ToolCall, source: String, r: ToolResult) {
@@ -148,7 +165,7 @@ class Assistant @Inject constructor(
         val says = ArrayList<String>()
         val ctx = ToolContext(context, input.heard, input.locked)
         for (step in steps) {
-            val o = executor.execute(step, ctx, confirmed = true, voiceOk = input.voiceOk)
+            val o = executor.execute(step, ctx, confirmed = true, voiceOk = voiceOk(input))
             val r = (o as? Outcome.Done)?.result ?: continue
             log(input.heard, step, "routine", r)
             if (!r.ok || step.tool in INFO_TOOLS) says.add(r.say)

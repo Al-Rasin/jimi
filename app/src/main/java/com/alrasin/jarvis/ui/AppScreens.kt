@@ -21,9 +21,11 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Switch
+import androidx.compose.material3.Slider
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -211,6 +213,10 @@ private fun SettingsTab(vm: AppViewModel) {
     val city by vm.homeCity.collectAsStateWithLifecycle()
     val message by vm.message.collectAsStateWithLifecycle()
     val pinSet by vm.pinSet.collectAsStateWithLifecycle()
+    val enrollStatus by vm.enrollStatus.collectAsStateWithLifecycle()
+    val voiceSamples by vm.voiceSamples.collectAsStateWithLifecycle()
+    val speakerThreshold by vm.speakerThreshold.collectAsStateWithLifecycle()
+    val lastVoiceScore by vm.lastVoiceScore.collectAsStateWithLifecycle()
     val models by vm.modelStatus.collectAsStateWithLifecycle()
     var cityText by remember(city) { mutableStateOf(city) }
     var pin by remember { mutableStateOf("") }
@@ -227,11 +233,33 @@ private fun SettingsTab(vm: AppViewModel) {
         Toggle("Keep listening after an answer (no \"Hey Jimi\" needed)", followUp, vm::setFollowUp)
         Toggle("Show panel on wake (also on lock screen)", panel, vm::setShowPanel)
         Toggle("Auto-clear unimportant notifications", autoClear, vm::setAutoClear)
-        Toggle("Voice ID for risky actions when locked", voiceId, vm::setVoiceId)
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             OutlinedTextField(cityText, { cityText = it }, Modifier.weight(1f), label = { Text("Home city (weather)") }, singleLine = true)
             OutlinedButton(onClick = { vm.setHomeCity(cityText) }) { Text("Save") }
         }
+
+        Header("Voice ID")
+        Text(
+            "When on and the phone is locked, calls, messages and unlock only work for your voice. " +
+                "Record 3–5 times, in a normal voice, in different places. Say \"panic\" or \"code red\" to lock everything.",
+            style = MaterialTheme.typography.bodySmall,
+        )
+        Toggle("Voice ID for risky actions when locked", voiceId, vm::setVoiceId)
+        LaunchedEffect(enrollStatus) { vm.refreshVoice() }
+        Text(
+            "$voiceSamples recording(s) saved." + if (enrollStatus.isNotBlank()) " $enrollStatus" else "",
+            style = MaterialTheme.typography.bodySmall,
+        )
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Button(onClick = vm::enrollVoice) { Text("Record my voice (8 s)") }
+            OutlinedButton(onClick = vm::resetVoice) { Text("Delete") }
+        }
+        Text(
+            "Match needed: ${"%.2f".format(speakerThreshold)}" +
+                (lastVoiceScore?.let { "   (last locked command: ${"%.2f".format(it)})" } ?: ""),
+            style = MaterialTheme.typography.bodySmall,
+        )
+        Slider(speakerThreshold, vm::setSpeakerThreshold, valueRange = 0.2f..0.8f, steps = 11)
 
         Header("Phone PIN (for \"unlock my phone\")")
         Text(if (pinSet) "PIN is saved, encrypted in Android Keystore." else "No PIN saved.", style = MaterialTheme.typography.bodySmall)

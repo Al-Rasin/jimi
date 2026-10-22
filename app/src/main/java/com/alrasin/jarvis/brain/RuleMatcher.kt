@@ -57,7 +57,11 @@ object RuleMatcher {
 
     private fun re(p: String) = Regex("^(?:$p)$")
 
+    /** Panic word (PLAN 12.4): stop everything, lock, refuse risky things until unlocked by hand. */
+    private const val PANIC = "panic|panic mode|code red|lock ?down|emergency lock|stop everything(?: and lock)?"
+
     private fun talk(t: String): ToolCall? = when {
+        t.matches(re(PANIC)) -> call("panic")
         t.matches(re("cancel|stop|never ?mind|forget it|nothing|shut up|be quiet|quiet|stop talking")) -> call("cancel")
         t.matches(re("(?:say (?:that|it) again|repeat(?: that| it)?|what did you say|come again|pardon)")) -> call("repeat_last")
         else -> null

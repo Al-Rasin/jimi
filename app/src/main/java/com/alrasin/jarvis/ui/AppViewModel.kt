@@ -24,6 +24,7 @@ import com.alrasin.jarvis.data.Settings
 import com.alrasin.jarvis.data.TurnDao
 import com.alrasin.jarvis.actions.ReminderScheduler
 import com.alrasin.jarvis.service.JarvisCoreService
+import com.alrasin.jarvis.voice.SpeakerVerifier
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
@@ -50,6 +51,7 @@ class AppViewModel @Inject constructor(
     private val registry: ToolRegistry,
     private val executor: ToolExecutor,
     private val models: ModelBrain,
+    private val speaker: SpeakerVerifier,
 ) : AndroidViewModel(app) {
     private fun <T> Flow<T>.state(initial: T) = stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), initial)
 
@@ -63,6 +65,10 @@ class AppViewModel @Inject constructor(
     val showPanel = settings.showPanel.state(true)
     val autoClear = settings.autoClearNotifications.state(false)
     val voiceId = settings.voiceId.state(false)
+    val speakerThreshold = settings.speakerThreshold.state(Settings.DEFAULT_SPEAKER_THRESHOLD)
+    val enrollStatus = JarvisCoreService.enrollStatus
+    val lastVoiceScore = JarvisCoreService.lastVoiceScore
+    val voiceSamples = MutableStateFlow(speaker.samples)
     val homeCity = settings.homeCity.state("Dhaka")
     val toolNames: List<String> get() = registry.all.map { it.name }.sorted()
 
@@ -110,6 +116,15 @@ class AppViewModel @Inject constructor(
     fun setShowPanel(v: Boolean) = viewModelScope.launch { settings.setShowPanel(v) }
     fun setAutoClear(v: Boolean) = viewModelScope.launch { settings.setAutoClearNotifications(v) }
     fun setVoiceId(v: Boolean) = viewModelScope.launch { settings.setVoiceId(v) }
+    fun setSpeakerThreshold(v: Float) = viewModelScope.launch { settings.setSpeakerThreshold(v) }
+    fun enrollVoice() = JarvisCoreService.enroll(app)
+    fun refreshVoice() { voiceSamples.value = speaker.samples }
+
+    fun resetVoice() {
+        speaker.reset()
+        voiceSamples.value = 0
+        _message.value = "Voice ID recordings deleted."
+    }
     fun setHomeCity(v: String) = viewModelScope.launch { settings.setHomeCity(v.trim().ifEmpty { "Dhaka" }) }
 
     fun setPin(pin: String) {

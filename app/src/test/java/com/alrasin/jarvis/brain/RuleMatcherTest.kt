@@ -102,6 +102,9 @@ class RuleMatcherTest {
         assertEquals(c("tap", "text" to "send"), m("tap on send button"))
         assertEquals(c("cancel"), m("never mind"))
         assertEquals(c("repeat_last"), m("say that again"))
+        assertEquals(c("panic"), m("code red"))
+        assertEquals(c("panic"), m("Panic!"))
+        assertEquals(c("cancel"), m("stop"))
     }
 
     @Test fun notificationsKnowledgeMemory() {
