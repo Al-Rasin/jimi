@@ -13,6 +13,7 @@ import com.k2fsa.sherpa.onnx.OfflineTtsModelConfig
 import com.k2fsa.sherpa.onnx.OfflineTtsSupertonicModelConfig
 import com.k2fsa.sherpa.onnx.OfflineTtsVitsModelConfig
 import java.io.File
+import kotlin.math.sqrt
 
 /**
  * Offline voice (PLAN 3.3, D-025, D-038) via sherpa-onnx. [voice] picks the engine (Piper / Supertonic) and speaker;
@@ -66,14 +67,17 @@ class TextToSpeech(
     }
 
     /** Stops the sentence being played now (user tapped stop / said "stop"). */
-    fun stop() { stopped = true }
+    fun stop() {
+        stopped = true
+        stopPlayback()
+    }
 
     /** Blocks until the sentence has been played or [stop] is called. Returns false if stopped. */
     fun speak(text: String): Boolean {
         stopped = false
         val audio = generate(text)
         if (stopped) return false
-        return play(audio)
+        return playPcm(audio.samples, audio.sampleRate) { stopped }
     }
 
     /** Plays audio made by [generate] (the service makes the next sentence while this one plays). */
@@ -92,6 +96,32 @@ class TextToSpeech(
 
         /** Quiet audio added after each sentence so the last sound is not cut when the track stops. */
         private const val TAIL_MS = 120
+        private val playbackLock = Any()
+        private var playbackEpoch = 0L
+        private data class Playback(val pcm: FloatArray, val rate: Int)
+        private val activeTracks = mutableMapOf<AudioTrack, Playback>()
+
+        val isPlaying: Boolean
+            get() = synchronized(playbackLock) { activeTracks.isNotEmpty() }
+
+        /** RMS near the playback head; queued speech must not suppress a quiet microphone window. */
+        val playbackEnergy: Float
+            get() = synchronized(playbackLock) {
+                activeTracks.maxOfOrNull { (track, audio) ->
+                    val start = track.playbackHeadPosition.coerceIn(0, audio.pcm.size)
+                    val end = (start + audio.rate / 50).coerceAtMost(audio.pcm.size)
+                    var energy = 0.0
+                    for (i in start until end) energy += audio.pcm[i] * audio.pcm[i]
+                    sqrt(energy / (end - start).coerceAtLeast(1)).toFloat()
+                } ?: 0f
+            }
+
+        /** Does not wait for native synthesis or the service's TTS lock. */
+        fun stopPlayback() = synchronized(playbackLock) {
+            playbackEpoch++
+            activeTracks.keys.forEach { track -> runCatching { track.stop() } }
+            activeTracks.clear()
+        }
 
         /**
          * Plays mono float PCM on the assistant audio stream; blocks until done or [stop] returns true.
@@ -99,6 +129,8 @@ class TextToSpeech(
          * and a clock-based wait then stopped it before the last words were heard.
          */
         fun playPcm(pcm: FloatArray, rate: Int, stop: () -> Boolean = { false }): Boolean {
+            val epoch = synchronized(playbackLock) { playbackEpoch }
+            if (stop()) return false
             if (pcm.isEmpty()) return true
             val samples = pcm.copyOf(pcm.size + rate * TAIL_MS / 1000)
             val track = AudioTrack.Builder()
@@ -120,16 +152,27 @@ class TextToSpeech(
                 .build()
             try {
                 track.write(samples, 0, samples.size, AudioTrack.WRITE_BLOCKING)
-                track.play()
+                synchronized(playbackLock) {
+                    if (epoch != playbackEpoch || stop()) return false
+                    track.play()
+                    activeTracks[track] = Playback(samples, rate)
+                }
+                fun cancelled() = stop() || synchronized(playbackLock) { epoch != playbackEpoch }
                 // give up only if playback is stuck (2 s more than the audio length)
                 val end = System.currentTimeMillis() + samples.size * 1000L / rate + 2000
-                while (!stop() && track.playbackHeadPosition < samples.size && System.currentTimeMillis() < end) {
+                while (!cancelled() && track.playbackHeadPosition < samples.size && System.currentTimeMillis() < end) {
                     Thread.sleep(20)
                 }
-                track.stop()
-                return !stop()
+                return !cancelled()
             } finally {
-                track.release()
+                synchronized(playbackLock) {
+                    activeTracks.remove(track)
+                    try {
+                        runCatching { track.stop() }
+                    } finally {
+                        track.release()
+                    }
+                }
             }
         }
 
