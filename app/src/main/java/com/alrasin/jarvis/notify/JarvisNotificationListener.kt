@@ -162,6 +162,7 @@ class JarvisNotificationListener : NotificationListenerService() {
     suspend fun lastCleared(): List<NotificationLog> = history.lastCleared()
 
     override fun onDestroy() {
+        if (instance === this) instance = null
         scope.cancel()
         super.onDestroy()
     }

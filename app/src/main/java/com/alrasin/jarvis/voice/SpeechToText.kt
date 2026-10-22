@@ -77,10 +77,15 @@ class SpeechToText(context: Context, dir: File? = null, hotwords: Collection<Str
         waitStart = waitStart,
         stripWake = stripWake,
     ).also {
+        try {
             // the model drops the first words if speech starts at sample 0
             it.feed(ShortArray(LEAD_SILENCE), LEAD_SILENCE)
             if (preRoll != null) it.feed(preRoll, preRoll.size)
+        } catch (failure: Throwable) {
+            it.close()
+            throw failure
         }
+    }
 
     inner class Session(
         private val stream: OnlineStream,
