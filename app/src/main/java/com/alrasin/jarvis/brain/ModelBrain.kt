@@ -53,16 +53,12 @@ class ModelBrain @Inject constructor(
     private val llmTools by lazy { registry.all }
     private val grammar by lazy { FunctionGemma.grammar(llmTools) }
 
-    private fun find(vararg prefixes: String): File? = dir.listFiles().orEmpty()
-        .filter { it.name.endsWith(".gguf") }
-        .sortedByDescending { it.name.contains("jarvis") }   // a fine-tuned file wins
-        .firstOrNull { f -> prefixes.any { f.name.startsWith(it, ignoreCase = true) } }
+    private fun toolFile(): File? = ModelSelection.fileFor(IntentRouter.Route.TOOL, dir)
 
-    private fun chatFile(selection: String): File? = if (selection == ChatModels.LFM)
-        ChatModels.findLfm(dir) else find("qwen3", "gemma-3")
+    private fun chatFile(selection: String): File? = ModelSelection.fileFor(IntentRouter.Route.CHAT, dir, selection)
 
     fun status(selection: String = ChatModels.DEFAULT): String = if (!Llama.available) "LLM library not built" else
-        "tool model: ${find("functiongemma")?.name ?: "none"}, chat model: ${chatFile(selection)?.name ?: "not installed"}"
+        "tool model: ${toolFile()?.name ?: "none"}, chat model: ${chatFile(selection)?.name ?: "not installed"}"
 
     /** Prepare the tool schema without allocating model weights or a KV cache. */
     fun warmUp() = scope.launch { grammar }
@@ -119,7 +115,7 @@ class ModelBrain @Inject constructor(
 
     private fun toolModel(): Llama? {
         toolModel?.let { return it }
-        val f = find("functiongemma") ?: return null
+        val f = toolFile() ?: return null
         screenModel?.close()
         screenModel = null
         chatModel?.close()
@@ -132,11 +128,15 @@ class ModelBrain @Inject constructor(
         chatModel?.let { if (it.file == f) return it }
         chatModel?.close()
         chatModel = null
-        if (f == null) return null
+        if (f == null) {
+            JarvisLog.i("chat model not installed (selection=$selection)")
+            return null
+        }
         screenModel?.close()
         screenModel = null
         toolModel?.close()
         toolModel = null
+        JarvisLog.i("chat model loading ${f.name} (selection=$selection)")
         return Llama.load(f, contextSize = 2048, threads = 4)?.also { chatModel = it }
     }
 
@@ -183,7 +183,7 @@ class ModelBrain @Inject constructor(
                                 retrieved.joinToString("\n") { it.text }
                 }
                 val chatHistory = if (evidence.isBlank()) history else emptyList()
-                val prompt = if (selection == ChatModels.LFM) ChatFormat.lfm(system, chatHistory, text)
+                val prompt = if (m.file.name.startsWith("LFM2.5-", ignoreCase = true)) ChatFormat.lfm(system, chatHistory, text)
                 else if (m.file.name.startsWith("gemma-3", ignoreCase = true)) buildString {
                     append("<bos><start_of_turn>user\n$system\n\n")
                     chatHistory.takeLast(3).forEach {
