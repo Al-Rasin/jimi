@@ -78,6 +78,7 @@ object RuleMatcher {
     }
 
     private fun toggle(t: String): ToolCall? {
+        if (t == "on flushed light") return call("toggle", "target" to "flashlight", "state" to "on")
         val on = Regex("\\b(turn on|switch on|enable|activate|start|open)\\b").containsMatchIn(t) || t.endsWith(" on")
         val off = Regex("\\b(turn off|switch off|disable|deactivate|stop|close|shut off)\\b").containsMatchIn(t) || t.endsWith(" off")
         if (on == off) {
