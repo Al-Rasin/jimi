@@ -113,7 +113,10 @@ class JarvisCoreService : LifecycleService() {
         )
         ensureVoice()
         val on = intent?.action !in QUIET_ACTIONS || runBlocking { settings.listeningEnabled.first() }
-        if (listenJob == null && on) startListening()
+        if (listenJob == null && on) {
+            startListening()
+            BootReceiver.schedule(this)
+        }
         return START_STICKY
     }
 
@@ -199,9 +202,17 @@ class JarvisCoreService : LifecycleService() {
             try {
                 val locked = getSystemService(KeyguardManager::class.java).isKeyguardLocked
                 val input = Assistant.Input(text, raw, source, locked, voiceOk(locked, audio), wakeId = wakeId, audioPath = audioPath)
-                val r = assistant.handle(input) { sentence ->
-                    _phase.value = PHASE_SPEAKING
-                    say(sentence)
+                var started = false
+                // slow answer (model loading, web): say something so the user knows Jimi heard (PLAN 9.4)
+                val filler = launch { delay(FILLER_MS); if (!started) say(Persona.FILLER) }
+                val r = try {
+                    assistant.handle(input) { sentence ->
+                        started = true
+                        _phase.value = PHASE_SPEAKING
+                        say(sentence)
+                    }
+                } finally {
+                    filler.cancel()
                 }
                 JarvisLog.i("reply (${r.tool ?: "talk"}): ${r.text}")
                 _reply.value = r.text
@@ -518,6 +529,7 @@ class JarvisCoreService : LifecycleService() {
         private val QUIET_ACTIONS = setOf(ACTION_SAY, ACTION_ASK, ACTION_SHUT_UP)
         private const val FOLLOW_UP_WAIT = 6f     // seconds to start talking after an answer
         private const val TAIL_MS = 350L
+        private const val FILLER_MS = 1_500L
         private const val RING_SECONDS = 4
         private const val CLIP_SAMPLES = 40_000       // 2.5 s per wake clip
         private const val MISSED_SECONDS = 3

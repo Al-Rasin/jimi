@@ -46,6 +46,19 @@ and split later — but packages must match the module names above.
 6. `ReplyBuilder` makes short text → TTS speaks it (sentence by sentence while LLM streams)
    AND text goes to chat UI + lock overlay + history DB.
 
+### As built (2026-10-22)
+One `:app` module, packages named like the modules above. Class map:
+- `service/JarvisCoreService` — mic loop: wake (`voice/WakeWordDetector`) → `voice/SpeechToText` session (1 s pre-roll,
+  own end-of-speech D-027) → `brain/Assistant.handle()` → voice (`voice/TextToSpeech`, queue per sentence) + panel
+  (`ui/AssistantActivity`) + quiet notification. Follow-up listening after a reply (D-028). "One moment" filler after 1.5 s.
+  Voice ID score from the command audio when locked (`voice/SpeakerVerifier`, D-034). Watchdog alarm in `BootReceiver`.
+- `brain/Assistant` = Router: pending yes/no → panic / small talk → `RuleMatcher` → `ModelBrain.toolCall`
+  (FunctionGemma, `llm/FunctionGemma` prompt + GBNF, D-030) → `CloudBrain` (optional, D-035) → `ModelBrain.chat` (Qwen3) → "can't".
+  Every turn → `conversation_turn`; every tool → `tool_call_log`.
+- `actions/ToolExecutor` = SecurityGate (CONFIRM → yes/no; while locked CONFIRM becomes VOICE_ID; lockdown after panic).
+- `llm/Llama` — JNI to llama.cpp (`app/src/main/cpp/jarvis_llm.cpp`), prefix KV cache, grammar, streaming.
+- `training/toolcall/` — dataset, MLX fine-tune, eval for the tool caller (D-033). `training/wakeword/` — wake word.
+
 ## 4. Tool contract (shared by rules, LLM, cloud, training data)
 ```kotlin
 enum class Risk { SAFE, CONFIRM, VOICE_ID }   // VOICE_ID = needs speaker verification when locked

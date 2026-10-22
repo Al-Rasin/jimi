@@ -4,6 +4,8 @@ package com.alrasin.jarvis.brain
 object Persona {
     const val NAME = "Jimi"
     const val ADDRESS = "Boss"
+    /** Said when an answer takes long (model loading, web). */
+    const val FILLER = "One moment, $ADDRESS."
 
     val SYSTEM_PROMPT = """
         You are $NAME, a helpful voice assistant on the user's Android phone. Call the user "$ADDRESS".
