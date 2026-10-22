@@ -22,11 +22,13 @@ class Chimes : AutoCloseable {
     private val done = render(listOf(Note(C5, 0, 0.25f), Note(E5, 80, 0.25f), Note(G5, 160, 0.3f)), 560)
     /** Nothing heard: two low notes going down. */
     private val error = render(listOf(Note(E5, 0, 0.22f), Note(B4, 110, 0.26f)), 480)
+    private val timeout = render(listOf(Note(B4, 0, 0.12f)), 300)
 
     fun wake() = play(wake)
     fun listen() = play(listen)
     fun done() = play(done)
     fun error() = play(error)
+    fun timeout() = play(timeout)
 
     private fun play(pcm: FloatArray) {
         runCatching { player.execute { runCatching { TextToSpeech.playPcm(pcm, RATE) } } }

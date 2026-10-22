@@ -33,7 +33,6 @@ import com.alrasin.jarvis.voice.SpeechToText
 import com.alrasin.jarvis.voice.Chimes
 import com.alrasin.jarvis.voice.PhraseCache
 import com.alrasin.jarvis.voice.TextToSpeech
-import com.alrasin.jarvis.voice.WakePhrase
 import com.alrasin.jarvis.voice.Wav
 import com.alrasin.jarvis.voice.WakeModels
 import com.alrasin.jarvis.voice.WakeWordDetector
@@ -435,7 +434,6 @@ class JarvisCoreService : LifecycleService() {
         var interruption: SpeechToText.Session? = null
         var interruptionChunks = 0
         var commandSource = "voice"
-        var commandChunks = 0
         val commandAudio = ArrayList<ShortArray>()
         var wasBusy = false
         var wasSpeaking = false
@@ -478,13 +476,14 @@ class JarvisCoreService : LifecycleService() {
                     cmd.accept(chunk)
                     _micLevel.value = level(chunk)
                     commandAudio.add(chunk.copyOf())
-                    val heard = WakePhrase.strip(cmd.text).let {
+                    val heard = cmd.text.let {
                         if (commandSource == "barge_in") BargeIn.stripInterruption(it) else it
                     }
                     _heard.value = heard
-                    if (cmd.done || ++commandChunks >= COMMAND_MAX_CHUNKS) {
+                    if (cmd.done) {
                         command = null
                         _micLevel.value = 0f
+                        JarvisLog.i("capture ended ($commandSource): ${cmd.finishReason}")
                         cmd.close()
                         val audio = join(commandAudio)
                         val path = saveCommand(audio, cmd.raw)
@@ -519,10 +518,9 @@ class JarvisCoreService : LifecycleService() {
                         interruption?.close()
                         interruption = null
                         // Exclude loudspeaker pre-roll; capture fresh command audio after the interruption.
-                        command = stt.session()
+                        command = stt.session(stripWake = wake)
                         commandSource = "barge_in"
                         commandAudio.clear()
-                        commandChunks = 0
                         _heard.value = ""
                         _reply.value = ""
                         _phase.value = PHASE_HEARING
@@ -556,9 +554,10 @@ class JarvisCoreService : LifecycleService() {
                     listenRequest = null
                     tone.listen()
                     command = stt.session(null, waitStart = if (req == "follow_up") FOLLOW_UP_WAIT else SpeechToText.WAIT_START)
+                        .also { it.accept(chunk) }
                     commandSource = req
                     commandAudio.clear()
-                    commandChunks = 0
+                    commandAudio.add(chunk.copyOf())
                     wasBusy = true
                     _heard.value = ""
                     _phase.value = if (req == "follow_up") PHASE_FOLLOW_UP else PHASE_HEARING
@@ -574,7 +573,6 @@ class JarvisCoreService : LifecycleService() {
                     commandSource = "voice"
                     commandAudio.clear()
                     commandAudio.add(preRoll)
-                    commandChunks = 0
                     wasBusy = true
                     _heard.value = ""
                     _reply.value = ""
@@ -635,7 +633,7 @@ class JarvisCoreService : LifecycleService() {
         if (wakeId != null) Notifications.showWakeCheck(this, wakeId, wakeScore, heard = text.ifEmpty { "(nothing)" })
         if (text.isEmpty()) {
             _heard.value = if (source == "follow_up") "" else AssistantActivity.NOTHING_HEARD
-            if (source != "follow_up") tone.error()
+            tone.timeout()
             _phase.value = PHASE_WAKE
             return
         }
@@ -747,7 +745,6 @@ class JarvisCoreService : LifecycleService() {
         private const val PRE_ROLL_SAMPLES = 16_000   // 1 s before the wake: "…jimi turn" → "turn" is kept
         private const val ENROLL_SECONDS = 8
         private const val ENROLL_CHUNKS = ENROLL_SECONDS * WakeWordDetector.SAMPLE_RATE / WakeWordDetector.CHUNK
-        private const val COMMAND_MAX_CHUNKS = 150   // ~12 s safety stop (STT also stops itself at 10 s)
 
         const val PHASE_WAKE = "Say \"Hey Jimi\""
         const val PHASE_HEARING = "Listening to you…"
