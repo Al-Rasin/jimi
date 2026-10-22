@@ -38,6 +38,19 @@ class NotificationModel private constructor(
         return Triage.Verdict(probability >= threshold, "learned notification preference")
     }
 
+    /** Until real-label evaluation, learned preferences may keep more notifications but never clear more. */
+    fun classifyConservatively(
+        input: Input,
+        category: String? = null,
+        rule: String? = null,
+        fullText: String = input.text,
+    ): Triage.Verdict {
+        val baseline = Triage.classify(input.pkg, input.title, fullText, category, rule)
+        if (!isLoaded || baseline.important || rule == "clear") return baseline
+        val learned = classify(input, category, rule)
+        return if (learned.important) learned else baseline
+    }
+
     companion object {
         private val tokenPattern = Regex("[a-z0-9]+")
         private val otpWords = setOf("otp", "passcode", "pin")

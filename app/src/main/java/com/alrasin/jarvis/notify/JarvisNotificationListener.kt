@@ -12,9 +12,11 @@ import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.async
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
+import java.io.File
 import javax.inject.Inject
 
 /** Reads every notification, logs it, and clears junk when auto-clear is on (PLAN 7). */
@@ -23,6 +25,9 @@ class JarvisNotificationListener : NotificationListenerService() {
     @Inject lateinit var dao: NotificationDao
     @Inject lateinit var settings: Settings
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    private val model by lazy {
+        scope.async { NotificationModel.load(File(filesDir, "models/notifications/model.json")) }
+    }
 
     override fun onListenerConnected() {
         instance = this
@@ -41,12 +46,13 @@ class JarvisNotificationListener : NotificationListenerService() {
         if (title.isBlank() && text.isBlank()) return
         scope.launch {
             val rule = dao.rules().firstOrNull { it.pkg == sbn.packageName }?.mode
-            val v = Triage.classify(sbn.packageName, title, text, n.category, rule)
+            val input = NotificationModel.Input(sbn.packageName, title, text.take(500), sbn.postTime)
+            val v = model.await().classifyConservatively(input, n.category, rule, text)
             val clear = !v.important && settings.autoClearNotifications.first()
             if (clear) cancelNotification(sbn.key)
             dao.insert(
                 NotificationLog(
-                    timeMs = sbn.postTime, pkg = sbn.packageName, appName = appName(sbn.packageName), title = title, text = text.take(500),
+                    timeMs = sbn.postTime, pkg = sbn.packageName, appName = appName(sbn.packageName), title = title, text = input.text,
                     important = v.important, reason = v.reason, status = if (clear) "cleared" else "kept",
                 ),
             )

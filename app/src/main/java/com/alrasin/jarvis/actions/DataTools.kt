@@ -11,7 +11,6 @@ import com.alrasin.jarvis.data.NoteDao
 import com.alrasin.jarvis.data.Reminder
 import com.alrasin.jarvis.data.ReminderDao
 import java.time.Instant
-import java.time.LocalDate
 import java.time.LocalDateTime
 import java.time.ZoneId
 import java.time.format.DateTimeFormatter
@@ -25,14 +24,9 @@ fun dataTools(
     memory: MemoryDao,
     selectedFactId: () -> Long? = { null },
 ): List<Tool> {
-    val zone = ZoneId.systemDefault()
     fun whenText(ms: Long): String {
-        val t = Instant.ofEpochMilli(ms).atZone(zone).toLocalDateTime()
-        val day = when (t.toLocalDate()) {
-            LocalDate.now() -> "today"
-            LocalDate.now().plusDays(1) -> "tomorrow"
-            else -> t.format(DateTimeFormatter.ofPattern("EEEE d MMMM", Locale.US))
-        }
+        val t = Instant.ofEpochMilli(ms).atZone(ZoneId.systemDefault()).toLocalDateTime()
+        val day = t.format(DateTimeFormatter.ofPattern("EEEE d MMMM yyyy", Locale.US))
         return "$day at ${speakTime(t.hour, t.minute)}"
     }
     return listOf(
@@ -53,7 +47,7 @@ fun dataTools(
             val text = c.arg("text") ?: return@SimpleTool ToolResult.fail("Remind you about what?")
             val at = c.arg("time")?.let { runCatching { LocalDateTime.parse(it) }.getOrNull() }
                 ?: return@SimpleTool ToolResult.fail("When should I remind you?")
-            val ms = at.atZone(zone).toInstant().toEpochMilli()
+            val ms = at.atZone(ZoneId.systemDefault()).toInstant().toEpochMilli()
             if (ms < System.currentTimeMillis() - 60_000) return@SimpleTool ToolResult.fail("That time has passed.")
             val r = Reminder(text = text, dueMs = ms, repeat = c.arg("repeat") ?: "none")
             scheduler.schedule(r.copy(id = reminders.insert(r)))
