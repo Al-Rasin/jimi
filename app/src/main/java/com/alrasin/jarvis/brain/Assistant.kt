@@ -17,6 +17,7 @@ import com.alrasin.jarvis.data.ToolCallLog
 import com.alrasin.jarvis.data.ToolLogDao
 import com.alrasin.jarvis.data.TurnDao
 import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import java.time.LocalDateTime
@@ -103,7 +104,8 @@ class Assistant @Inject constructor(
             models.toolCall(text, contextLine())?.let { return runTool(it, input, "llm") }
         }
         val facts = memory.all().map { it.text }
-        cloud.chat(text, history.toList(), facts, forced)?.let { return Reply(it, tool = "cloud") }
+        // Local replies can contain private notes, notifications or screen text (D-035).
+        cloud.chat(text, emptyList(), facts, forced)?.let { return Reply(it, tool = "cloud") }
         models.chat(text, history.toList(), facts, speak)?.let { return Reply(it.text, tool = "chat", spokenAlready = it.streamed) }
         return Reply(Persona.CANT)
     }
@@ -133,6 +135,19 @@ class Assistant @Inject constructor(
             }
             is Outcome.Done -> {
                 log(input.heard, call, source, o.result)
+                if (o.result.ok && call.tool in setOf("web_search", "read_page") && o.result.data.isNotBlank()) {
+                    val answer = try {
+                        models.chat(call.arg("query") ?: input.heard, emptyList(), emptyList(), {}, evidence = o.result.data)
+                    } catch (e: CancellationException) {
+                        throw e
+                    } catch (e: Exception) {
+                        JarvisLog.e("web answer failed", e)
+                        null
+                    }
+                    val sources = o.result.data.lineSequence().filter { it.startsWith("Source: ") }.distinct().joinToString("\n")
+                    val text = answer?.text ?: o.result.say
+                    return Reply(text + if (sources.isBlank()) "" else "\n\n$sources", o.result.data, call.tool)
+                }
                 Reply(o.result.say, o.result.data, call.tool)
             }
         }
@@ -161,7 +176,7 @@ class Assistant @Inject constructor(
         }
     }
 
-    /** Runs each step; speaks only info results and failures (PLAN 8.1–8.3). */
+    /** Runs each step and reports its actual result (PLAN 8.1–8.3). */
     private suspend fun runRoutine(name: String, input: Input): Reply {
         val steps = stepsFor(name) ?: return Reply("I don't have a routine called ${name.replace('_', ' ')}.", tool = "run_routine")
         val says = ArrayList<String>()
@@ -171,14 +186,14 @@ class Assistant @Inject constructor(
             execute = { step, confirmed -> executor.execute(step, ctx, confirmed, input.voiceOk) },
             record = { step, result ->
                 log(input.heard, step, "routine", result)
-                if (!result.ok || step.tool in INFO_TOOLS) says.add(result.say)
+                if (result.say.isNotBlank()) says.add(result.say)
             },
         )
-        if (stopped != null) return Reply(stopped, tool = "run_routine")
+        if (stopped != null) return Reply((says + stopped).joinToString(" "), tool = "run_routine")
         val hello = when (name) {
-            "good_night" -> "Good night, ${Persona.ADDRESS}. Do not disturb is on."
+            "good_night" -> "Good night, ${Persona.ADDRESS}."
             "good_morning" -> "Good morning, ${Persona.ADDRESS}."
-            else -> "Done."
+            else -> "Routine finished."
         }
         return Reply((listOf(hello) + says).joinToString(" "), tool = "run_routine", endConversation = name == "good_night")
     }
@@ -192,7 +207,6 @@ class Assistant @Inject constructor(
 
     companion object {
         private const val PENDING_MS = 30_000L
-        private val INFO_TOOLS = setOf("device_status", "list_reminders", "weather", "notification_summary", "read_notes", "news")
 
         fun stepsJson(steps: List<ToolCall>) = Json.write(steps.map { mapOf("tool" to it.tool, "args" to it.args) })
 

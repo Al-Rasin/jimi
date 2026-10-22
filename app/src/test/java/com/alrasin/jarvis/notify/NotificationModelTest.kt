@@ -88,6 +88,38 @@ class NotificationModelTest {
         assertTrue(NotificationModel.fromJson(modelJson()).classify(input).important)
     }
 
+    @Test fun conservativeClassificationOnlyAddsKeeps() {
+        val dismiss = NotificationModel.fromJson(modelJson(bias = -1000.0))
+        val keep = NotificationModel.fromJson(modelJson(bias = 1000.0))
+        assertEquals(Triage.Verdict(true, "learned notification preference"), keep.classifyConservatively(input))
+        assertEquals(Triage.classify(input.pkg, input.title, input.text, null, null), dismiss.classifyConservatively(input))
+        for (category in listOf("call", "msg", "alarm")) {
+            assertEquals(
+                Triage.classify(input.pkg, input.title, input.text, category, null),
+                dismiss.classifyConservatively(input, category),
+            )
+        }
+        val ordinary = input.copy(title = "Update", text = "The task finished")
+        assertTrue(dismiss.classifyConservatively(ordinary).important)
+        assertEquals(Triage.Verdict(true, "your rule"), dismiss.classifyConservatively(input, rule = "keep"))
+        assertEquals(Triage.Verdict(false, "your rule"), keep.classifyConservatively(input, rule = "clear"))
+    }
+
+    @Test fun conservativeClassificationPreservesFullTextProtectionAndFallback() {
+        val fullText = "x".repeat(501) + " OTP 1234"
+        val clipped = input.copy(text = fullText.take(500))
+        val dismiss = NotificationModel.fromJson(modelJson(bias = -1000.0))
+        assertEquals(Triage.Verdict(true, "important words"), dismiss.classifyConservatively(clipped, fullText = fullText))
+
+        val latePromo = "x".repeat(501) + " sale"
+        val plain = input.copy(title = "Update", text = latePromo.take(500))
+        val baseline = Triage.classify(plain.pkg, plain.title, latePromo, null, null)
+        assertFalse(baseline.important)
+        for (model in listOf(NotificationModel.load(null), NotificationModel.fromJson("broken"))) {
+            assertEquals(baseline, model.classifyConservatively(plain, fullText = latePromo))
+        }
+    }
+
     private fun modelJson(bias: Double = 0.0, threshold: Double = 0.5): String = Json.write(
         mapOf("version" to 1, "feature_version" to 1, "bias" to bias, "threshold" to threshold, "weights" to emptyMap<String, Double>()),
     )

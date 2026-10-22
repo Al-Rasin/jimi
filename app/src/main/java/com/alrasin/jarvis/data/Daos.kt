@@ -24,6 +24,7 @@ interface NoteDao {
     @Insert suspend fun insert(n: Note): Long
     @Query("DELETE FROM note WHERE id = :id") suspend fun delete(id: Long)
     @Query("SELECT * FROM note ORDER BY timeMs DESC") fun all(): Flow<List<Note>>
+    @Query("SELECT * FROM note ORDER BY timeMs DESC, id DESC") suspend fun snapshot(): List<Note>
     @Query("SELECT * FROM note ORDER BY timeMs DESC LIMIT :limit") suspend fun last(limit: Int): List<Note>
 }
 

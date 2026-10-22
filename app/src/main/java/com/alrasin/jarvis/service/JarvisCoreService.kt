@@ -37,12 +37,15 @@ import com.alrasin.jarvis.voice.WakeModels
 import com.alrasin.jarvis.voice.WakeWordDetector
 import com.alrasin.jarvis.voice.Voices
 import dagger.hilt.android.AndroidEntryPoint
+import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.sync.Mutex
@@ -55,6 +58,7 @@ import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.async
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 import java.io.File
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -142,7 +146,17 @@ class JarvisCoreService : LifecycleService() {
         voiceJob = lifecycleScope.launch(Dispatchers.IO) {
             settings.voice.distinctUntilChanged().collect { id -> switchVoice(id) }
         }
-        lifecycleScope.launch { settings.voiceSpeed.collect { s -> voiceSpeed = s; readyVoice()?.speed = s } }
+        lifecycleScope.launch(Dispatchers.IO) {
+            settings.voiceSpeed.distinctUntilChanged().collect { s ->
+                ttsLock.withLock {
+                    voiceSpeed = s
+                    readyVoice()?.let { v ->
+                        v.speed = s
+                        warmPhrases(v)
+                    }
+                }
+            }
+        }
         val audio = Channel<Pair<Int, PhraseCache.Audio>>(1)
         lifecycleScope.launch(Dispatchers.IO) {
             for (s in speech) {
@@ -192,46 +206,71 @@ class JarvisCoreService : LifecycleService() {
 
     /** Loads voice [id] (falls back to the built-in voice if it is not downloaded or fails), then frees the old one. */
     private suspend fun switchVoice(id: String) {
-        val old = tts
-        val next = lifecycleScope.async(Dispatchers.IO) {
-            val v = Voices.byId(id).takeIf { Voices.installed(this@JarvisCoreService, it.pack) } ?: Voices.byId(Voices.BUILT_IN)
-            runCatching { TextToSpeech(this@JarvisCoreService, v, speed = voiceSpeed) }
-                .recoverCatching { if (v.id == Voices.BUILT_IN) throw it else TextToSpeech(this@JarvisCoreService, speed = voiceSpeed) }
-                .onSuccess { JarvisLog.i("voice: ${it.voice.id}") }
-                .onFailure { JarvisLog.e("voice not loaded (run tools/fetch_speech.sh)", it) }
-                .getOrNull()
+        var old: Deferred<TextToSpeech?>? = null
+        val next = ttsLock.withLock {
+            currentCoroutineContext().ensureActive()
+            old = tts
+            phraseWarm?.cancel()
+            phrases = null
+            // Teardown must be able to await and release a native voice even if loading is cancelled.
+            lifecycleScope.async(Dispatchers.IO + NonCancellable) {
+                val v = Voices.byId(id).takeIf { Voices.installed(this@JarvisCoreService, it.pack) } ?: Voices.byId(Voices.BUILT_IN)
+                runCatching { TextToSpeech(this@JarvisCoreService, v, speed = voiceSpeed) }
+                    .recoverCatching { if (v.id == Voices.BUILT_IN) throw it else TextToSpeech(this@JarvisCoreService, speed = voiceSpeed) }
+                    .onSuccess { JarvisLog.i("voice: ${it.voice.id}") }
+                    .onFailure { JarvisLog.e("voice not loaded (run tools/fetch_speech.sh)", it) }
+                    .getOrNull()
+            }.also { tts = it }
         }
-        tts = next
-        val loaded = next.await()
-        old?.await()?.let { o -> ttsLock.withLock { o.close() } }
-        loaded?.let { warmPhrases(it) }
+        try {
+            val loaded = next.await()
+            ttsLock.withLock {
+                if (tts === next) loaded?.let {
+                    it.speed = voiceSpeed
+                    warmPhrases(it)
+                }
+            }
+        } finally {
+            withContext(NonCancellable + Dispatchers.IO) {
+                old?.await()?.let { o -> ttsLock.withLock { o.close() } }
+            }
+        }
     }
 
     /** Common short replies come from [PhraseCache] (made once per voice + speed), the rest is made now. */
     private fun audioFor(v: TextToSpeech, text: String): PhraseCache.Audio {
         val common = text.trim() in COMMON_PHRASES
-        val cache = if (common) phraseCache(v) else null
+        var cache = if (common) phrases?.takeIf { it.voiceId == v.voice.id && it.speed == v.speed } else null
         cache?.get(text)?.let { return it }
         val made = v.generate(text)
+        if (common && cache == null) {
+            cache = PhraseCache(File(cacheDir, "phrases"), v.voice.id, v.speed, made.sampleRate)
+            phrases = cache
+        }
         cache?.put(text, made.samples, made.sampleRate)
         return PhraseCache.Audio(made.samples, made.sampleRate)
-    }
-
-    private fun phraseCache(v: TextToSpeech): PhraseCache {
-        val c = phrases
-        if (c != null && c.voiceId == v.voice.id && c.speed == v.speed) return c
-        return PhraseCache(File(cacheDir, "phrases"), v.voice.id, v.speed, sampleRate = 24_000).also { phrases = it }
     }
 
     /** Makes the common replies in the background, one at a time, only while Jimi is not speaking. */
     private fun warmPhrases(v: TextToSpeech) {
         phraseWarm?.cancel()
+        val speed = v.speed
         phraseWarm = lifecycleScope.launch(Dispatchers.IO) {
             for (text in PhraseCache.COMMON) {
-                while (speechLeft.get() > 0) delay(1_000)
-                if (readyVoice() !== v) return@launch
-                ttsLock.withLock { runCatching { audioFor(v, text) } }
-                delay(200)
+                while (isActive) {
+                    delay(500)
+                    val done = ttsLock.withLock {
+                        if (readyVoice() !== v || v.speed != speed) return@launch
+                        if (speaking || speechLeft.get() > 0 || listenRequest != null) false
+                        else {
+                            runCatching { audioFor(v, text) }
+                                .onFailure { JarvisLog.e("phrase warm failed", it) }
+                                .getOrNull() ?: return@launch
+                            true
+                        }
+                    }
+                    if (done) break
+                }
             }
         }
     }
@@ -606,7 +645,15 @@ class JarvisCoreService : LifecycleService() {
         runCatching { unregisterReceiver(battery) }
         speech.close()
         speechEpoch++
-        tts?.let { d -> if (d.isCompleted && !speaking) d.getCompleted()?.close() else d.cancel() }
+        voiceJob?.cancel()
+        phraseWarm?.cancel()
+        CoroutineScope(Dispatchers.IO).launch {
+            ttsLock.withLock {
+                val voice = tts
+                tts = null
+                runCatching { voice?.await()?.close() }.onFailure { JarvisLog.e("voice close failed", it) }
+            }
+        }
         wakeLock?.takeIf { it.isHeld }?.release()
         _running.value = false
         super.onDestroy()
