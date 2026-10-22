@@ -34,6 +34,8 @@ import com.alrasin.jarvis.voice.SttCorrector
 import com.alrasin.jarvis.voice.SttVocabularyLoader
 import com.alrasin.jarvis.voice.Chimes
 import com.alrasin.jarvis.voice.PhraseCache
+import com.alrasin.jarvis.voice.SpeechText
+import com.alrasin.jarvis.voice.Engine
 import com.alrasin.jarvis.voice.TextToSpeech
 import com.alrasin.jarvis.voice.WakeFeedback as WakeFeedbackSignal
 import com.alrasin.jarvis.voice.Wav
@@ -253,15 +255,16 @@ class JarvisCoreService : LifecycleService() {
 
     /** Common short replies come from [PhraseCache] (made once per voice + speed), the rest is made now. */
     private fun audioFor(v: TextToSpeech, text: String): PhraseCache.Audio {
-        val common = text.trim() in COMMON_PHRASES
+        val spoken = SpeechText.normalize(text)
+        val common = spoken in COMMON_PHRASES
         var cache = if (common) phrases?.takeIf { it.voiceId == v.voice.id && it.speed == v.speed } else null
-        cache?.get(text)?.let { return it }
-        val made = v.generate(text)
+        cache?.get(spoken)?.let { return it }
+        val made = v.generate(spoken)
         if (common && cache == null) {
             cache = PhraseCache(File(cacheDir, "phrases"), v.voice.id, v.speed, made.sampleRate)
             phrases = cache
         }
-        cache?.put(text, made.samples, made.sampleRate)
+        cache?.put(spoken, made.samples, made.sampleRate)
         return PhraseCache.Audio(made.samples, made.sampleRate)
     }
 
@@ -293,10 +296,14 @@ class JarvisCoreService : LifecycleService() {
     private fun readyVoice(): TextToSpeech? = tts?.takeIf { it.isCompleted }?.getCompleted()
 
     private fun say(text: String, epoch: Int = speechEpoch) {
+        val chunks = if (readyVoice()?.voice?.pack?.engine != Engine.PIPER) SpeechText.chunks(text)
+            else listOf(SpeechText.normalize(text)).filter { it.isNotBlank() }
         synchronized(speechState) {
-            if (text.isBlank() || epoch != speechEpoch) return
-            speechLeft.incrementAndGet()
-            if (speech.trySend(epoch to text).isFailure) speechLeft.decrementAndGet()
+            if (epoch != speechEpoch) return
+            for (chunk in chunks) {
+                speechLeft.incrementAndGet()
+                if (speech.trySend(epoch to chunk).isFailure) speechLeft.decrementAndGet()
+            }
         }
     }
 
@@ -774,7 +781,7 @@ class JarvisCoreService : LifecycleService() {
     }
 
     companion object {
-        private val COMMON_PHRASES = PhraseCache.COMMON.toSet()
+        private val COMMON_PHRASES = PhraseCache.COMMON.map(SpeechText::normalize).toSet()
         /** -1000 = never kill; -800 keeps us above ordinary apps but still killable if the phone is desperate. */
         private const val OOM_ADJ = -800
         const val ACTION_STOP = "com.alrasin.jarvis.STOP"
