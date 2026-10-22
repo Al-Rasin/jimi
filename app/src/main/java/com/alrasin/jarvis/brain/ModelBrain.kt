@@ -52,8 +52,19 @@ class ModelBrain @Inject constructor(
     fun status(): String = if (!Llama.available) "LLM library not built" else
         "tool model: ${find("functiongemma")?.name ?: "none"}, chat model: ${find("qwen3", "gemma-3")?.name ?: "none"}"
 
-    /** Loads the tool model in the background so the first command is not slow. */
-    fun warmUp() = scope.launch { lock.withLock { toolModel() } }
+    /**
+     * Loads the tool model in the background and reads the tool list once, so its K/V are cached and the
+     * first real command only decodes the short user part (phone: 31 s cold vs 6.5 s cached).
+     */
+    fun warmUp() = scope.launch {
+        lock.withLock {
+            val m = toolModel() ?: return@withLock
+            val t0 = System.currentTimeMillis()
+            runCatching { m.generate(FunctionGemma.prompt(llmTools, "", ""), grammar, maxTokens = 1) }
+                .onFailure { JarvisLog.e("tool model warm-up failed", it) }
+            JarvisLog.i("tool model warm in ${System.currentTimeMillis() - t0} ms")
+        }
+    }
 
     private fun toolModel(): Llama? {
         toolModel?.let { return it }

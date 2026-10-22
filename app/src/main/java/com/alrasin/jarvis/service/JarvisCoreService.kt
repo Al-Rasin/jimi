@@ -18,6 +18,7 @@ import android.os.BatteryManager
 import android.os.PowerManager
 import androidx.lifecycle.LifecycleService
 import androidx.lifecycle.lifecycleScope
+import com.alrasin.jarvis.actions.RootShell
 import com.alrasin.jarvis.brain.Assistant
 import com.alrasin.jarvis.brain.ModelBrain
 import com.alrasin.jarvis.brain.Persona
@@ -145,6 +146,20 @@ class JarvisCoreService : LifecycleService() {
         lifecycleScope.launch { settings.speakerThreshold.collect { speakerThreshold = it } }
         registerReceiver(battery, IntentFilter(Intent.ACTION_BATTERY_CHANGED))
         models.warmUp()
+        lifecycleScope.launch(Dispatchers.IO) { protectFromLowMemoryKiller() }
+    }
+
+    /**
+     * MIUI's low-memory killer took the service down when another app opened (signal 9 on the phone).
+     * With root, lower our oom_score_adj. Android rewrites it when the process state changes, so repeat.
+     */
+    private suspend fun protectFromLowMemoryKiller() {
+        if (!RootShell.available) return
+        val path = "/proc/${android.os.Process.myPid()}/oom_score_adj"
+        while (currentCoroutineContext().isActive) {
+            RootShell.run("[ \$(cat $path) -gt $OOM_ADJ ] && echo $OOM_ADJ > $path || true")
+            delay(30_000)
+        }
     }
 
     private fun say(text: String) {
@@ -517,6 +532,8 @@ class JarvisCoreService : LifecycleService() {
     }
 
     companion object {
+        /** -1000 = never kill; -800 keeps us above ordinary apps but still killable if the phone is desperate. */
+        private const val OOM_ADJ = -800
         const val ACTION_STOP = "com.alrasin.jarvis.STOP"
         const val ACTION_MISSED = "com.alrasin.jarvis.MISSED"
         const val ACTION_SAY = "com.alrasin.jarvis.SAY"
