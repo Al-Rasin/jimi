@@ -46,25 +46,26 @@ fun appTools(context: Context, apps: AppList): List<Tool> = listOf(
     SimpleTool("open_app", "Open an app by name", listOf(arg("app", "app name, e.g. YouTube"))) { c, _ ->
         val name = c.arg("app") ?: return@SimpleTool ToolResult.fail("Which app?")
         if (name in listOf("settings", "phone settings")) {
-            context.launch(Intent(android.provider.Settings.ACTION_SETTINGS))
-            return@SimpleTool ToolResult.ok("Opening settings.")
+            return@SimpleTool if (context.launch(Intent(android.provider.Settings.ACTION_SETTINGS)))
+                ToolResult.ok("Boss, I opened settings.")
+            else ToolResult.fail("Boss, I couldn't open settings.")
         }
         val app = apps.find(name) ?: return@SimpleTool ToolResult.fail("I can't find an app called $name.")
         val intent = context.packageManager.getLaunchIntentForPackage(app.pkg)
             ?: return@SimpleTool ToolResult.fail("${app.label} can't be opened.")
-        if (context.launch(intent)) ToolResult.ok("Opening ${app.label}.") else ToolResult.fail("Couldn't open ${app.label}.")
+        if (context.launch(intent)) ToolResult.ok("Boss, I opened ${app.label}.") else ToolResult.fail("Couldn't open ${app.label}.")
     },
     SimpleTool("close_app", "Close (force stop) an app", listOf(arg("app", "app name"))) { c, _ ->
         val name = c.arg("app") ?: return@SimpleTool ToolResult.fail("Which app?")
         val app = apps.find(name) ?: return@SimpleTool ToolResult.fail("I can't find an app called $name.")
         if (app.pkg == context.packageName) return@SimpleTool ToolResult.fail("I can't close myself.")
         val r = RootShell.run("am force-stop ${app.pkg}")
-        if (r.ok) ToolResult.ok("Closed ${app.label}.") else ToolResult.fail("Couldn't close ${app.label}.")
+        if (r.ok) ToolResult.ok("Boss, I requested ${app.label} to close.") else ToolResult.fail("Couldn't close ${app.label}.")
     },
     SimpleTool("open_url", "Open a website", listOf(arg("url", "web address, e.g. google.com"))) { c, _ ->
         var url = c.arg("url") ?: return@SimpleTool ToolResult.fail("Which website?")
         if (!url.startsWith("http")) url = "https://$url"
-        if (context.launch(Intent(Intent.ACTION_VIEW, Uri.parse(url)))) ToolResult.ok("Opening ${Uri.parse(url).host}.")
+        if (context.launch(Intent(Intent.ACTION_VIEW, Uri.parse(url)))) ToolResult.ok("Boss, I opened the link for ${Uri.parse(url).host}.")
         else ToolResult.fail("No browser found.")
     },
 )

@@ -1,16 +1,24 @@
 package com.alrasin.jarvis.actions
 
 import android.Manifest
+import android.app.Activity
+import android.app.PendingIntent
+import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
+import android.content.IntentFilter
 import android.content.pm.PackageManager
 import android.net.Uri
+import android.os.Build
 import android.provider.ContactsContract
 import android.telephony.SmsManager
 import com.alrasin.jarvis.core.Risk
 import com.alrasin.jarvis.core.Tool
 import com.alrasin.jarvis.core.ToolResult
-import kotlinx.coroutines.delay
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.withTimeoutOrNull
+import java.util.UUID
 
 /** Contacts lookup by spoken name. */
 class Contacts(private val context: Context) {
@@ -52,8 +60,9 @@ fun commsTools(context: Context, contacts: Contacts): List<Tool> = listOf(
         val p = contacts.find(who) ?: return@SimpleTool ToolResult.fail("I can't find $who in your contacts.")
         if (context.checkSelfPermission(Manifest.permission.CALL_PHONE) != PackageManager.PERMISSION_GRANTED)
             return@SimpleTool ToolResult.fail("I need the phone permission. Open Jarvis setup.")
-        context.launch(Intent(Intent.ACTION_CALL, Uri.parse("tel:" + Uri.encode(p.number))))
-        ToolResult.ok("Calling ${p.name}.")
+        if (context.launch(Intent(Intent.ACTION_CALL, Uri.parse("tel:" + Uri.encode(p.number)))))
+            ToolResult.ok("Boss, I requested a call to ${p.name}.")
+        else ToolResult.fail("Boss, I couldn't open the phone app.")
     },
     SimpleTool("send_sms", "Send a text message (SMS)", listOf(arg("contact", "name or number"), arg("text", "message")), Risk.CONFIRM) { c, _ ->
         val who = c.arg("contact") ?: return@SimpleTool ToolResult.fail("To who?")
@@ -62,8 +71,7 @@ fun commsTools(context: Context, contacts: Contacts): List<Tool> = listOf(
         if (context.checkSelfPermission(Manifest.permission.SEND_SMS) != PackageManager.PERMISSION_GRANTED)
             return@SimpleTool ToolResult.fail("I need the SMS permission. Open Jarvis setup.")
         @Suppress("DEPRECATION") val sms = SmsManager.getDefault()
-        sms.sendMultipartTextMessage(p.number, null, sms.divideMessage(text), null, null)
-        ToolResult.ok("Message sent to ${p.name}.")
+        sendSms(context, sms, p, text)
     },
     SimpleTool("send_whatsapp", "Send a WhatsApp message", listOf(arg("contact", "name or number"), arg("text", "message")), Risk.CONFIRM) { c, _ ->
         val who = c.arg("contact") ?: return@SimpleTool ToolResult.fail("To who?")
@@ -74,14 +82,9 @@ fun commsTools(context: Context, contacts: Contacts): List<Tool> = listOf(
         var number = p.number.filter { it.isDigit() || it == '+' }.removePrefix("+")
         if (number.startsWith("0")) number = "88$number"   // Bangladesh local → international (+880)
         val uri = Uri.parse("https://api.whatsapp.com/send?phone=$number&text=${Uri.encode(text)}")
-        context.launch(Intent(Intent.ACTION_VIEW, uri).setPackage(pkg))
-        // the chat opens with the text typed; press Send through accessibility
-        repeat(10) {
-            delay(700)
-            val a = JarvisAccessibilityService.instance ?: return@SimpleTool ToolResult.ok("WhatsApp is open with your message. Please press send.")
-            if (a.clickByDescription("Send") || a.clickById("$pkg:id/send")) return@SimpleTool ToolResult.ok("WhatsApp sent to ${p.name}.")
-        }
-        ToolResult.ok("WhatsApp is open with your message. I couldn't press send.")
+        if (context.launch(Intent(Intent.ACTION_VIEW, uri).setPackage(pkg)))
+            ToolResult.ok("Boss, I opened WhatsApp with the message ready. Tap send.")
+        else ToolResult.fail("Boss, I couldn't open WhatsApp.")
     },
     SimpleTool("read_messages", "Read the latest text messages") { _, _ ->
         if (context.checkSelfPermission(Manifest.permission.READ_SMS) != PackageManager.PERMISSION_GRANTED)
@@ -109,6 +112,65 @@ fun commsTools(context: Context, contacts: Contacts): List<Tool> = listOf(
         val i = Intent(Intent.ACTION_SENDTO, uri)
         c.arg("subject")?.let { i.putExtra(Intent.EXTRA_SUBJECT, it) }
         c.arg("body")?.let { i.putExtra(Intent.EXTRA_TEXT, it) }
-        if (context.launch(i)) ToolResult.ok("Email is ready. Check and send it.") else ToolResult.fail("No mail app found.")
+        if (context.launch(i)) ToolResult.ok("Boss, I opened email with the message ready. Tap send.") else ToolResult.fail("No mail app found.")
     },
 )
+
+/** Every part must receive its own successful sent callback. Null means still unconfirmed. */
+internal class SmsSentStatus(private val partCount: Int) {
+    private val confirmed = mutableSetOf<Int>()
+    private var failed = false
+
+    fun record(part: Int, sent: Boolean): Boolean? {
+        if (part !in 0 until partCount) return null
+        if (!sent) failed = true else confirmed.add(part)
+        return when {
+            failed -> false
+            confirmed.size == partCount -> true
+            else -> null
+        }
+    }
+}
+
+private suspend fun sendSms(context: Context, sms: SmsManager, contact: Contacts.Contact, text: String): ToolResult {
+    val parts = sms.divideMessage(text)
+    if (parts.isEmpty()) return ToolResult.fail("Boss, the message is empty.")
+    val action = "${context.packageName}.SMS_SENT.${UUID.randomUUID()}"
+    val status = SmsSentStatus(parts.size)
+    val result = CompletableDeferred<Boolean>()
+    val receiver = object : BroadcastReceiver() {
+        override fun onReceive(context: Context, intent: Intent) {
+            if (intent.action != action) return
+            status.record(intent.getIntExtra("part", -1), resultCode == Activity.RESULT_OK)?.let { result.complete(it) }
+        }
+    }
+    val callbacks = arrayListOf<PendingIntent>()
+    var registered = false
+    try {
+        if (Build.VERSION.SDK_INT >= 33) {
+            context.registerReceiver(receiver, IntentFilter(action), Context.RECEIVER_NOT_EXPORTED)
+        } else {
+            @Suppress("DEPRECATION")
+            context.registerReceiver(receiver, IntentFilter(action))
+        }
+        registered = true
+        parts.indices.forEach { part ->
+            callbacks.add(PendingIntent.getBroadcast(context, part,
+                Intent(action).setPackage(context.packageName).putExtra("part", part),
+                PendingIntent.FLAG_ONE_SHOT or PendingIntent.FLAG_IMMUTABLE))
+        }
+        sms.sendMultipartTextMessage(contact.number, null, parts, callbacks, null)
+        return when (withTimeoutOrNull(5_000) { result.await() }) {
+            true -> ToolResult.ok("Boss, message sent to ${contact.name}.")
+            false -> ToolResult.fail("Boss, the message wasn't fully sent.")
+            null -> ToolResult.fail("Boss, I requested the SMS, but couldn't confirm it was sent. Check Messages.")
+        }
+    } catch (e: CancellationException) {
+        throw e
+    } catch (_: Exception) {
+        return ToolResult.fail("Boss, I couldn't confirm the SMS was sent. Check Messages.")
+    } finally {
+        if (registered) context.unregisterReceiver(receiver)
+        callbacks.forEach { it.cancel() }
+    }
+}

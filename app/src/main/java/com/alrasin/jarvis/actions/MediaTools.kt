@@ -10,9 +10,18 @@ import android.provider.MediaStore
 import android.view.KeyEvent
 import com.alrasin.jarvis.core.Tool
 import com.alrasin.jarvis.core.ToolResult
+import kotlinx.coroutines.delay
 
 fun mediaTools(context: Context): List<Tool> {
     val audio by lazy { context.getSystemService(AudioManager::class.java) }
+    fun musicActive(): Boolean? = runCatching { audio.isMusicActive }.getOrNull()
+    suspend fun awaitMusic(active: Boolean): Boolean? {
+        repeat(10) {
+            delay(200)
+            if (musicActive() == active) return active
+        }
+        return musicActive()
+    }
     fun key(code: Int) {
         val t = SystemClock.uptimeMillis()
         audio.dispatchMediaKeyEvent(KeyEvent(t, t, KeyEvent.ACTION_DOWN, code, 0))
@@ -22,6 +31,7 @@ fun mediaTools(context: Context): List<Tool> {
         SimpleTool("play_media", "Play a song, video or music", listOf(arg("query", "what to play"), arg("app", "youtube, spotify or music", required = false))) { c, _ ->
             val q = c.arg("query") ?: "music"
             val app = c.arg("app") ?: "youtube"
+            val wasActive = musicActive()
             val ok = when {
                 app.contains("spotify") && context.isInstalled("com.spotify.music") ->
                     context.launch(Intent(Intent.ACTION_VIEW, Uri.parse("spotify:search:${Uri.encode(q)}")))
@@ -31,17 +41,23 @@ fun mediaTools(context: Context): List<Tool> {
                     context.launch(Intent(Intent.ACTION_SEARCH).setPackage("com.google.android.youtube").putExtra("query", q))
                 else -> context.launch(Intent(Intent.ACTION_VIEW, Uri.parse("https://www.youtube.com/results?search_query=${Uri.encode(q)}")))
             }
-            if (ok) ToolResult.ok("Playing $q.") else ToolResult.fail("I couldn't open a player.")
+            if (ok) MediaTruth.opened(wasActive, awaitMusic(true))
+            else ToolResult.fail("I couldn't open a player, Boss.")
         },
         SimpleTool("media_control", "Pause, play, next or previous for music/video", listOf(arg("action", "what to do", choices = listOf("play", "pause", "next", "previous")))) { c, _ ->
-            when (c.arg("action")) {
+            val action = c.arg("action")
+            when (action) {
                 "pause" -> key(KeyEvent.KEYCODE_MEDIA_PAUSE)
                 "play" -> key(KeyEvent.KEYCODE_MEDIA_PLAY)
                 "next" -> key(KeyEvent.KEYCODE_MEDIA_NEXT)
                 "previous" -> key(KeyEvent.KEYCODE_MEDIA_PREVIOUS)
                 else -> return@SimpleTool ToolResult.fail("Play, pause, next or previous?")
             }
-            ToolResult.ok(when (c.arg("action")) { "pause" -> "Paused."; "play" -> "Playing."; "next" -> "Next."; else -> "Previous." })
+            MediaTruth.control(action!!, when (action) {
+                "play" -> awaitMusic(true)
+                "pause" -> awaitMusic(false)
+                else -> null
+            })
         },
         SimpleTool("set_volume", "Set media volume", listOf(arg("level", "0-100, up, or down"))) { c, _ ->
             val s = AudioManager.STREAM_MUSIC
@@ -54,7 +70,23 @@ fun mediaTools(context: Context): List<Tool> {
                     audio.setStreamVolume(s, (pct * max + 50) / 100, 0)
                 }
             }
-            ToolResult.ok("Volume ${audio.getStreamVolume(s) * 100 / max} percent.")
+            ToolResult.ok("Volume ${audio.getStreamVolume(s) * 100 / max.coerceAtLeast(1)} percent, Boss.")
         },
     )
+}
+
+internal object MediaTruth {
+    fun opened(wasActive: Boolean?, active: Boolean?): ToolResult = ToolResult.ok(
+        if (wasActive == false && active == true) "I opened it. Audio is playing, Boss."
+        else "I opened it, Boss."
+    )
+
+    fun control(action: String, active: Boolean?): ToolResult = ToolResult.ok(when {
+        action == "play" && active == true -> "Audio is playing, Boss."
+        action == "pause" && active == false -> "No music is playing, Boss."
+        action == "play" -> "Play requested, Boss. I couldn't confirm playback."
+        action == "pause" -> "Pause requested, Boss. I couldn't confirm it."
+        action == "next" -> "Next track requested, Boss."
+        else -> "Previous track requested, Boss."
+    })
 }
