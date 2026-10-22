@@ -22,6 +22,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
@@ -150,14 +151,16 @@ private fun Panel(vm: PanelViewModel, onClose: () -> Unit) {
             exit = slideOutVertically(tween(if (motion) 200 else 0)) { it } + fadeOut(tween(if (motion) 200 else 0)),
         ) {
             Column(Modifier.fillMaxWidth().imePadding()) {
-                GlowEdge(active = mood == OrbMood.HEARING, modifier = Modifier.fillMaxWidth().height(2.dp))
+                val sheetShape = RoundedCornerShape(topStart = 32.dp, topEnd = 32.dp)
                 Surface(
                     modifier = Modifier.fillMaxWidth()
+                        .border(1.dp, Hud.edgeBrush, sheetShape)
                         .clickable(remember { MutableInteractionSource() }, null) { touch() },
-                    shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp),
-                    color = PanelColors.Sheet,
+                    shape = sheetShape,
+                    color = Color.Transparent,
                     contentColor = PanelColors.Text,
                 ) {
+                  Box(Modifier.background(Hud.sheetBrush)) {
                     Column(
                         Modifier.navigationBarsPadding().padding(start = 20.dp, end = 20.dp, top = 12.dp, bottom = 20.dp)
                             .animateContentSize(tween(if (motion) 200 else 0)),
@@ -165,65 +168,65 @@ private fun Panel(vm: PanelViewModel, onClose: () -> Unit) {
                     ) {
                         Box(Modifier.fillMaxWidth()) {
                             Box(
-                                Modifier.align(Alignment.TopCenter).size(36.dp, 4.dp)
-                                    .background(PanelColors.Dim.copy(alpha = 0.4f), RoundedCornerShape(2.dp)),
+                                Modifier.align(Alignment.TopCenter).size(32.dp, 3.dp)
+                                    .background(PanelColors.Dim.copy(alpha = 0.3f), RoundedCornerShape(2.dp)),
                             )
-                            Column(Modifier.fillMaxWidth().padding(top = 8.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                                Orb(mood, level, size = 96.dp)
+                            Column(
+                                Modifier.fillMaxWidth().padding(top = 14.dp),
+                                horizontalAlignment = Alignment.CenterHorizontally,
+                                verticalArrangement = Arrangement.spacedBy(10.dp),
+                            ) {
+                                HudOrb(mood, level)
                                 AnimatedContent(if (idle) "Jimi" else phase, label = "phase") { p ->
-                                    Text(
-                                        p,
-                                        style = MaterialTheme.typography.labelLarge,
-                                        color = PanelColors.Text,
-                                    )
+                                    HudLabel(p, active = !idle)
                                 }
                             }
                             Row(Modifier.align(Alignment.TopEnd)) {
                                 if (phase == JarvisCoreService.PHASE_SPEAKING) {
-                                    TextButton(onClick = { touch(); vm.shutUp() }) { Text("Stop", color = PanelColors.Cyan) }
+                                    TextButton(onClick = { touch(); vm.shutUp() }) { Text("STOP", color = PanelColors.Cyan, letterSpacing = 2.sp) }
                                 }
-                                TextButton(onClick = ::close) { Text("✕", color = PanelColors.Dim, fontSize = 18.sp) }
+                                TextButton(onClick = ::close) { Text("✕", color = PanelColors.Dim, fontSize = 16.sp) }
                             }
                         }
                         val scroll = rememberScrollState()
                         LaunchedEffect(replyShown, heard, past.size) { scroll.animateScrollTo(scroll.maxValue) }
                         Column(
                             Modifier.fillMaxWidth().heightIn(max = 340.dp).verticalScroll(scroll),
-                            verticalArrangement = Arrangement.spacedBy(8.dp),
+                            verticalArrangement = Arrangement.spacedBy(14.dp),
                         ) {
                             past.forEachIndexed { i, t ->
-                                Bubble(t.heard, mine = true)
+                                HudLine(t.heard, mine = true)
                                 // the newest answer types out
-                                Bubble(if (i == past.lastIndex && t.reply == reply) replyShown else t.reply, mine = false)
+                                HudLine(if (i == past.lastIndex && t.reply == reply) replyShown else t.reply, mine = false)
                             }
                             if (!live && past.isEmpty() && heard != AssistantActivity.NOTHING_HEARD) {
                                 Text(
                                     "How can I help, Boss?",
-                                    style = MaterialTheme.typography.titleLarge,
-                                    color = PanelColors.Dim,
+                                    style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Light),
+                                    color = PanelColors.Text,
                                     textAlign = TextAlign.Center,
                                     modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
                                 )
                             }
                             if (heard == AssistantActivity.NOTHING_HEARD) {
-                                Text("I didn't catch that, Boss.", color = PanelColors.Dim, modifier = Modifier.padding(start = 34.dp))
+                                Text("I didn't catch that, Boss.", color = PanelColors.Dim, modifier = Modifier.padding(start = 14.dp))
                             } else if (live) {
-                                Bubble(heard, mine = true)
-                                if (reply.isNotBlank()) Bubble(replyShown, mine = false)
+                                HudLine(heard, mine = true)
+                                if (reply.isNotBlank()) HudLine(replyShown, mine = false)
                             }
                         }
                         val last = past.lastOrNull()
                         if (last != null && !live && !fixing && !reporting) {
                             FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                                Chip(if (rated) "✓ Thanks" else "✓ Right", enabled = !rated) { touch(); rated = true; vm.right() }
+                                HudChip(if (rated) "✓ Thanks" else "✓ Right", enabled = !rated) { touch(); rated = true; vm.right() }
                                 if (reported == last.id) {
-                                    Chip("✗ Saved", enabled = false) {}
+                                    HudChip("✗ Saved", enabled = false) {}
                                 } else {
-                                    Chip("✗ Wrong answer") { touch(); reportText = ""; reporting = true }
+                                    HudChip("✗ Wrong answer") { touch(); reportText = ""; reporting = true }
                                 }
-                                Chip("✎ Wrong text") { touch(); fixText = last.heard; fixing = true }
+                                HudChip("✎ Wrong text") { touch(); fixText = last.heard; fixing = true }
                             }
-                            Chip("I didn't call") { vm.notCalled(); close() }
+                            HudChip("I didn't call") { vm.notCalled(); close() }
                         }
                         if (reporting) {
                             OutlinedTextField(
@@ -249,26 +252,14 @@ private fun Panel(vm: PanelViewModel, onClose: () -> Unit) {
                                 TextButton(onClick = { fixing = false }) { Text("Cancel") }
                             }
                         }
-                        InputPill(typed, { touch(); typed = it }) {
+                        HudInput(typed, { touch(); typed = it }) {
                             touch()
                             if (typed.isBlank()) vm.listen() else { vm.ask(typed.trim()); typed = "" }
                         }
                     }
+                  }
                 }
             }
         }
     }
-}
-
-@Composable
-private fun Chip(text: String, enabled: Boolean = true, onClick: () -> Unit) {
-    Text(
-        text,
-        color = if (enabled) PanelColors.Text else PanelColors.Cyan,
-        style = MaterialTheme.typography.labelLarge,
-        modifier = Modifier.clip(RoundedCornerShape(12.dp))
-            .border(1.dp, JimiColors.Outline, RoundedCornerShape(12.dp))
-            .clickable(enabled = enabled, onClick = onClick)
-            .padding(horizontal = 16.dp, vertical = 16.dp),
-    )
 }
