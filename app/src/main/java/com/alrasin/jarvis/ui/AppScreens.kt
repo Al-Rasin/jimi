@@ -533,8 +533,9 @@ internal fun VoiceCard(vm: AppViewModel) {
 
 @Composable
 private fun Toggle(label: String, value: Boolean, set: (Boolean) -> Unit) {
+    var checked by remember(value) { mutableStateOf(value) }
     Row(verticalAlignment = Alignment.CenterVertically) {
         Text(label, Modifier.weight(1f))
-        Switch(checked = value, onCheckedChange = set)
+        Switch(checked = checked, onCheckedChange = { checked = it; set(it) })
     }
 }

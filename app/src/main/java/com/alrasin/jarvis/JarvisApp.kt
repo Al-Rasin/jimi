@@ -1,13 +1,40 @@
 package com.alrasin.jarvis
 
 import android.app.Application
+import android.content.pm.ApplicationInfo
+import android.content.ComponentCallbacks2
+import android.os.StrictMode
+import com.alrasin.jarvis.brain.ModelBrain
 import com.alrasin.jarvis.service.Notifications
 import dagger.hilt.android.HiltAndroidApp
+import dagger.Lazy
+import javax.inject.Inject
 
 @HiltAndroidApp
 class JarvisApp : Application() {
+    @Inject lateinit var models: Lazy<ModelBrain>
+
     override fun onCreate() {
         super.onCreate()
+        if (applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE != 0) {
+            StrictMode.setThreadPolicy(StrictMode.ThreadPolicy.Builder()
+                .detectDiskReads().detectDiskWrites().detectNetwork().detectCustomSlowCalls()
+                .penaltyLog().build())
+        }
         Notifications.createChannels(this)
+    }
+
+    override fun onTrimMemory(level: Int) {
+        super.onTrimMemory(level)
+        if (level == ComponentCallbacks2.TRIM_MEMORY_RUNNING_LOW ||
+            level == ComponentCallbacks2.TRIM_MEMORY_RUNNING_CRITICAL ||
+            level >= ComponentCallbacks2.TRIM_MEMORY_BACKGROUND) {
+            models.get().releaseModels()
+        }
+    }
+
+    override fun onLowMemory() {
+        super.onLowMemory()
+        models.get().releaseModels()
     }
 }

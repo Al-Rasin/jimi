@@ -17,6 +17,14 @@ import com.alrasin.jarvis.voice.WakePhrase
 import com.alrasin.jarvis.voice.WakeModels
 import com.alrasin.jarvis.voice.WakeWordDetector
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.isActive
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.withTimeoutOrNull
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.stateIn
@@ -30,29 +38,48 @@ class HomeViewModel @Inject constructor(
     private val settings: Settings,
     private val dao: WakeEventDao,
 ) : AndroidViewModel(app) {
-    val running = JarvisCoreService.running
+    private val requestedRunning = MutableStateFlow<Boolean?>(null)
+    val running = combine(JarvisCoreService.running, requestedRunning) { actual, requested -> requested ?: actual }
+        .stateIn(viewModelScope, SharingStarted.Eagerly, JarvisCoreService.running.value)
+    private var listeningChange: Job? = null
+    private val listeningLock = Mutex()
     val lastScore = JarvisCoreService.lastScore
     val modelName = JarvisCoreService.modelName
     val phase = JarvisCoreService.phase
     val heard = JarvisCoreService.heard
-    val events = dao.recent().stateIn(viewModelScope, SharingStarted.Lazily, emptyList())
-    val counts = dao.counts().stateIn(viewModelScope, SharingStarted.Lazily, emptyList())
+    val events = dao.recent().stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+    val counts = dao.counts().stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
     val threshold = settings.wakeThreshold.stateIn(viewModelScope, SharingStarted.Eagerly, Settings.DEFAULT_THRESHOLD)
     val log = JarvisLog.lines
     private var player: MediaPlayer? = null
 
-    fun start() = viewModelScope.launch {
-        settings.setListeningEnabled(true)
-        JarvisCoreService.start(app)
+    fun start() = setListening(true)
+
+    fun stop() = setListening(false)
+
+    private fun setListening(enabled: Boolean) {
+        requestedRunning.value = enabled
+        listeningChange?.cancel()
+        listeningChange = viewModelScope.launch(Dispatchers.IO) {
+            try {
+                listeningLock.withLock {
+                    settings.setListeningEnabled(enabled)
+                    val dispatched = if (enabled) JarvisCoreService.start(app) else JarvisCoreService.stop(app)
+                    if (dispatched == null) return@launch
+                }
+                withTimeoutOrNull(45_000) { JarvisCoreService.running.first { it == enabled } }
+            } catch (failure: RuntimeException) {
+                if (failure is kotlinx.coroutines.CancellationException) throw failure
+                JarvisLog.e("listening change failed", failure)
+            } finally {
+                if (kotlinx.coroutines.currentCoroutineContext().isActive) requestedRunning.value = null
+            }
+        }
     }
 
-    fun missed() {
+    fun missed() = viewModelScope.launch(Dispatchers.IO) {
         JarvisCoreService.missed(app)
         JarvisLog.i("missed: saving last 3 s")
-    }
-
-    fun stop() {
-        JarvisCoreService.stop(app)
     }
 
     fun setThreshold(v: Float) = viewModelScope.launch { settings.setWakeThreshold(v) }
@@ -64,7 +91,11 @@ class HomeViewModel @Inject constructor(
     fun play(path: String) {
         player?.release()
         player = runCatching {
-            MediaPlayer().apply { setDataSource(path); prepare(); start() }
+            MediaPlayer().apply {
+                setOnPreparedListener { it.start() }
+                setDataSource(path)
+                prepareAsync()
+            }
         }.onFailure { JarvisLog.e("play failed", it) }.getOrNull()
     }
 

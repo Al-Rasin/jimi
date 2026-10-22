@@ -12,7 +12,9 @@ import com.alrasin.jarvis.core.JarvisLog
 import com.alrasin.jarvis.data.Settings
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
 import javax.inject.Inject
 
 /**
@@ -25,18 +27,27 @@ class BootReceiver : BroadcastReceiver() {
     @Inject lateinit var reminders: ReminderScheduler
 
     override fun onReceive(context: Context, intent: Intent) {
-        when (intent.action) {
-            Intent.ACTION_BOOT_COMPLETED -> {
-                runBlocking { reminders.rescheduleAll() }
-                if (runBlocking { settings.setupComplete.first() && settings.listeningEnabled.first() }) {
-                    resume(context)
+        val pending = goAsync()
+        CoroutineScope(Dispatchers.IO).launch {
+            try {
+                when (intent.action) {
+                    Intent.ACTION_BOOT_COMPLETED -> {
+                        reminders.rescheduleAll()
+                        if (settings.setupComplete.first() && settings.listeningEnabled.first()) {
+                            resume(context)
+                        }
+                        schedule(context)
+                    }
+                    ACTION_WATCHDOG -> if (!JarvisCoreService.running.value &&
+                        settings.setupComplete.first() && settings.listeningEnabled.first()) {
+                        JarvisLog.i("watchdog: microphone service was not running")
+                        resume(context)
+                    }
                 }
-                schedule(context)
-            }
-            ACTION_WATCHDOG -> if (!JarvisCoreService.running.value &&
-                runBlocking { settings.setupComplete.first() && settings.listeningEnabled.first() }) {
-                JarvisLog.i("watchdog: microphone service was not running")
-                resume(context)
+            } catch (failure: Exception) {
+                JarvisLog.e("background resume failed", failure)
+            } finally {
+                pending.finish()
             }
         }
     }

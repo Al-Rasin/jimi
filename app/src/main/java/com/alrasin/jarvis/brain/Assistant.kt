@@ -87,7 +87,7 @@ class Assistant @Inject constructor(
     /** [speak] is called for chat sentences while the model is still writing. */
     suspend fun handle(input: Input, speak: (String) -> Unit = {}): Reply {
         val smoke = coroutineContext[SmokeSession]
-        if (smoke == null && RuleMatcher.match(input.heard)?.tool in setOf("cancel", "panic")) {
+        if (smoke == null && RuleMatcher.interrupt(input.heard) != null) {
             screenAgent.stop()
         }
         return lock.withLock {
@@ -158,6 +158,7 @@ class Assistant @Inject constructor(
             smoke?.call = call
             smoke?.ok = ok
         }
+        val routingStarted = System.nanoTime()
         val rule = RuleMatcher.match(text)
         if (rule?.tool in setOf("panic", "cancel")) return runTool(rule!!, input, "rule")
         if (smoke == null && screenAgent.hasPendingQuestion) {
@@ -226,10 +227,13 @@ class Assistant @Inject constructor(
             val intent = IntentRouter.classify(text, rule)
             JarvisLog.i("route ${intent.route} ${intent.confidence}: ${intent.reason}")
             webRouteCall(text, rule, intent)?.let { return runTool(it, input, "router") }
+            ruleRouteCall(text, rule, intent)?.let {
+                JarvisLog.i("route rule ${it.tool} in ${(System.nanoTime() - routingStarted) / 1_000_000} ms; llm=false")
+                return runTool(it, input, "rule")
+            }
             if (!intent.isConfident || intent.route != IntentRouter.Route.CHAT) {
-                rule?.takeIf { AgentRouting.acceptsSingleTool(text, it.tool) }
-                    ?.let { return runTool(it, input, "rule") }
                 if (!AgentRouting.needsMultiStep(text)) {
+                    JarvisLog.i("route llm fallback: rule=${rule?.tool ?: "none"}, reason=${intent.reason}")
                     models.toolCall(text, contextLine())?.let { return runTool(it, input, "llm") }
                 }
                 if (AgentRouting.needsScreen(text)) {
@@ -410,6 +414,11 @@ class Assistant @Inject constructor(
     companion object {
         private const val PENDING_MS = 30_000L
         private val WEB_TOOLS = setOf("web_search", "weather", "news", "wiki_lookup", "read_page", "open_url")
+
+        internal fun ruleRouteCall(text: String, rule: ToolCall?, intent: IntentRouter.Decision): ToolCall? {
+            if (intent.isConfident && intent.route == IntentRouter.Route.CHAT) return null
+            return rule?.takeIf { AgentRouting.acceptsSingleTool(text, it.tool) }
+        }
 
         internal fun webRouteCall(text: String, rule: ToolCall?, intent: IntentRouter.Decision): ToolCall? {
             if (!intent.isConfident || intent.route != IntentRouter.Route.WEB) return null

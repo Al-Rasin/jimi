@@ -3,7 +3,7 @@ package com.alrasin.jarvis.ui
 import android.os.SystemClock
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
-import androidx.compose.runtime.collectAsState
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.remember
@@ -16,7 +16,7 @@ import kotlin.math.sin
 
 @Composable
 fun rememberWakePulse(enabled: Boolean): Float {
-    val startedAt by WakeFeedback.startedAt.collectAsState()
+    val startedAt by WakeFeedback.startedAt.collectAsStateWithLifecycle()
     var pulse by remember { mutableFloatStateOf(0f) }
     LaunchedEffect(enabled, startedAt) {
         pulse = 0f

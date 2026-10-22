@@ -66,14 +66,14 @@ class PanelViewModel @Inject constructor(
     /** ✗ + fixed text: saves the correction (training data) and runs the fixed command. */
     fun fix(text: String) {
         rate(false, text)
-        JarvisCoreService.ask(app, text, source = "fix")
+        viewModelScope.launch(Dispatchers.IO) { JarvisCoreService.ask(app, text, source = "fix") }
     }
 
-    fun ask(text: String) = JarvisCoreService.ask(app, text)
+    fun ask(text: String) = viewModelScope.launch(Dispatchers.IO) { JarvisCoreService.ask(app, text) }
 
-    fun listen() = JarvisCoreService.listen(app)
+    fun listen() = viewModelScope.launch(Dispatchers.IO) { JarvisCoreService.listen(app) }
 
-    fun shutUp() = JarvisCoreService.shutUp(app)
+    fun shutUp() = viewModelScope.launch(Dispatchers.IO) { JarvisCoreService.shutUp(app) }
 
     /** The wake was false: same as ✗ on the wake notification (D-023). */
     fun notCalled() {

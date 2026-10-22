@@ -79,6 +79,8 @@ Java_com_alrasin_jarvis_llm_Llama_nativeLoad(JNIEnv *env, jclass, jstring jpath,
     if (!init) { llama_backend_init(); init = true; }
     const char *path = env->GetStringUTFChars(jpath, nullptr);
     auto mp = llama_model_default_params();
+    mp.use_mmap = true;
+    mp.use_mlock = false;
     llama_model *model = llama_model_load_from_file(path, mp);
     env->ReleaseStringUTFChars(jpath, path);
     if (!model) { LOGE("model load failed"); return 0; }

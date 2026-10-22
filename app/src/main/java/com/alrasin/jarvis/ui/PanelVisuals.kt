@@ -70,12 +70,13 @@ fun Orb(mood: OrbMood, level: Float, size: Dp = 64.dp, modifier: Modifier = Modi
     var rotation = 0f
     if (motion) {
         when (mood) {
-            OrbMood.IDLE, OrbMood.SPEAKING -> {
+            OrbMood.IDLE -> Unit
+            OrbMood.SPEAKING -> {
                 val transition = rememberInfiniteTransition(label = "orb pulse")
                 val pulse by transition.animateFloat(
-                    1f, if (mood == OrbMood.IDLE) 1.04f else 1.08f,
+                    1f, 1.08f,
                     infiniteRepeatable(
-                        tween(if (mood == OrbMood.IDLE) 2000 else 650, easing = FastOutSlowInEasing),
+                        tween(650, easing = FastOutSlowInEasing),
                         RepeatMode.Reverse,
                     ), label = "radius",
                 )
