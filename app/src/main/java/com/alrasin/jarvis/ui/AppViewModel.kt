@@ -42,7 +42,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.map
-import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.coroutines.launch
 import javax.inject.Inject
@@ -58,13 +58,16 @@ class AppViewModel @Inject constructor(
     private val scheduler: ReminderScheduler,
     private val notifications: NotificationDao,
     private val memory: MemoryDao,
-    private val secrets: Secrets,
+    private val secretsProvider: dagger.Lazy<Secrets>,
     private val backup: Backup,
     private val registry: ToolRegistry,
     private val executor: ToolExecutor,
     private val models: ModelBrain,
-    private val speaker: SpeakerVerifier,
+    private val speakerProvider: dagger.Lazy<SpeakerVerifier>,
 ) : AndroidViewModel(app) {
+    private val secrets get() = secretsProvider.get()
+    private val speaker get() = speakerProvider.get()
+
     private fun <T> Flow<T>.state(initial: T) = stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), initial)
 
     val turnList = turns.recent().state(emptyList())
@@ -80,35 +83,35 @@ class AppViewModel @Inject constructor(
     val speakerThreshold = settings.speakerThreshold.state(Settings.DEFAULT_SPEAKER_THRESHOLD)
     val enrollStatus = JarvisCoreService.enrollStatus
     val lastVoiceScore = JarvisCoreService.lastVoiceScore
-    val voiceSamples = MutableStateFlow(speaker.samples)
+    val voiceSamples = MutableStateFlow(0)
     val cloudEnabled = settings.cloudEnabled.state(false)
     val cloudForChat = settings.cloudForChat.state(false)
     val cloudSendFacts = settings.cloudSendFacts.state(false)
-    val cloudKeySet = MutableStateFlow(secrets.has(Secrets.CLOUD_KEY))
+    val cloudKeySet = MutableStateFlow(false)
     val homeCity = settings.homeCity.state("Dhaka")
     val voice = settings.voice.state(Voices.BUILT_IN)
     val voiceSpeed = settings.voiceSpeed.state(1.0f)
     val setupComplete = settings.setupComplete.map<Boolean, Boolean?> { it }.state(null)
     val assistantMode = settings.assistantMode.state(AssistantMode.BESIDE_GEMINI)
-    val deviceFeatures = MutableStateFlow(DeviceCheck.features(app))
+    val deviceFeatures = MutableStateFlow<List<DeviceFeature>>(emptyList())
     val deviceCheckRevision = MutableStateFlow(0)
     val rootAvailable = MutableStateFlow<Boolean?>(null)
-    val portableModels = MutableStateFlow(PortableModels.status(app))
+    val portableModels = MutableStateFlow<List<com.alrasin.jarvis.voice.ModelStatus>>(emptyList())
     val modelDownloads = MutableStateFlow<Map<String, Float>>(emptyMap())
 
     fun finishSetup() = viewModelScope.launch { settings.setSetupComplete(true) }
-    suspend fun resumeListening() {
-        if (!settings.setupComplete.first() || !settings.listeningEnabled.first() || JarvisCoreService.running.value) return
+    suspend fun resumeListening() = withContext(Dispatchers.IO) {
+        if (!settings.setupComplete.first() || !settings.listeningEnabled.first() || JarvisCoreService.running.value) return@withContext
         val ready = SetupPolicy.wakeReady(
             DeviceCheck.hasPermission(app, android.Manifest.permission.RECORD_AUDIO),
             PortableModels.status(app).associate { it.id to it.ready },
         )
-        if (!ready) return
+        if (!ready) return@withContext
         JarvisCoreService.start(app)
         withTimeoutOrNull(30_000) { JarvisCoreService.running.first { it } }
     }
     fun setAssistantMode(mode: AssistantMode) = viewModelScope.launch { settings.setAssistantMode(mode) }
-    fun refreshDeviceCheck() {
+    fun refreshDeviceCheck() = viewModelScope.launch(Dispatchers.IO) {
         deviceFeatures.value = DeviceCheck.features(app)
         deviceCheckRevision.value++
         portableModels.value = PortableModels.status(app)
@@ -143,7 +146,7 @@ class AppViewModel @Inject constructor(
     }
     val chatModel = settings.chatModel.state(ChatModels.DEFAULT)
     /** Ids of downloaded voice packs. */
-    val installedPacks = MutableStateFlow(installedNow())
+    val installedPacks = MutableStateFlow<Set<String>>(emptySet())
     /** Pack id → download progress 0..1. */
     val downloads = MutableStateFlow<Map<String, Float>>(emptyMap())
     /** Id of the voice being tried, null when idle. */
@@ -153,13 +156,23 @@ class AppViewModel @Inject constructor(
     private val _message = MutableStateFlow("")
     /** Result line of the last button (setup, export, tool run). */
     val message: StateFlow<String> = _message
-    val pinSet = MutableStateFlow(secrets.has(Secrets.PIN))
-    val modelStatus = MutableStateFlow(models.status())
+    val pinSet = MutableStateFlow(false)
+    val modelStatus = MutableStateFlow("Checking models…")
     private var player: MediaPlayer? = null
 
-    fun ask(text: String) = JarvisCoreService.ask(app, text)
+    init {
+        viewModelScope.launch(Dispatchers.IO) {
+            voiceSamples.value = speaker.samples
+            cloudKeySet.value = secrets.has(Secrets.CLOUD_KEY)
+            pinSet.value = secrets.has(Secrets.PIN)
+        }
+        refreshDeviceCheck()
+        refreshModels()
+    }
 
-    fun listen() = JarvisCoreService.listen(app)
+    fun ask(text: String) = viewModelScope.launch(Dispatchers.IO) { JarvisCoreService.ask(app, text) }
+
+    fun listen() = viewModelScope.launch(Dispatchers.IO) { JarvisCoreService.listen(app) }
 
     fun rate(id: Long, ok: Boolean) = viewModelScope.launch { turns.rate(id, ok, null) }
 
@@ -170,7 +183,11 @@ class AppViewModel @Inject constructor(
 
     fun play(path: String) {
         player?.release()
-        player = runCatching { MediaPlayer().apply { setDataSource(path); prepare(); start() } }
+        player = runCatching { MediaPlayer().apply {
+            setOnPreparedListener { it.start() }
+            setDataSource(path)
+            prepareAsync()
+        } }
             .onFailure { JarvisLog.e("play failed", it) }.getOrNull()
     }
 
@@ -185,7 +202,7 @@ class AppViewModel @Inject constructor(
 
     fun deleteNote(id: Long) = viewModelScope.launch { notes.delete(id) }
 
-    fun deleteReminder(id: Long) = viewModelScope.launch {
+    fun deleteReminder(id: Long) = viewModelScope.launch(Dispatchers.IO) {
         scheduler.cancel(id)
         reminders.delete(id)
     }
@@ -210,11 +227,11 @@ class AppViewModel @Inject constructor(
             runCatching { Voices.download(app, pack) { p -> downloads.value += pack.id to p } }
                 .onFailure { JarvisLog.e("voice download failed", it); _message.value = "Download failed. Check internet and try again." }
             downloads.value -= pack.id
-            installedPacks.value = installedNow()
+            installedPacks.value = withContext(Dispatchers.IO) { installedNow() }
         }
     }
 
-    fun deleteVoice(pack: VoicePack) {
+    fun deleteVoice(pack: VoicePack) = viewModelScope.launch(Dispatchers.IO) {
         if (Voices.byId(voice.value).pack.id == pack.id) setVoice(Voices.BUILT_IN)
         Voices.delete(app, pack)
         installedPacks.value = installedNow()
@@ -235,23 +252,23 @@ class AppViewModel @Inject constructor(
         }
     }
 
-    fun setCloudKey(key: String) {
+    fun setCloudKey(key: String) = viewModelScope.launch(Dispatchers.IO) {
         secrets.put(Secrets.CLOUD_KEY, key.trim().ifEmpty { null })
         cloudKeySet.value = secrets.has(Secrets.CLOUD_KEY)
         _message.value = if (cloudKeySet.value) "API key saved (encrypted)." else "API key removed."
     }
 
-    fun enrollVoice() = JarvisCoreService.enroll(app)
-    fun refreshVoice() { voiceSamples.value = speaker.samples }
+    fun enrollVoice() = viewModelScope.launch(Dispatchers.IO) { JarvisCoreService.enroll(app) }
+    fun refreshVoice() = viewModelScope.launch(Dispatchers.IO) { voiceSamples.value = speaker.samples }
 
-    fun resetVoice() {
+    fun resetVoice() = viewModelScope.launch(Dispatchers.IO) {
         speaker.reset()
         voiceSamples.value = 0
         _message.value = "Voice ID recordings deleted."
     }
     fun setHomeCity(v: String) = viewModelScope.launch { settings.setHomeCity(v.trim().ifEmpty { "Dhaka" }) }
 
-    fun setPin(pin: String) {
+    fun setPin(pin: String) = viewModelScope.launch(Dispatchers.IO) {
         secrets.put(Secrets.PIN, pin.trim().ifEmpty { null })
         pinSet.value = secrets.has(Secrets.PIN)
         _message.value = if (pinSet.value) "PIN saved (encrypted)." else "PIN removed."
@@ -269,11 +286,11 @@ class AppViewModel @Inject constructor(
     }
 
     fun refreshModels() {
-        viewModelScope.launch { modelStatus.value = models.status(settings.chatModel.first()) }
+        viewModelScope.launch(Dispatchers.IO) { modelStatus.value = models.status(settings.chatModel.first()) }
     }
 
     /** Debug: run any tool with JSON args, no voice. Risky tools still ask (confirmed = false). */
-    fun runTool(name: String, argsJson: String) = viewModelScope.launch {
+    fun runTool(name: String, argsJson: String) = viewModelScope.launch(Dispatchers.IO) {
         val args = runCatching {
             (Json.parse(argsJson.ifBlank { "{}" }) as Map<*, *>).entries.associate { (k, v) -> k.toString() to v.toString() }
         }.getOrElse { _message.value = "Bad JSON: ${it.message}"; return@launch }

@@ -20,6 +20,7 @@ import com.alrasin.jarvis.brain.Assistant
 import com.alrasin.jarvis.brain.ModelBrain
 import com.alrasin.jarvis.brain.Persona
 import com.alrasin.jarvis.core.JarvisLog
+import com.alrasin.jarvis.core.backgroundWork
 import com.alrasin.jarvis.data.Settings
 import com.alrasin.jarvis.data.WakeEvent
 import com.alrasin.jarvis.data.WakeEventDao
@@ -56,7 +57,6 @@ import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
-import kotlinx.coroutines.runBlocking
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.atomic.AtomicReference
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -154,10 +154,12 @@ class JarvisCoreService : LifecycleService() {
             ACTION_ENROLL -> enrollRequested = true
         }
         ensureVoice()
-        val on = intent?.action !in QUIET_ACTIONS || runBlocking { settings.listeningEnabled.first() }
-        if (listenJob?.isActive != true && on) {
-            startListening()
-            BootReceiver.schedule(this)
+        lifecycleScope.launch {
+            val on = intent?.action !in QUIET_ACTIONS || settings.listeningEnabled.first()
+            if (listenJob?.isActive != true && on) {
+                startListening()
+                BootReceiver.schedule(this@JarvisCoreService)
+            }
         }
         return START_STICKY
     }
@@ -220,7 +222,6 @@ class JarvisCoreService : LifecycleService() {
         lifecycleScope.launch { settings.voiceId.collect { voiceId = it } }
         lifecycleScope.launch { settings.speakerThreshold.collect { speakerThreshold = it } }
         registerReceiver(battery, IntentFilter(Intent.ACTION_BATTERY_CHANGED))
-        models.warmUp()
         lifecycleScope.launch(Dispatchers.IO) { protectFromLowMemoryKiller() }
     }
 
@@ -247,12 +248,14 @@ class JarvisCoreService : LifecycleService() {
             phrases = null
             // Teardown must be able to await and release a native voice even if loading is cancelled.
             lifecycleScope.async(Dispatchers.IO + NonCancellable) {
+                backgroundWork {
                 val v = Voices.byId(id).takeIf { Voices.installed(this@JarvisCoreService, it.pack) } ?: Voices.byId(Voices.BUILT_IN)
                 runCatching { TextToSpeech(this@JarvisCoreService, v, speed = voiceSpeed) }
                     .recoverCatching { if (v.id == Voices.BUILT_IN) throw it else TextToSpeech(this@JarvisCoreService, speed = voiceSpeed) }
                     .onSuccess { JarvisLog.i("voice: ${it.voice.id}") }
                     .onFailure { JarvisLog.e("voice not loaded (run tools/fetch_speech.sh)", it) }
                     .getOrNull()
+                }
             }.also { tts = it }
         }
         try {
@@ -297,7 +300,7 @@ class JarvisCoreService : LifecycleService() {
                         if (readyVoice() !== v || v.speed != speed) return@launch
                         if (speaking || speechLeft.get() > 0 || listenRequest != null) false
                         else {
-                            runCatching { audioFor(v, text) }
+                            runCatching { backgroundWork { audioFor(v, text) } }
                                 .onFailure { JarvisLog.e("phrase warm failed", it) }
                                 .getOrNull() ?: return@launch
                             true

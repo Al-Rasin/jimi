@@ -57,6 +57,9 @@ object RuleMatcher {
         return s.replace(Regex("\\s+"), " ").trim()
     }
 
+    internal fun interrupt(input: String): ToolCall? = talk(normalize(input))
+        ?.takeIf { it.tool == "cancel" || it.tool == "panic" }
+
     fun match(input: String, now: LocalDateTime = LocalDateTime.now()): ToolCall? {
         val t = normalize(input)
         if (t.isEmpty()) return null

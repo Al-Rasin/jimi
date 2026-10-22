@@ -3,9 +3,9 @@ package com.alrasin.jarvis.agent
 import android.content.Context
 import com.alrasin.jarvis.brain.ClaudeProvider
 import com.alrasin.jarvis.brain.CloudBrain
+import com.alrasin.jarvis.brain.ModelBrain
 import com.alrasin.jarvis.core.Secrets
 import com.alrasin.jarvis.llm.ChatFormat
-import com.alrasin.jarvis.llm.Llama
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -26,6 +26,7 @@ class AgentModels @Inject constructor(
     @ApplicationContext private val context: Context,
     private val cloud: CloudBrain,
     private val secrets: Secrets,
+    private val models: ModelBrain,
 ) {
     private val cloudScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val cloudLock = Mutex()
@@ -48,24 +49,21 @@ class AgentModels @Inject constructor(
                 val response = try { request.await() } finally { request.cancel() }
                 return AgentAction.parse(response) ?: error("Cloud returned an invalid screen action.")
             }
-        } else LocalAgentModel(File(context.getExternalFilesDir(null), "models/llm"))
+        } else LocalAgentModel(File(context.getExternalFilesDir(null), "models/llm"), models)
     }
 }
 
-private class LocalAgentModel(private val directory: File) : AgentModel, AutoCloseable {
+private class LocalAgentModel(private val directory: File, private val models: ModelBrain) : AgentModel, AutoCloseable {
     override val description = "Using the offline screen model. Small local models may struggle with complex tasks."
-    private var model: Llama? = null
 
     override suspend fun next(task: String, snapshot: ScreenSnapshot, history: List<String>): AgentAction = withContext(Dispatchers.Default) {
         val job = currentCoroutineContext()
         job.ensureActive()
-        synchronized(this@LocalAgentModel) {
-            val file = directory.listFiles().orEmpty().filter {
-                it.extension.equals("gguf", true) && (it.name.startsWith("qwen3", true) || it.name.startsWith("gemma-3", true))
-            }.sortedBy { !it.name.startsWith("qwen3", true) }.firstOrNull()
-                ?: error("Install a Qwen3 or Gemma-3 chat GGUF to use offline screen assistance.")
-            val llama = model ?: (Llama.load(file, contextSize = 4096, threads = 4)
-                ?: error("The local screen model could not load.")).also { model = it }
+        val file = directory.listFiles().orEmpty().filter {
+            it.extension.equals("gguf", true) && (it.name.startsWith("qwen3", true) || it.name.startsWith("gemma-3", true))
+        }.sortedBy { !it.name.startsWith("qwen3", true) }.firstOrNull()
+            ?: error("Install a Qwen3 or Gemma-3 chat GGUF to use offline screen assistance.")
+        models.withScreenModel(file) { llama ->
             job.ensureActive()
             val input = AgentPrompt.input(task, snapshot, history, 6_000)
             val prompt = if (file.name.startsWith("gemma", true))
@@ -78,7 +76,7 @@ private class LocalAgentModel(private val directory: File) : AgentModel, AutoClo
         }
     }
 
-    @Synchronized override fun close() { model?.close(); model = null }
+    override fun close() { models.releaseScreenModel() }
 }
 
 internal object AgentPrompt {

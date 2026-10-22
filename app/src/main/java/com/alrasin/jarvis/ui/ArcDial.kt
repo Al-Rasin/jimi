@@ -99,14 +99,14 @@ fun ArcDial(
         motion = scope.launch {
             rotation.snapTo(if (dragging) dragAngle else rotation.value)
             dragging = false
+            if (index != currentSelection) {
+                haptics.performHapticFeedback(HapticFeedbackType.LongPress)
+                select(index)
+            }
             if (ValueAnimator.areAnimatorsEnabled()) {
                 rotation.animateTo(index * step, spring(dampingRatio = 0.75f, stiffness = 380f))
             } else {
                 rotation.snapTo(index * step)
-            }
-            if (index != currentSelection) {
-                haptics.performHapticFeedback(HapticFeedbackType.LongPress)
-                select(index)
             }
         }
     }

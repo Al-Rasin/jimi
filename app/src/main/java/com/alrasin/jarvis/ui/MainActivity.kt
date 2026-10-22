@@ -4,6 +4,7 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.core.view.doOnPreDraw
 import androidx.activity.viewModels
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
@@ -20,14 +21,18 @@ class MainActivity : ComponentActivity() {
         // Compose only gets keyboard insets edge-to-edge; without it the ArcDial thinks the keyboard is open and hides.
         enableEdgeToEdge()
         super.onCreate(savedInstanceState)
-        lifecycleScope.launch {
-            repeatOnLifecycle(Lifecycle.State.RESUMED) { appVm.resumeListening() }
-        }
         intent.getStringExtra("test_dir")?.let { vm.scoreDir(it) }
         intent.getStringExtra("stt_dir")?.let {
             vm.speechTest(it, intent.getStringExtra("stt_model"), speak = !intent.hasExtra("no_speak"))
         }
         intent.getStringExtra("voice_bench")?.let { vm.voiceBench(it) }
+        window.decorView.doOnPreDraw {
+            window.decorView.post {
+                lifecycleScope.launch {
+                    repeatOnLifecycle(Lifecycle.State.RESUMED) { appVm.resumeListening() }
+                }
+            }
+        }
         setContent {
             JimiTheme {
                 AppShell(appVm, vm)

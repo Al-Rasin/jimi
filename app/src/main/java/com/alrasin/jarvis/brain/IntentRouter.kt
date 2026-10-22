@@ -100,7 +100,8 @@ object IntentRouter {
             null -> launchRequest.matchEntire(normalized)?.groupValues?.get(1)
             else -> null
         }
-        if (launchApp != null && (isAppLaunchQuestion(normalized) || RuleMatcher.appNameMatches?.invoke(launchApp) == false)) {
+        if (launchApp != null && (isAppLaunchQuestion(normalized) ||
+                (ruleCall == null && RuleMatcher.appNameMatches?.invoke(launchApp) == false))) {
             return Decision(Route.CHAT, 0.96f, "unmatched app or app question")
         }
 
