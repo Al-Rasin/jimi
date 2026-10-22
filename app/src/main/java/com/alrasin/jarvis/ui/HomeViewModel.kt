@@ -11,6 +11,7 @@ import com.alrasin.jarvis.service.JarvisCoreService
 import com.alrasin.jarvis.service.WakeFeedback
 import com.alrasin.jarvis.voice.SpeechToText
 import com.alrasin.jarvis.voice.TextToSpeech
+import com.alrasin.jarvis.voice.Voices
 import com.alrasin.jarvis.voice.Wav
 import com.alrasin.jarvis.voice.WakePhrase
 import com.alrasin.jarvis.voice.WakeModels
@@ -141,12 +142,13 @@ class HomeViewModel @Inject constructor(
     }
 
     /**
-     * Debug: time every Piper voice folder in [dir] (each: one .onnx + tokens.txt), 2 and 4 threads.
-     * `adb shell am start -n com.alrasin.jarvis/.ui.MainActivity --es tts_dir <dir>`
+     * Debug: time each installed voice ([ids] = comma list of voice ids, or "all"), 2 and 4 threads.
+     * `adb shell am start -n com.alrasin.jarvis/.ui.MainActivity --es voice_bench kokoro-heart,kitten-m2`
      */
-    fun voiceBench(dir: String) = viewModelScope.launch(Dispatchers.Default) {
+    fun voiceBench(ids: String) = viewModelScope.launch(Dispatchers.Default) {
         val text = "You said: turn on the flashlight and set an alarm for seven."
-        for (voice in File(dir).listFiles { f -> f.isDirectory }.orEmpty().sortedBy { it.name }) {
+        val voices = Voices.ALL.filter { (ids == "all" || it.id in ids.split(',')) && Voices.installed(app, it.pack) }
+        for (voice in voices) {
             for (threads in listOf(2, 4)) runCatching {
                 var t0 = System.nanoTime()
                 TextToSpeech(app, voice, threads).use { tts ->
@@ -155,9 +157,9 @@ class HomeViewModel @Inject constructor(
                     val a = tts.generate(text)
                     val ms = (System.nanoTime() - t0) / 1_000_000
                     val audioMs = a.samples.size * 1000L / a.sampleRate
-                    JarvisLog.i("VOICE ${voice.name} t=$threads load=${load}ms gen=${ms}ms audio=${audioMs}ms rtf=${"%.2f".format(ms.toFloat() / audioMs)}")
+                    JarvisLog.i("VOICE ${voice.id} t=$threads load=${load}ms gen=${ms}ms audio=${audioMs}ms rtf=${"%.2f".format(ms.toFloat() / audioMs)}")
                 }
-            }.onFailure { JarvisLog.e("VOICE ${voice.name} failed", it) }
+            }.onFailure { JarvisLog.e("VOICE ${voice.id} failed", it) }
         }
         JarvisLog.i("VOICE done")
     }

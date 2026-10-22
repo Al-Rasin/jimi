@@ -10,6 +10,7 @@ class WakePhraseTest {
     @Test fun stripsJimOnly() = assertEquals("call mom", WakePhrase.strip("jimmy call mom"))
     @Test fun keepsNormalText() = assertEquals("remind me at five", WakePhrase.strip("remind me at five"))
     @Test fun keepsLoneA() = assertEquals("a song please", WakePhrase.strip("a song please"))
+    @Test fun stripsIzumi() = assertEquals("open youtube", WakePhrase.strip("izumi open youtube"))
     @Test fun emptyStaysEmpty() = assertEquals("", WakePhrase.strip(""))
     @Test fun onlyWakeGivesEmpty() = assertEquals("", WakePhrase.strip("hey jimmy"))
 }

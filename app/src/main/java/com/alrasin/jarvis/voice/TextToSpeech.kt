@@ -4,41 +4,60 @@ import android.content.Context
 import android.media.AudioAttributes
 import android.media.AudioFormat
 import android.media.AudioTrack
+import com.k2fsa.sherpa.onnx.GeneratedAudio
+import com.k2fsa.sherpa.onnx.GenerationConfig
 import com.k2fsa.sherpa.onnx.OfflineTts
 import com.k2fsa.sherpa.onnx.OfflineTtsConfig
 import com.k2fsa.sherpa.onnx.OfflineTtsModelConfig
+import com.k2fsa.sherpa.onnx.OfflineTtsSupertonicModelConfig
 import com.k2fsa.sherpa.onnx.OfflineTtsVitsModelConfig
 import java.io.File
 
 /**
- * Offline voice (PLAN 3.3, D-025): Piper "en_GB-alan-medium" via sherpa-onnx, model from APK assets `tts/`.
- * espeak-ng-data must be a real folder, so it is copied from assets to app files once.
- * [modelDir] (debug): load a Piper voice folder (one .onnx + tokens.txt) from storage instead of assets.
+ * Offline voice (PLAN 3.3, D-025, D-038) via sherpa-onnx. [voice] picks the engine (Piper / Supertonic) and speaker;
+ * the built-in Piper "Alan" is in APK assets `tts/`, other voices are downloaded to `files/voices/` (see [Voices]).
+ * espeak-ng-data must be a real folder, so it is copied from assets to app files once (all engines share it).
  */
-class TextToSpeech(context: Context, modelDir: File? = null, threads: Int = 2) : AutoCloseable {
+class TextToSpeech(
+    context: Context,
+    val voice: Voice = Voices.byId(Voices.BUILT_IN),
+    threads: Int = 2,
+    speed: Float = 1.0f,
+) : AutoCloseable {
     private val tts: OfflineTts
     @Volatile private var stopped = false
+    /** 1.0 = normal; can change between sentences without reloading. */
+    @Volatile var speed = speed
 
     init {
-        val data = copyEspeakData(context)
-        val model = modelDir?.listFiles { f -> f.name.endsWith(".onnx") }?.firstOrNull()
-        tts = OfflineTts(
-            if (modelDir == null) context.assets else null,
-            OfflineTtsConfig(
-                model = OfflineTtsModelConfig(
-                    vits = OfflineTtsVitsModelConfig(
-                        model = model?.path ?: "$DIR/en_GB-alan-medium.onnx",
-                        tokens = if (modelDir == null) "$DIR/tokens.txt" else File(modelDir, "tokens.txt").path,
-                        dataDir = data.path,
-                    ),
-                    numThreads = threads,
+        val data = copyEspeakData(context).path
+        val pack = voice.pack
+        val builtIn = pack.id == Voices.BUILT_IN
+        fun f(name: String) = if (builtIn) "$DIR/$name" else File(Voices.dir(context, pack), name).path
+        val model = when (pack.engine) {
+            Engine.PIPER -> OfflineTtsModelConfig(
+                vits = OfflineTtsVitsModelConfig(model = f(pack.model), tokens = f("tokens.txt"), dataDir = data),
+                numThreads = threads,
+            )
+            Engine.SUPERTONIC -> OfflineTtsModelConfig(
+                supertonic = OfflineTtsSupertonicModelConfig(
+                    durationPredictor = f("duration_predictor.int8.onnx"), textEncoder = f("text_encoder.int8.onnx"),
+                    vectorEstimator = f("vector_estimator.int8.onnx"), vocoder = f("vocoder.int8.onnx"),
+                    ttsJson = f("tts.json"), unicodeIndexer = f("unicode_indexer.bin"), voiceStyle = f("voice.bin"),
                 ),
-            ),
-        )
+                numThreads = threads,
+            )
+        }
+        tts = OfflineTts(if (builtIn) context.assets else null, OfflineTtsConfig(model = model))
         generate("Hi.")   // first run is ~4x slower; pay it now, not on the first answer
     }
 
-    fun generate(text: String) = tts.generate(text, sid = 0, speed = 1.0f)
+    fun generate(text: String): GeneratedAudio =
+        if (voice.pack.engine == Engine.SUPERTONIC) {
+            tts.generateWithConfig(text, GenerationConfig(sid = voice.sid, speed = speed, numSteps = SUPERTONIC_STEPS, extra = mapOf("lang" to "en")))
+        } else {
+            tts.generate(text, sid = voice.sid, speed = speed)
+        }
 
     /** Stops the sentence being played now (user tapped stop / said "stop"). */
     fun stop() { stopped = true }
@@ -48,41 +67,54 @@ class TextToSpeech(context: Context, modelDir: File? = null, threads: Int = 2) :
         stopped = false
         val audio = generate(text)
         if (stopped) return false
-        if (audio.samples.isEmpty()) return true
-        val track = AudioTrack.Builder()
-            .setAudioAttributes(
-                AudioAttributes.Builder()
-                    .setUsage(AudioAttributes.USAGE_ASSISTANT)
-                    .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH)
-                    .build()
-            )
-            .setAudioFormat(
-                AudioFormat.Builder()
-                    .setEncoding(AudioFormat.ENCODING_PCM_FLOAT)
-                    .setSampleRate(audio.sampleRate)
-                    .setChannelMask(AudioFormat.CHANNEL_OUT_MONO)
-                    .build()
-            )
-            .setTransferMode(AudioTrack.MODE_STATIC)
-            .setBufferSizeInBytes(audio.samples.size * 4)
-            .build()
-        try {
-            track.write(audio.samples, 0, audio.samples.size, AudioTrack.WRITE_BLOCKING)
-            track.play()
-            val end = System.currentTimeMillis() + audio.samples.size * 1000L / audio.sampleRate + 150
-            while (!stopped && System.currentTimeMillis() < end) Thread.sleep(50)
-            track.stop()
-            return !stopped
-        } finally {
-            track.release()
-        }
+        return play(audio)
+    }
+
+    /** Plays audio made by [generate] (the service makes the next sentence while this one plays). */
+    fun play(audio: GeneratedAudio): Boolean {
+        stopped = false
+        return playPcm(audio.samples, audio.sampleRate) { stopped }
     }
 
     override fun close() = tts.release()
 
     companion object {
         private const val DIR = "tts"
+        /** Supertonic quality/speed: more denoising steps = cleaner voice, slower. */
+        private const val SUPERTONIC_STEPS = 2
         private const val ESPEAK = "espeak-ng-data"
+
+        /** Plays mono float PCM on the assistant audio stream; blocks until done or [stop] returns true. */
+        fun playPcm(samples: FloatArray, rate: Int, stop: () -> Boolean = { false }): Boolean {
+            if (samples.isEmpty()) return true
+            val track = AudioTrack.Builder()
+                .setAudioAttributes(
+                    AudioAttributes.Builder()
+                        .setUsage(AudioAttributes.USAGE_ASSISTANT)
+                        .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH)
+                        .build()
+                )
+                .setAudioFormat(
+                    AudioFormat.Builder()
+                        .setEncoding(AudioFormat.ENCODING_PCM_FLOAT)
+                        .setSampleRate(rate)
+                        .setChannelMask(AudioFormat.CHANNEL_OUT_MONO)
+                        .build()
+                )
+                .setTransferMode(AudioTrack.MODE_STATIC)
+                .setBufferSizeInBytes(samples.size * 4)
+                .build()
+            try {
+                track.write(samples, 0, samples.size, AudioTrack.WRITE_BLOCKING)
+                track.play()
+                val end = System.currentTimeMillis() + samples.size * 1000L / rate + 150
+                while (!stop() && System.currentTimeMillis() < end) Thread.sleep(50)
+                track.stop()
+                return !stop()
+            } finally {
+                track.release()
+            }
+        }
 
         private fun copyEspeakData(context: Context): File {
             val dest = File(context.filesDir, ESPEAK)

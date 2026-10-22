@@ -27,6 +27,10 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.unit.sp
+import com.alrasin.jarvis.voice.Engine
+import com.alrasin.jarvis.voice.Voice
+import com.alrasin.jarvis.voice.VoicePack
+import com.alrasin.jarvis.voice.Voices
 import com.alrasin.jarvis.service.JarvisCoreService
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -49,6 +53,7 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Switch
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -65,6 +70,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.alrasin.jarvis.data.ConversationTurn
@@ -393,6 +399,7 @@ private fun SettingsTab(vm: AppViewModel) {
                 OutlinedButton(onClick = { vm.setHomeCity(cityText) }) { Text("Save") }
             }
         }
+        VoiceCard(vm)
         GlassCard(title = "Voice ID") {
             Text(
                 "When on and the phone is locked, calls, messages and unlock only work for your voice. " +
@@ -453,6 +460,63 @@ private fun SettingsTab(vm: AppViewModel) {
             OutlinedTextField(tool, { tool = it.trim() }, Modifier.fillMaxWidth(), label = { Text("Tool") }, singleLine = true)
             OutlinedTextField(args, { args = it }, Modifier.fillMaxWidth(), label = { Text("Args JSON") })
             Button(onClick = { vm.runTool(tool, args) }) { Text("Run") }
+        }
+    }
+}
+
+/** Pick Jimi's voice (D-038): natural Supertonic voices (one 128 MB download) or fast Piper voices. */
+@Composable
+private fun VoiceCard(vm: AppViewModel) {
+    val current by vm.voice.collectAsStateWithLifecycle()
+    val speed by vm.voiceSpeed.collectAsStateWithLifecycle()
+    val installed by vm.installedPacks.collectAsStateWithLifecycle()
+    val downloads by vm.downloads.collectAsStateWithLifecycle()
+    val trying by vm.trying.collectAsStateWithLifecycle()
+    var open by remember { mutableStateOf(false) }
+
+    @Composable
+    fun PackBar(pack: VoicePack) {
+        val p = downloads[pack.id]
+        when {
+            p != null -> LinearProgressIndicator({ p }, Modifier.fillMaxWidth())
+            pack.id == Voices.BUILT_IN -> {}
+            pack.id in installed -> TextButton(onClick = { vm.deleteVoice(pack) }) { Text("Delete (${pack.sizeMb} MB)") }
+            else -> OutlinedButton(onClick = { vm.downloadVoice(pack) }) { Text("Download (${pack.sizeMb} MB)") }
+        }
+    }
+
+    @Composable
+    fun VoiceRow(v: Voice) {
+        val ready = v.pack.id in installed
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+            Text(
+                (if (v.id == current) "● " else "") + v.label,
+                Modifier.weight(1f),
+                style = MaterialTheme.typography.bodyMedium,
+                fontWeight = if (v.id == current) FontWeight.Bold else null,
+            )
+            if (ready) {
+                TextButton(onClick = { vm.tryVoice(v) }, enabled = trying == null) { Text(if (trying == v.id) "…" else "Try") }
+                if (v.id != current) TextButton(onClick = { vm.setVoice(v.id) }) { Text("Use") }
+            }
+        }
+    }
+
+    GlassCard(title = "Voice") {
+        Text("Now: ${Voices.byId(current).label}", style = MaterialTheme.typography.bodySmall)
+        Text("Speed ${"%.2f".format(speed)}x", style = MaterialTheme.typography.bodySmall)
+        Slider(speed, vm::setVoiceSpeed, valueRange = 0.8f..1.3f, steps = 9)
+        TextButton(onClick = { open = !open }) { Text(if (open) "Hide voices" else "Change voice") }
+        if (open) {
+            val (natural, fast) = Voices.ALL.partition { it.pack.engine == Engine.SUPERTONIC }
+            Text("Natural (best, a bit slower to start)", fontWeight = FontWeight.Bold)
+            PackBar(Voices.SUPERTONIC)
+            natural.forEach { VoiceRow(it) }
+            Text("Fast", fontWeight = FontWeight.Bold, modifier = Modifier.padding(top = 8.dp))
+            fast.forEach { v ->
+                VoiceRow(v)
+                PackBar(v.pack)
+            }
         }
     }
 }

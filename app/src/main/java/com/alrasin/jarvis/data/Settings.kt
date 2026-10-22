@@ -6,6 +6,7 @@ import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.floatPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
+import com.alrasin.jarvis.voice.Voices
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
@@ -27,6 +28,8 @@ class Settings @Inject constructor(@ApplicationContext private val context: Cont
     private val cloudKey = booleanPreferencesKey("cloud_enabled")
     private val cloudChatKey = booleanPreferencesKey("cloud_for_chat")
     private val cloudFactsKey = booleanPreferencesKey("cloud_send_facts")
+    private val voiceKey = stringPreferencesKey("voice")
+    private val voiceSpeedKey = floatPreferencesKey("voice_speed")
 
     val wakeThreshold: Flow<Float> = context.dataStore.data.map { it[thresholdKey] ?: DEFAULT_THRESHOLD }
     val listeningEnabled: Flow<Boolean> = context.dataStore.data.map { it[enabledKey] ?: false }
@@ -49,6 +52,13 @@ class Settings @Inject constructor(@ApplicationContext private val context: Cont
     /** Privacy (PLAN 14.3): remembered facts are sent only if this is on. Notes, notifications, screen text never are. */
     val cloudSendFacts: Flow<Boolean> = context.dataStore.data.map { it[cloudFactsKey] ?: false }
 
+    /** Jimi's voice id (see Voices, D-038). */
+    val voice: Flow<String> = context.dataStore.data.map { it[voiceKey] ?: Voices.BUILT_IN }
+    /** Speaking speed, 1.0 = normal. */
+    val voiceSpeed: Flow<Float> = context.dataStore.data.map { it[voiceSpeedKey] ?: 1.0f }
+
+    suspend fun setVoice(v: String) = context.dataStore.edit { it[voiceKey] = v }
+    suspend fun setVoiceSpeed(v: Float) = context.dataStore.edit { it[voiceSpeedKey] = v }
     suspend fun setCloudEnabled(v: Boolean) = context.dataStore.edit { it[cloudKey] = v }
     suspend fun setCloudForChat(v: Boolean) = context.dataStore.edit { it[cloudChatKey] = v }
     suspend fun setCloudSendFacts(v: Boolean) = context.dataStore.edit { it[cloudFactsKey] = v }

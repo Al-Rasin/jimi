@@ -20,6 +20,17 @@ class RuleMatcherTest {
         assertEquals(c("toggle", "target" to "flashlight", "state" to "on"), m("can you please switch on the torch"))
     }
 
+    /** Real speech-to-text mistakes from the phone (files/commands, 2026-10-22). */
+    @Test fun misheardCommands() {
+        assertEquals(c("toggle", "target" to "flashlight", "state" to "on"), m("down on flushlight"))
+        assertEquals(c("toggle", "target" to "flashlight", "state" to "on"), m("new down on flashlight"))
+        assertEquals(c("toggle", "target" to "flashlight", "state" to "on"), m("do you mean on flashlight"))
+        assertEquals(c("toggle", "target" to "flashlight", "state" to "off"), m("turn of the flashlight"))
+        assertEquals(c("set_volume", "level" to "up"), m("sound up"))
+        assertEquals(c("set_volume", "level" to "down"), m("sound down"))
+        assertEquals(c("set_volume", "level" to "0"), m("sound of"))
+    }
+
     @Test fun toggles() {
         assertEquals(c("toggle", "target" to "wifi", "state" to "off"), m("turn off wi-fi"))
         assertEquals(c("toggle", "target" to "bluetooth", "state" to "on"), m("enable bluetooth"))

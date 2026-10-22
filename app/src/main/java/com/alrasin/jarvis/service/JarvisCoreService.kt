@@ -10,10 +10,8 @@ import android.content.IntentFilter
 import android.content.pm.PackageManager
 import android.content.pm.ServiceInfo
 import android.media.AudioFormat
-import android.media.AudioManager
 import android.media.AudioRecord
 import android.media.MediaRecorder
-import android.media.ToneGenerator
 import android.os.BatteryManager
 import android.os.PowerManager
 import androidx.lifecycle.LifecycleService
@@ -30,11 +28,13 @@ import com.alrasin.jarvis.ui.AssistantActivity
 import com.alrasin.jarvis.voice.AudioRing
 import com.alrasin.jarvis.voice.SpeakerVerifier
 import com.alrasin.jarvis.voice.SpeechToText
+import com.alrasin.jarvis.voice.Chimes
 import com.alrasin.jarvis.voice.TextToSpeech
 import com.alrasin.jarvis.voice.WakePhrase
 import com.alrasin.jarvis.voice.Wav
 import com.alrasin.jarvis.voice.WakeModels
 import com.alrasin.jarvis.voice.WakeWordDetector
+import com.alrasin.jarvis.voice.Voices
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.Dispatchers
@@ -42,7 +42,11 @@ import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
+import com.k2fsa.sherpa.onnx.GeneratedAudio
 import kotlinx.coroutines.runBlocking
 import java.util.concurrent.atomic.AtomicInteger
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -83,7 +87,12 @@ class JarvisCoreService : LifecycleService() {
     @Volatile private var speakerThreshold = Settings.DEFAULT_SPEAKER_THRESHOLD
     /** Set by the Settings tab: the mic loop records [ENROLL_CHUNKS] of the owner's voice for voice ID. */
     @Volatile private var enrollRequested = false
-    private var tts: Deferred<TextToSpeech?>? = null
+    @Volatile private var tts: Deferred<TextToSpeech?>? = null
+    private var voiceJob: Job? = null
+    /** Generating and closing a voice must not overlap (native code). */
+    private val ttsLock = Mutex()
+    @Volatile private var speechEpoch = 0
+    @Volatile private var voiceSpeed = 1.0f
     private val speech = Channel<String>(Channel.UNLIMITED)
     private val speechLeft = AtomicInteger(0)
     private var batteryWarnedAt = 100
@@ -121,20 +130,37 @@ class JarvisCoreService : LifecycleService() {
         return START_STICKY
     }
 
-    /** Loads the voice once and starts the speaker loop (sentences are queued in [speech]). */
+    /**
+     * Loads the chosen voice and starts the speaker: one coroutine makes the audio for the next sentence
+     * while the other plays the current one (Supertonic takes about as long to make as to play).
+     * [speechEpoch] goes up on "stop", so audio made before that is thrown away.
+     */
     private fun ensureVoice() {
-        if (tts != null) return
-        tts = lifecycleScope.async(Dispatchers.IO) {
-            runCatching { TextToSpeech(this@JarvisCoreService) }
-                .onFailure { JarvisLog.e("voice not loaded (run tools/fetch_speech.sh)", it) }
-                .getOrNull()
+        if (voiceJob != null) return
+        voiceJob = lifecycleScope.launch(Dispatchers.IO) {
+            settings.voice.distinctUntilChanged().collect { id -> switchVoice(id) }
         }
+        lifecycleScope.launch { settings.voiceSpeed.collect { s -> voiceSpeed = s; readyVoice()?.speed = s } }
+        val audio = Channel<Pair<Int, GeneratedAudio>>(1)
         lifecycleScope.launch(Dispatchers.IO) {
             for (s in speech) {
-                try {
-                    tts?.await()?.speak(s)
+                val epoch = speechEpoch
+                val made = try {
+                    ttsLock.withLock { tts?.await()?.generate(s) }
                 } catch (t: Throwable) {
                     JarvisLog.e("speak failed", t)
+                    null
+                }
+                if (made != null && epoch == speechEpoch) audio.send(epoch to made) else speechLeft.decrementAndGet()
+            }
+            audio.close()
+        }
+        lifecycleScope.launch(Dispatchers.IO) {
+            for ((epoch, a) in audio) {
+                try {
+                    if (epoch == speechEpoch) TextToSpeech.playPcm(a.samples, a.sampleRate) { epoch != speechEpoch }
+                } catch (t: Throwable) {
+                    JarvisLog.e("play failed", t)
                 } finally {
                     speechLeft.decrementAndGet()
                 }
@@ -162,6 +188,25 @@ class JarvisCoreService : LifecycleService() {
         }
     }
 
+    /** Loads voice [id] (falls back to the built-in voice if it is not downloaded or fails), then frees the old one. */
+    private suspend fun switchVoice(id: String) {
+        val old = tts
+        val next = lifecycleScope.async(Dispatchers.IO) {
+            val v = Voices.byId(id).takeIf { Voices.installed(this@JarvisCoreService, it.pack) } ?: Voices.byId(Voices.BUILT_IN)
+            runCatching { TextToSpeech(this@JarvisCoreService, v, speed = voiceSpeed) }
+                .recoverCatching { if (v.id == Voices.BUILT_IN) throw it else TextToSpeech(this@JarvisCoreService, speed = voiceSpeed) }
+                .onSuccess { JarvisLog.i("voice: ${it.voice.id}") }
+                .onFailure { JarvisLog.e("voice not loaded (run tools/fetch_speech.sh)", it) }
+                .getOrNull()
+        }
+        tts = next
+        next.await()
+        old?.await()?.let { o -> ttsLock.withLock { o.close() } }
+    }
+
+    @OptIn(ExperimentalCoroutinesApi::class)
+    private fun readyVoice(): TextToSpeech? = tts?.takeIf { it.isCompleted }?.getCompleted()
+
     private fun say(text: String) {
         if (text.isBlank()) return
         speechLeft.incrementAndGet()
@@ -174,8 +219,8 @@ class JarvisCoreService : LifecycleService() {
 
     @OptIn(ExperimentalCoroutinesApi::class)
     private fun shutUp() {
+        speechEpoch++
         while (speech.tryReceive().isSuccess) speechLeft.decrementAndGet()
-        tts?.takeIf { it.isCompleted }?.getCompleted()?.stop()
         listenRequest = null
     }
 
@@ -232,6 +277,7 @@ class JarvisCoreService : LifecycleService() {
                 JarvisLog.i("reply (${r.tool ?: "talk"}): ${r.text}")
                 _reply.value = r.text
                 _turnId.value = r.turnId
+                _lastTurn.value = Turn(r.turnId, text, r.text, r.tool)
                 Notifications.showReply(this@JarvisCoreService, text, r.text)
                 _phase.value = PHASE_SPEAKING
                 if (r.tool == "panic") shutUp()
@@ -317,7 +363,7 @@ class JarvisCoreService : LifecycleService() {
             AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT,
             maxOf(minBuf, WakeWordDetector.SAMPLE_RATE * 2),   // 1 s: room for slow STT decode steps
         )
-        val tone = ToneGenerator(AudioManager.STREAM_NOTIFICATION, 80)
+        val tone = Chimes()
         val clips = ClipCollector()
         try {
             rec.startRecording()
@@ -355,7 +401,7 @@ class JarvisCoreService : LifecycleService() {
                     enrolling.add(chunk.copyOf())
                     if (enrolling.size >= ENROLL_CHUNKS) {
                         enrollAudio = null
-                        tone.startTone(ToneGenerator.TONE_PROP_ACK, 200)
+                        tone.done()
                         finishEnroll(join(enrolling))
                     }
                     continue
@@ -365,13 +411,13 @@ class JarvisCoreService : LifecycleService() {
                     enrollAudio = ArrayList()
                     wasBusy = true
                     _enrollStatus.value = "Recording… keep talking for $ENROLL_SECONDS seconds."
-                    tone.startTone(ToneGenerator.TONE_PROP_BEEP, 120)
+                    tone.listen()
                     continue
                 }
                 val req = listenRequest
                 if (req != null && stt != null) {
                     listenRequest = null
-                    tone.startTone(ToneGenerator.TONE_PROP_BEEP, 120)
+                    tone.listen()
                     command = stt.session(null, waitStart = if (req == "follow_up") FOLLOW_UP_WAIT else SpeechToText.WAIT_START)
                     commandSource = req
                     commandAudio.clear()
@@ -404,7 +450,7 @@ class JarvisCoreService : LifecycleService() {
             stt?.close()
             rec.stop()
             rec.release()
-            tone.release()
+            tone.close()
             detector.close()
             _running.value = false
             _phase.value = PHASE_WAKE
@@ -443,14 +489,14 @@ class JarvisCoreService : LifecycleService() {
     /** A command was heard: answer it. Empty after a follow-up means the conversation is over. */
     private fun onCommand(
         text: String, raw: String, source: String, wakeId: Long?, wakeScore: Float, audioPath: String?, audio: ShortArray,
-        tone: ToneGenerator,
+        tone: Chimes,
     ) {
         JarvisLog.i("heard ($source): \"$text\"")
         if (source == "voice") _wakeId.value = wakeId
         if (wakeId != null) Notifications.showWakeCheck(this, wakeId, wakeScore, heard = text.ifEmpty { "(nothing)" })
         if (text.isEmpty()) {
             _heard.value = if (source == "follow_up") "" else AssistantActivity.NOTHING_HEARD
-            if (source != "follow_up") tone.startTone(ToneGenerator.TONE_PROP_NACK, 200)
+            if (source != "follow_up") tone.error()
             _phase.value = PHASE_WAKE
             return
         }
@@ -470,7 +516,7 @@ class JarvisCoreService : LifecycleService() {
             private set
 
         /** Returns true when the wake word was just heard. */
-        suspend fun onChunk(score: Float, thr: Float, ring: AudioRing, tone: ToneGenerator): Boolean {
+        suspend fun onChunk(score: Float, thr: Float, ring: AudioRing, tone: Chimes): Boolean {
             val now = System.currentTimeMillis()
             if (missedRequested) {
                 missedRequested = false
@@ -479,7 +525,7 @@ class JarvisCoreService : LifecycleService() {
             }
             if (score >= thr && now - lastWakeMs > WAKE_COOLDOWN_MS) {
                 lastWakeMs = now
-                tone.startTone(ToneGenerator.TONE_PROP_BEEP2, 150)
+                tone.wake()
                 pendingKind = WakeEvent.VERDICT_NONE
                 pendingPeak = score
                 pendingChunks = AFTER_CHUNKS
@@ -527,6 +573,7 @@ class JarvisCoreService : LifecycleService() {
         listenJob?.cancel()
         runCatching { unregisterReceiver(battery) }
         speech.close()
+        speechEpoch++
         tts?.let { d -> if (d.isCompleted && !speaking) d.getCompleted()?.close() else d.cancel() }
         wakeLock?.takeIf { it.isHeld }?.release()
         _running.value = false
@@ -596,6 +643,9 @@ class JarvisCoreService : LifecycleService() {
         private val _turnId = MutableStateFlow(0L)
         /** conversation_turn id of the last answer (for ✓ / ✗ in the panel). */
         val turnId: StateFlow<Long> = _turnId
+        private val _lastTurn = MutableStateFlow<Turn?>(null)
+        /** The last finished turn, all fields from the same moment (panel chat bubbles). */
+        val lastTurn: StateFlow<Turn?> = _lastTurn
         private val _wakeId = MutableStateFlow<Long?>(null)
         /** wake_event id of the last voice wake (for "I didn't call"). */
         val wakeId: StateFlow<Long?> = _wakeId
@@ -638,3 +688,6 @@ class JarvisCoreService : LifecycleService() {
         )
     }
 }
+
+/** One finished command: what was heard and what Jimi answered. */
+data class Turn(val id: Long, val heard: String, val reply: String, val tool: String?)

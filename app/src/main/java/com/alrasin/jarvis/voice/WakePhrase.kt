@@ -9,6 +9,7 @@ object WakePhrase {
         "hey", "hay", "hi", "a", "jimmy", "jimi", "jimmie", "jamie", "jim", "gym", "me", "mi",
         // real mishears of "Hey Jimi" from the user's commands (2026-10-22)
         "zumi", "zoomy", "azumi", "hazumi", "zimmy", "jimmi", "hazy", "yumi",
+        "izumi", "hayzumi", "zooming",
     )
     private const val MAX_WORDS = 4
 
@@ -24,7 +25,7 @@ object WakePhrase {
 
     private fun isWakeWord(w: String) = w in WORDS || looksLikeJimi(w)
 
-    private val STRONG = setOf("zumi", "azumi", "hazumi", "zimmy", "zoomy")
+    private val STRONG = setOf("zumi", "azumi", "hazumi", "zimmy", "zoomy", "izumi", "hayzumi")
 
     private fun looksLikeJimi(w: String) =
         w.startsWith("jim") || w.startsWith("gym") || w.startsWith("jem") || w.startsWith("zim")

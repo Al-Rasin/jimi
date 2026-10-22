@@ -32,7 +32,17 @@ object RuleMatcher {
             .replace(Regex("[^a-z0-9' ]"), " ")
             .replace("'s ", "s ").replace("'", "")
             .replace(Regex("\\s+"), " ").trim(),
-    ).let { polite(it) }
+    ).let { polite(mishears(it)) }
+
+    /** Speech-to-text mistakes seen in the user's real commands (files/commands, 2026-10-22). */
+    private val MISHEARS = listOf(
+        Regex("\\b(?:flush ?light|flesh ?light|flash ?lite|flashlights)\\b") to "flashlight",
+        Regex("\\bsound (up|down|off|of|max|maximum|full)\\b") to "volume $1",
+        Regex("\\b(volume|sound) of\\b") to "$1 off",
+        Regex("\\b(?:turn|switch) of\\b") to "turn off",
+    )
+
+    private fun mishears(t: String) = MISHEARS.fold(t) { s, (r, to) -> r.replace(s, to) }
 
     /** Drops "please", "can you", "jarvis" etc. around the command. */
     private fun polite(t: String): String {
@@ -71,6 +81,11 @@ object RuleMatcher {
         val on = Regex("\\b(turn on|switch on|enable|activate|start|open)\\b").containsMatchIn(t) || t.endsWith(" on")
         val off = Regex("\\b(turn off|switch off|disable|deactivate|stop|close|shut off)\\b").containsMatchIn(t) || t.endsWith(" off")
         if (on == off) {
+            // "down on flashlight" / "do you mean on flashlight": STT lost "turn", but "on" right before the name is enough
+            for ((target, names) in TOGGLE_TARGETS) {
+                val m = Regex("\\b(on|off) (?:the |my )?(?:${names.joinToString("|")})$").find(t) ?: continue
+                return call("toggle", "target" to target, "state" to m.groupValues[1])
+            }
             // "toggle wifi" / "flashlight" alone
             if (!t.startsWith("toggle ")) return null
         }

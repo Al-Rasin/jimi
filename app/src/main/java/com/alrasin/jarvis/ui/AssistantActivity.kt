@@ -95,6 +95,10 @@ private fun Panel(vm: PanelViewModel, onClose: () -> Unit) {
     val reply by vm.reply.collectAsStateWithLifecycle()
     val level by vm.micLevel.collectAsStateWithLifecycle()
     val past by vm.exchanges.collectAsStateWithLifecycle()
+    val live by vm.live.collectAsStateWithLifecycle()
+    val reported by vm.reported.collectAsStateWithLifecycle()
+    var reporting by remember { mutableStateOf(false) }
+    var reportText by remember { mutableStateOf("") }
     var fixing by remember { mutableStateOf(false) }
     var fixText by remember { mutableStateOf("") }
     var typed by remember { mutableStateOf("") }
@@ -176,32 +180,49 @@ private fun Panel(vm: PanelViewModel, onClose: () -> Unit) {
                             Modifier.fillMaxWidth().heightIn(max = 340.dp).verticalScroll(scroll),
                             verticalArrangement = Arrangement.spacedBy(8.dp),
                         ) {
-                            past.forEach { (h, r) -> Bubble(h, mine = true); Bubble(r, mine = false) }
-                            val live = heard to reply
-                            if (past.lastOrNull() != live) {
-                                if (heard.isBlank() && past.isEmpty()) {
-                                    Text(
-                                        "How can I help, Boss?",
-                                        style = MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.Light),
-                                        color = PanelColors.Dim,
-                                        textAlign = TextAlign.Center,
-                                        modifier = Modifier.fillMaxWidth().padding(vertical = 6.dp),
-                                    )
-                                }
-                                if (heard == AssistantActivity.NOTHING_HEARD) {
-                                    Text("I didn't catch that, Boss.", color = PanelColors.Dim, modifier = Modifier.padding(start = 34.dp))
-                                } else {
-                                    Bubble(heard, mine = true)
-                                }
-                                // the reply of the last finished turn stays in the service until the next answer
-                                if (past.lastOrNull()?.second != reply) Bubble(replyShown, mine = false)
+                            past.forEachIndexed { i, t ->
+                                Bubble(t.heard, mine = true)
+                                // the newest answer types out
+                                Bubble(if (i == past.lastIndex && t.reply == reply) replyShown else t.reply, mine = false)
+                            }
+                            if (!live && past.isEmpty() && heard != AssistantActivity.NOTHING_HEARD) {
+                                Text(
+                                    "How can I help, Boss?",
+                                    style = MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.Light),
+                                    color = PanelColors.Dim,
+                                    textAlign = TextAlign.Center,
+                                    modifier = Modifier.fillMaxWidth().padding(vertical = 6.dp),
+                                )
+                            }
+                            if (heard == AssistantActivity.NOTHING_HEARD) {
+                                Text("I didn't catch that, Boss.", color = PanelColors.Dim, modifier = Modifier.padding(start = 34.dp))
+                            } else if (live) {
+                                Bubble(heard, mine = true)
+                                if (reply.isNotBlank()) Bubble(replyShown, mine = false)
                             }
                         }
-                        if (heard.isNotBlank() && !fixing) {
+                        val last = past.lastOrNull()
+                        if (last != null && !live && !fixing && !reporting) {
                             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                                 Chip(if (rated) "✓ Thanks" else "✓ Right", enabled = !rated) { touch(); rated = true; vm.right() }
-                                Chip("✎ Wrong text") { touch(); fixText = heard; fixing = true }
-                                Chip("I didn't call") { vm.notCalled(); close() }
+                                if (reported == last.id) {
+                                    Chip("✗ Saved", enabled = false) {}
+                                } else {
+                                    Chip("✗ Wrong answer") { touch(); reportText = ""; reporting = true }
+                                }
+                                Chip("✎ Wrong text") { touch(); fixText = last.heard; fixing = true }
+                            }
+                            Chip("I didn't call") { vm.notCalled(); close() }
+                        }
+                        if (reporting) {
+                            OutlinedTextField(
+                                value = reportText, onValueChange = { touch(); reportText = it },
+                                label = { Text("What should Jimi have done? (optional)") }, modifier = Modifier.fillMaxWidth(),
+                                shape = RoundedCornerShape(16.dp),
+                            )
+                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                Button(onClick = { reporting = false; touch(); vm.wrongAnswer(reportText.trim()) }) { Text("Save for later") }
+                                TextButton(onClick = { reporting = false }) { Text("Cancel") }
                             }
                         }
                         if (fixing) {

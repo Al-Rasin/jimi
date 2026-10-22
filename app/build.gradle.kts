@@ -107,6 +107,7 @@ dependencies {
     implementation(libs.libsu.core)
     implementation(libs.okhttp)
     implementation(libs.jsoup)
+    implementation(libs.commons.compress)
     // Optional cloud chat (PLAN 14, off by default)
     implementation(libs.anthropic.java)
 

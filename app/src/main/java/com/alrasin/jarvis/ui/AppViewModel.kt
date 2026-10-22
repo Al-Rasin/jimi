@@ -25,6 +25,10 @@ import com.alrasin.jarvis.data.TurnDao
 import com.alrasin.jarvis.actions.ReminderScheduler
 import com.alrasin.jarvis.service.JarvisCoreService
 import com.alrasin.jarvis.voice.SpeakerVerifier
+import com.alrasin.jarvis.voice.TextToSpeech
+import com.alrasin.jarvis.voice.Voice
+import com.alrasin.jarvis.voice.VoicePack
+import com.alrasin.jarvis.voice.Voices
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
@@ -74,6 +78,14 @@ class AppViewModel @Inject constructor(
     val cloudSendFacts = settings.cloudSendFacts.state(false)
     val cloudKeySet = MutableStateFlow(secrets.has(Secrets.CLOUD_KEY))
     val homeCity = settings.homeCity.state("Dhaka")
+    val voice = settings.voice.state(Voices.BUILT_IN)
+    val voiceSpeed = settings.voiceSpeed.state(1.0f)
+    /** Ids of downloaded voice packs. */
+    val installedPacks = MutableStateFlow(installedNow())
+    /** Pack id → download progress 0..1. */
+    val downloads = MutableStateFlow<Map<String, Float>>(emptyMap())
+    /** Id of the voice being tried, null when idle. */
+    val trying = MutableStateFlow<String?>(null)
     val toolNames: List<String> get() = registry.all.map { it.name }.sorted()
 
     private val _message = MutableStateFlow("")
@@ -126,6 +138,39 @@ class AppViewModel @Inject constructor(
     fun setCloudEnabled(v: Boolean) = viewModelScope.launch { settings.setCloudEnabled(v) }
     fun setCloudForChat(v: Boolean) = viewModelScope.launch { settings.setCloudForChat(v) }
     fun setCloudSendFacts(v: Boolean) = viewModelScope.launch { settings.setCloudSendFacts(v) }
+
+    private fun installedNow() = Voices.ALL.map { it.pack }.distinct().filter { Voices.installed(app, it) }.map { it.id }.toSet()
+
+    fun downloadVoice(pack: VoicePack) {
+        if (pack.id in downloads.value) return
+        downloads.value += pack.id to 0f
+        viewModelScope.launch {
+            runCatching { Voices.download(app, pack) { p -> downloads.value += pack.id to p } }
+                .onFailure { JarvisLog.e("voice download failed", it); _message.value = "Download failed. Check internet and try again." }
+            downloads.value -= pack.id
+            installedPacks.value = installedNow()
+        }
+    }
+
+    fun deleteVoice(pack: VoicePack) {
+        if (Voices.byId(voice.value).pack.id == pack.id) setVoice(Voices.BUILT_IN)
+        Voices.delete(app, pack)
+        installedPacks.value = installedNow()
+    }
+
+    fun setVoice(id: String) = viewModelScope.launch { settings.setVoice(id) }
+    fun setVoiceSpeed(v: Float) = viewModelScope.launch { settings.setVoiceSpeed(v) }
+
+    /** Loads [v] just for a sample sentence (a few seconds the first time), then frees it. */
+    fun tryVoice(v: Voice) {
+        if (trying.value != null) return
+        trying.value = v.id
+        viewModelScope.launch(Dispatchers.IO) {
+            runCatching { TextToSpeech(app, v, speed = voiceSpeed.value).use { it.speak("Hi Boss, I'm Jimi. How can I help?") } }
+                .onFailure { JarvisLog.e("try voice failed", it) }
+            trying.value = null
+        }
+    }
 
     fun setCloudKey(key: String) {
         secrets.put(Secrets.CLOUD_KEY, key.trim().ifEmpty { null })

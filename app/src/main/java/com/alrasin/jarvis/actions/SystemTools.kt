@@ -17,6 +17,7 @@ import android.os.Environment
 import android.os.PowerManager
 import android.os.StatFs
 import android.provider.Settings
+import com.alrasin.jarvis.core.JarvisLog
 import com.alrasin.jarvis.core.Risk
 import com.alrasin.jarvis.core.Tool
 import com.alrasin.jarvis.core.ToolResult
@@ -25,11 +26,12 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 
-/** Torch state is only known through a callback. */
 /** Flashlight. Camera service is opened on first use, so a camera problem never breaks the tool list. */
 class Torch(private val context: Context) {
     @Volatile private var state = false
-    val on: Boolean get() = runCatching { cm; state }.getOrDefault(false)
+    /** Set when the LED was switched with root; the camera callback does not see that (it reports off). */
+    @Volatile private var ledOn = false
+    val on: Boolean get() = ledOn || runCatching { cm; state }.getOrDefault(false)
 
     private val cm: CameraManager by lazy {
         context.getSystemService(CameraManager::class.java).also { cm ->
@@ -43,7 +45,21 @@ class Torch(private val context: Context) {
             .getOrNull()
     }
 
-    fun set(value: Boolean): Boolean = runCatching { id?.let { cm.setTorchMode(it, value); true } ?: false }.getOrDefault(false)
+    /** Camera API first; MIUI refuses it for background apps, then the flash LED is switched with root. */
+    suspend fun set(value: Boolean): Boolean {
+        val api = runCatching { id?.let { cm.setTorchMode(it, value); true } ?: false }
+            .onFailure { JarvisLog.e("torch: camera API failed", it) }.getOrDefault(false)
+        if (api) { ledOn = false; return true }
+        val ok = RootShell.run("for l in $LEDS; do [ -w \$l/brightness ] && echo ${if (value) LED_ON else 0} > \$l/brightness; done; true").ok
+        if (ok) ledOn = value
+        return ok
+    }
+
+    companion object {
+        /** MediaTek flash LEDs (Redmi 10 Prime: torch-light0). */
+        private const val LEDS = "/sys/class/leds/torch-light0 /sys/class/leds/flashlight"
+        private const val LED_ON = 200
+    }
 }
 
 val TOGGLE_TARGETS = listOf("flashlight", "wifi", "bluetooth", "data", "dnd", "airplane", "location", "hotspot", "battery_saver", "auto_rotate")

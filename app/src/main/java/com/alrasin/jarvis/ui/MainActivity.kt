@@ -29,7 +29,7 @@ class MainActivity : ComponentActivity() {
         intent.getStringExtra("stt_dir")?.let {
             vm.speechTest(it, intent.getStringExtra("stt_model"), speak = !intent.hasExtra("no_speak"))
         }
-        intent.getStringExtra("tts_dir")?.let { vm.voiceBench(it) }
+        intent.getStringExtra("voice_bench")?.let { vm.voiceBench(it) }
         setContent {
             JimiTheme {
                 AppShell(appVm, vm)

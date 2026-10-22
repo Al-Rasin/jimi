@@ -3,11 +3,13 @@ package com.alrasin.jarvis.ui
 import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import com.alrasin.jarvis.core.WrongAnswers
 import com.alrasin.jarvis.data.TurnDao
 import com.alrasin.jarvis.data.WakeEvent
 import com.alrasin.jarvis.data.WakeEventDao
 import com.alrasin.jarvis.service.JarvisCoreService
 import com.alrasin.jarvis.service.Notifications
+import com.alrasin.jarvis.service.Turn
 import com.alrasin.jarvis.service.WakeFeedback
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Dispatchers
@@ -29,15 +31,33 @@ class PanelViewModel @Inject constructor(
     val turnId = JarvisCoreService.turnId
     val wakeId = JarvisCoreService.wakeId
 
-    private val _exchanges = MutableStateFlow<List<Pair<String, String>>>(emptyList())
-    /** Finished heard → reply pairs since this panel opened (chat bubbles). */
-    val exchanges: StateFlow<List<Pair<String, String>>> = _exchanges
+    private val _exchanges = MutableStateFlow<List<Turn>>(emptyList())
+    /** Finished turns since this panel opened (chat bubbles). */
+    val exchanges: StateFlow<List<Turn>> = _exchanges
+    private val _live = MutableStateFlow(false)
+    /** True while a command is being heard or answered; false once it is in [exchanges]. */
+    val live: StateFlow<Boolean> = _live
+    private val _reported = MutableStateFlow(0L)
+    /** Turn id of the last "wrong answer" report (to show "Saved"). */
+    val reported: StateFlow<Long> = _reported
 
     init {
-        val opened = turnId.value
+        val opened = JarvisCoreService.lastTurn.value?.id
         viewModelScope.launch {
-            turnId.collect { id -> if (id > 0 && id != opened) _exchanges.value = _exchanges.value + (heard.value to reply.value) }
+            JarvisCoreService.lastTurn.collect { t ->
+                if (t == null || t.id == opened || _exchanges.value.any { it.id == t.id }) return@collect
+                _exchanges.value = _exchanges.value + t
+                _live.value = false
+            }
         }
+        viewModelScope.launch { heard.collect { _live.value = it.isNotBlank() && it != JarvisCoreService.lastTurn.value?.heard } }
+    }
+
+    /** ✗ on the answer: saves a report for diagnosis (WrongAnswers). */
+    fun wrongAnswer(note: String) {
+        val t = _exchanges.value.lastOrNull() ?: JarvisCoreService.lastTurn.value ?: return
+        _reported.value = t.id
+        viewModelScope.launch(Dispatchers.IO) { WrongAnswers.save(app, t.id, t.heard, t.reply, t.tool, note) }
     }
 
     /** ✓: the heard text was right. */
