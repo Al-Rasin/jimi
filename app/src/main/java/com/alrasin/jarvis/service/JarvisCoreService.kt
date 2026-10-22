@@ -9,9 +9,6 @@ import android.content.Intent
 import android.content.IntentFilter
 import android.content.pm.PackageManager
 import android.content.pm.ServiceInfo
-import android.media.AudioFormat
-import android.media.AudioRecord
-import android.media.MediaRecorder
 import android.os.BatteryManager
 import android.os.PowerManager
 import androidx.lifecycle.LifecycleService
@@ -38,6 +35,7 @@ import com.alrasin.jarvis.voice.WakeWordDetector
 import com.alrasin.jarvis.voice.Voices
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.Deferred
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.Job
@@ -103,6 +101,20 @@ class JarvisCoreService : LifecycleService() {
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         super.onStartCommand(intent, flags, startId)
+        if (intent?.action != ACTION_STOP) {
+            try {
+                startForeground(
+                    Notifications.ID_SERVICE,
+                    Notifications.listening(this, "Say \"Hey Jimi\""),
+                    ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE,
+                )
+            } catch (failure: RuntimeException) {
+                JarvisLog.e("Open Jimi to grant microphone access and resume listening", failure)
+                Notifications.showResumeListening(this)
+                stopSelf()
+                return START_NOT_STICKY
+            }
+        }
         when (intent?.action) {
             ACTION_STOP -> {
                 lifecycleScope.launch { settings.setListeningEnabled(false) }
@@ -118,14 +130,9 @@ class JarvisCoreService : LifecycleService() {
             ACTION_SHUT_UP -> shutUp()
             ACTION_ENROLL -> enrollRequested = true
         }
-        startForeground(
-            Notifications.ID_SERVICE,
-            Notifications.listening(this, "Say \"Hey Jimi\""),
-            ServiceInfo.FOREGROUND_SERVICE_TYPE_MICROPHONE,
-        )
         ensureVoice()
         val on = intent?.action !in QUIET_ACTIONS || runBlocking { settings.listeningEnabled.first() }
-        if (listenJob == null && on) {
+        if (listenJob?.isActive != true && on) {
             startListening()
             BootReceiver.schedule(this)
         }
@@ -321,7 +328,7 @@ class JarvisCoreService : LifecycleService() {
             } finally {
                 delay(TAIL_MS)   // let the speaker go quiet before the mic listens again
                 listenRequest = next
-                if (next == null) _phase.value = PHASE_WAKE
+                if (next == null) _phase.value = if (_microphoneAvailable.value) PHASE_WAKE else PHASE_MIC_BUSY
                 speaking = false
             }
         }
@@ -357,9 +364,14 @@ class JarvisCoreService : LifecycleService() {
         listenJob = lifecycleScope.launch(Dispatchers.Default) {
             try {
                 listenLoop()
+            } catch (cancelled: CancellationException) {
+                throw cancelled
             } catch (t: Throwable) {
                 JarvisLog.e("listening stopped", t)
+                Notifications.showResumeListening(this@JarvisCoreService)
+            } finally {
                 _running.value = false
+                wakeLock?.takeIf { it.isHeld }?.release()
             }
         }
     }
@@ -386,28 +398,37 @@ class JarvisCoreService : LifecycleService() {
         var wasBusy = false
         var enrollAudio: ArrayList<ShortArray>? = null
         val chunk = ShortArray(WakeWordDetector.CHUNK)
-        val ring = AudioRing(WakeWordDetector.SAMPLE_RATE * RING_SECONDS)
-        val minBuf = AudioRecord.getMinBufferSize(
-            WakeWordDetector.SAMPLE_RATE, AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT,
-        )
-        val rec = AudioRecord(
-            MediaRecorder.AudioSource.VOICE_RECOGNITION, WakeWordDetector.SAMPLE_RATE,
-            AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT,
-            maxOf(minBuf, WakeWordDetector.SAMPLE_RATE * 2),   // 1 s: room for slow STT decode steps
-        )
+        var ring = AudioRing(WakeWordDetector.SAMPLE_RATE * RING_SECONDS)
+        val rec = SharedMicrophone(this, WakeWordDetector.SAMPLE_RATE) { available ->
+            _microphoneAvailable.value = available
+            if (!speaking) _phase.value = if (available) PHASE_WAKE else PHASE_MIC_BUSY
+            Notifications.updateListening(this, if (available) PHASE_WAKE else PHASE_MIC_BUSY)
+        }
         val tone = Chimes()
-        val clips = ClipCollector()
+        var clips = ClipCollector()
+        var interrupted = false
         try {
-            rec.startRecording()
             _running.value = true
             JarvisLog.i("listening")
             while (currentCoroutineContext().isActive) {
-                var got = 0
-                while (got < chunk.size) {
-                    val n = rec.read(chunk, got, chunk.size - got)
-                    if (n < 0) error("AudioRecord.read = $n")
-                    got += n
+                if (!rec.read(chunk)) {
+                    if (interrupted) continue
+                    interrupted = true
+                    command?.close()
+                    command = null
+                    commandAudio.clear()
+                    if (enrollAudio != null) _enrollStatus.value = "Microphone interrupted. Please record again."
+                    enrollAudio = null
+                    listenRequest = null
+                    _micLevel.value = 0f
+                    _lastScore.value = 0f
+                    _heard.value = ""
+                    ring = AudioRing(WakeWordDetector.SAMPLE_RATE * RING_SECONDS)
+                    clips = ClipCollector()
+                    detector.reset()
+                    continue
                 }
+                interrupted = false
                 ring.write(chunk)
                 val cmd = command
                 if (cmd != null) {
@@ -480,11 +501,11 @@ class JarvisCoreService : LifecycleService() {
         } finally {
             command?.close()
             stt?.close()
-            rec.stop()
-            rec.release()
+            rec.close()
             tone.close()
             detector.close()
             _running.value = false
+            _microphoneAvailable.value = false
             _phase.value = PHASE_WAKE
         }
     }
@@ -646,9 +667,12 @@ class JarvisCoreService : LifecycleService() {
         const val PHASE_SPEAKING = "Speaking…"
         const val PHASE_THINKING = "Thinking…"
         const val PHASE_FOLLOW_UP = "Anything else?"
+        const val PHASE_MIC_BUSY = "Microphone busy or unavailable. Jimi will retry."
 
         private val _running = MutableStateFlow(false)
         val running: StateFlow<Boolean> = _running
+        private val _microphoneAvailable = MutableStateFlow(false)
+        val microphoneAvailable: StateFlow<Boolean> = _microphoneAvailable
         private val _modelName = MutableStateFlow("")
         val modelName: StateFlow<String> = _modelName
         private val _lastScore = MutableStateFlow(0f)
@@ -688,8 +712,15 @@ class JarvisCoreService : LifecycleService() {
         /** Voice ID score of the last locked command (to tune the threshold). */
         val lastVoiceScore: StateFlow<Float?> = _lastVoiceScore
 
-        fun start(context: Context) =
-            context.startForegroundService(Intent(context, JarvisCoreService::class.java))
+        fun start(context: Context) = startSafely(context, Intent(context, JarvisCoreService::class.java))
+
+        private fun startSafely(context: Context, intent: Intent) = try {
+            context.startForegroundService(intent)
+        } catch (failure: RuntimeException) {
+            JarvisLog.e("Jimi needs to be opened before listening can resume", failure)
+            Notifications.showResumeListening(context)
+            null
+        }
 
         /** Save the last 3 s as a "missed" clip (wake word was said but not detected). */
         fun missed(context: Context) = context.startService(
@@ -697,7 +728,7 @@ class JarvisCoreService : LifecycleService() {
         )
 
         private fun send(context: Context, action: String, text: String? = null, source: String? = null) =
-            context.startForegroundService(
+            startSafely(context,
                 Intent(context, JarvisCoreService::class.java).setAction(action)
                     .putExtra(EXTRA_TEXT, text).putExtra(EXTRA_SOURCE, source),
             )

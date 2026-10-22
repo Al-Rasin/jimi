@@ -22,7 +22,7 @@ import java.io.File
  * their timestamps, so they neither show up in the text nor count as "the user already spoke".
  */
 class SpeechToText(context: Context, dir: File? = null) : AutoCloseable {
-    private val modelDir = dir ?: overrideDir(context).takeIf { File(it, "tokens.txt").isFile }
+    private val modelDir = dir ?: overrideDir(context).takeIf(ModelFiles::speechReady)
     val modelName: String = modelDir?.name ?: "built-in Kroko en"
 
     private val recognizer = OnlineRecognizer(
@@ -110,7 +110,7 @@ class SpeechToText(context: Context, dir: File? = null) : AutoCloseable {
     companion object {
         private const val DIR = "stt"
 
-        fun overrideDir(context: Context) = File(context.getExternalFilesDir(null), "models/stt")
+        fun overrideDir(context: Context) = PortableModels.dir(context, "stt")
 
         /**
          * Joins [tokens] into words (a token starting with a space starts a word), drops words that start before

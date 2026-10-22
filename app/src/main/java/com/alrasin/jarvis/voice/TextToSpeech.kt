@@ -31,10 +31,13 @@ class TextToSpeech(
     @Volatile var speed = speed
 
     init {
-        val data = copyEspeakData(context).path
         val pack = voice.pack
-        val builtIn = pack.id == Voices.BUILT_IN
-        fun f(name: String) = if (builtIn) "$DIR/$name" else File(Voices.dir(context, pack), name).path
+        val data = if (pack.engine == Engine.PIPER) copyEspeakData(context).path else ""
+        val downloaded = PortableModels.dir(context, DIR)
+        val localAlan = pack.id == Voices.BUILT_IN && ModelFiles.voiceReady(downloaded)
+        val builtIn = pack.id == Voices.BUILT_IN && !localAlan
+        fun f(name: String) = if (builtIn) "$DIR/$name"
+            else File(if (localAlan) downloaded else Voices.dir(context, pack), name).path
         val model = when (pack.engine) {
             Engine.PIPER -> OfflineTtsModelConfig(
                 vits = OfflineTtsVitsModelConfig(model = f(pack.model), tokens = f("tokens.txt"), dataDir = data),
@@ -134,6 +137,8 @@ class TextToSpeech(
         }
 
         private fun copyEspeakData(context: Context): File {
+            val downloaded = File(PortableModels.dir(context, DIR), ESPEAK)
+            if (ModelFiles.voiceReady(PortableModels.dir(context, DIR))) return downloaded
             val dest = File(context.filesDir, ESPEAK)
             val marker = File(dest, ".copied")
             if (marker.isFile) return dest

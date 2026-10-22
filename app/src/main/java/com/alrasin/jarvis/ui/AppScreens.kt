@@ -82,6 +82,18 @@ private val SUGGESTIONS = listOf("What's the weather?", "Set a timer for 5 minut
 
 @Composable
 fun AppShell(vm: AppViewModel, home: HomeViewModel) {
+    val setupComplete by vm.setupComplete.collectAsStateWithLifecycle()
+    var setupOpen by rememberSaveable { mutableStateOf(false) }
+    var deviceCheckOpen by rememberSaveable { mutableStateOf(false) }
+    if (setupComplete == null) return
+    if (setupComplete == false || setupOpen) {
+        SetupWizard(vm, home) { vm.finishSetup(); setupOpen = false }
+        return
+    }
+    if (deviceCheckOpen) {
+        DeviceCheckScreen(vm) { deviceCheckOpen = false }
+        return
+    }
     var tab by rememberSaveable { mutableIntStateOf(0) }
     val running by home.running.collectAsStateWithLifecycle()
     val phase by home.phase.collectAsStateWithLifecycle()
@@ -122,7 +134,7 @@ fun AppShell(vm: AppViewModel, home: HomeViewModel) {
                 1 -> HistoryTab(vm)
                 2 -> AlertsTab(vm)
                 3 -> NotesTab(vm)
-                4 -> SettingsTab(vm)
+                4 -> SettingsTab(vm, { setupOpen = true }, { deviceCheckOpen = true })
                 else -> HomeScreen(home)
             }
         }
@@ -345,7 +357,7 @@ private fun NotesTab(vm: AppViewModel) {
 private fun Header(t: String) = GradientTitle(t, 22, Modifier.padding(top = 12.dp))
 
 @Composable
-private fun SettingsTab(vm: AppViewModel) {
+private fun SettingsTab(vm: AppViewModel, onSetup: () -> Unit, onDeviceCheck: () -> Unit) {
     val followUp by vm.followUp.collectAsStateWithLifecycle()
     val panel by vm.showPanel.collectAsStateWithLifecycle()
     val autoClear by vm.autoClear.collectAsStateWithLifecycle()
@@ -370,10 +382,13 @@ private fun SettingsTab(vm: AppViewModel) {
 
     Column(Modifier.fillMaxSize().padding(20.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         GlassCard(title = "Setup") {
-            Text("Gives all permissions with root, turns on screen + notification access, stops MIUI killing Jimi.", style = MaterialTheme.typography.bodySmall)
+            Button(onClick = onSetup) { Text("Run setup wizard") }
+            OutlinedButton(onClick = onDeviceCheck) { Text("Device check") }
+            Text("Root is optional. Extra permissions and background settings depend on this phone.", style = MaterialTheme.typography.bodySmall)
             Button(onClick = vm::rootSetup) { Text("Set up with root") }
             if (message.isNotBlank()) Text(message, style = MaterialTheme.typography.bodySmall)
         }
+        AssistantModeCard(vm)
         GlassCard(title = "Conversation") {
             Toggle("Keep listening after an answer (no \"Hey Jimi\" needed)", followUp, vm::setFollowUp)
             Toggle("Show panel on wake (also on lock screen)", panel, vm::setShowPanel)
@@ -450,7 +465,7 @@ private fun SettingsTab(vm: AppViewModel) {
 
 /** Pick Jimi's voice (D-038): natural Supertonic voices (one 128 MB download) or fast Piper voices. */
 @Composable
-private fun VoiceCard(vm: AppViewModel) {
+internal fun VoiceCard(vm: AppViewModel) {
     val current by vm.voice.collectAsStateWithLifecycle()
     val speed by vm.voiceSpeed.collectAsStateWithLifecycle()
     val installed by vm.installedPacks.collectAsStateWithLifecycle()

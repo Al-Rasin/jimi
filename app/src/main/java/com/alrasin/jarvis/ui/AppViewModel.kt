@@ -21,6 +21,9 @@ import com.alrasin.jarvis.data.NoteDao
 import com.alrasin.jarvis.data.NotificationDao
 import com.alrasin.jarvis.data.ReminderDao
 import com.alrasin.jarvis.data.Settings
+import com.alrasin.jarvis.data.AssistantMode
+import com.alrasin.jarvis.actions.RootShell
+import com.alrasin.jarvis.voice.PortableModels
 import com.alrasin.jarvis.data.TurnDao
 import com.alrasin.jarvis.actions.ReminderScheduler
 import com.alrasin.jarvis.service.JarvisCoreService
@@ -36,6 +39,9 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
@@ -80,6 +86,59 @@ class AppViewModel @Inject constructor(
     val homeCity = settings.homeCity.state("Dhaka")
     val voice = settings.voice.state(Voices.BUILT_IN)
     val voiceSpeed = settings.voiceSpeed.state(1.0f)
+    val setupComplete = settings.setupComplete.map<Boolean, Boolean?> { it }.state(null)
+    val assistantMode = settings.assistantMode.state(AssistantMode.BESIDE_GEMINI)
+    val deviceFeatures = MutableStateFlow(DeviceCheck.features(app))
+    val deviceCheckRevision = MutableStateFlow(0)
+    val rootAvailable = MutableStateFlow<Boolean?>(null)
+    val portableModels = MutableStateFlow(PortableModels.status(app))
+    val modelDownloads = MutableStateFlow<Map<String, Float>>(emptyMap())
+
+    fun finishSetup() = viewModelScope.launch { settings.setSetupComplete(true) }
+    suspend fun resumeListening() {
+        if (!settings.setupComplete.first() || !settings.listeningEnabled.first() || JarvisCoreService.running.value) return
+        val ready = SetupPolicy.wakeReady(
+            DeviceCheck.hasPermission(app, android.Manifest.permission.RECORD_AUDIO),
+            PortableModels.status(app).associate { it.id to it.ready },
+        )
+        if (!ready) return
+        JarvisCoreService.start(app)
+        withTimeoutOrNull(30_000) { JarvisCoreService.running.first { it } }
+    }
+    fun setAssistantMode(mode: AssistantMode) = viewModelScope.launch { settings.setAssistantMode(mode) }
+    fun refreshDeviceCheck() {
+        deviceFeatures.value = DeviceCheck.features(app)
+        deviceCheckRevision.value++
+        portableModels.value = PortableModels.status(app)
+        installedPacks.value = installedNow()
+    }
+    fun checkRoot() = viewModelScope.launch(Dispatchers.IO) { rootAvailable.value = RootShell.available }
+    fun downloadModel(id: String) {
+        if (modelDownloads.value.isNotEmpty()) return
+        modelDownloads.value = mapOf(id to 0f)
+        viewModelScope.launch {
+            runCatching { PortableModels.download(app, id) { modelDownloads.value = mapOf(id to it) } }
+                .onFailure { _message.value = "Model download failed: ${it.message}" }
+            modelDownloads.value = emptyMap()
+            refreshDeviceCheck()
+        }
+    }
+    fun importWake(uri: android.net.Uri) = viewModelScope.launch {
+        runCatching { PortableModels.importWake(app, uri) }
+            .onSuccess { _message.value = "Hey Jimi model imported." }
+            .onFailure { _message.value = "Import failed: ${it.message}" }
+        refreshDeviceCheck()
+    }
+    fun importLlm(uri: android.net.Uri) = viewModelScope.launch {
+        if (modelDownloads.value.isNotEmpty()) return@launch
+        modelDownloads.value = mapOf("llm" to 0f)
+        runCatching { PortableModels.importLlm(app, uri) }
+            .onSuccess { _message.value = "Local AI model imported." }
+            .onFailure { _message.value = "Import failed: ${it.message}" }
+        modelDownloads.value = emptyMap()
+        refreshDeviceCheck()
+        refreshModels()
+    }
     /** Ids of downloaded voice packs. */
     val installedPacks = MutableStateFlow(installedNow())
     /** Pack id → download progress 0..1. */

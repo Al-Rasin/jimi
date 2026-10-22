@@ -53,7 +53,7 @@ object Voices {
         ),
         archive = "sherpa-onnx-supertonic-3-tts-int8-2026-05-11",
     )
-    private val ALAN = VoicePack(BUILT_IN, Engine.PIPER, 0, "", listOf("en_GB-alan-medium.onnx", "tokens.txt"))
+    private val ALAN = VoicePack(BUILT_IN, Engine.PIPER, 80, "", listOf("en_GB-alan-medium.onnx", "tokens.txt"))
 
     private fun piper(name: String, lang: String) =
         VoicePack("piper-$name", Engine.PIPER, 63, "vits-piper-$lang-$name-medium", listOf("$lang-$name-medium.onnx", "tokens.txt"))
@@ -88,10 +88,15 @@ object Voices {
     fun dir(context: Context, pack: VoicePack) = File(context.getExternalFilesDir(null) ?: context.filesDir, "voices/${pack.id}")
 
     fun installed(context: Context, pack: VoicePack): Boolean =
-        pack.id == BUILT_IN || pack.files.all { File(dir(context, pack), it).isFile }
+        if (pack.id == BUILT_IN) PortableModels.voiceReady(context)
+        else pack.files.all { ModelFiles.present(File(dir(context, pack), it)) }
 
     /** Downloads the missing files of [pack]; [progress] gets 0..1. Throws on network errors (partial files are removed). */
     suspend fun download(context: Context, pack: VoicePack, progress: (Float) -> Unit) = withContext(Dispatchers.IO) {
+        if (pack.id == BUILT_IN) {
+            PortableModels.download(context, "tts", progress)
+            return@withContext
+        }
         val dir = dir(context, pack).apply { mkdirs() }
         val archive = pack.archive
         if (archive != null) {

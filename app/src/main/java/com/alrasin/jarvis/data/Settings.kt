@@ -30,6 +30,14 @@ class Settings @Inject constructor(@ApplicationContext private val context: Cont
     private val cloudFactsKey = booleanPreferencesKey("cloud_send_facts")
     private val voiceKey = stringPreferencesKey("voice")
     private val voiceSpeedKey = floatPreferencesKey("voice_speed")
+    private val assistantModeKey = stringPreferencesKey("assistant_mode")
+    private val setupCompleteKey = booleanPreferencesKey("setup_complete")
+
+    val assistantMode: Flow<AssistantMode> = context.dataStore.data.map { AssistantMode.fromStored(it[assistantModeKey]) }
+    val setupComplete: Flow<Boolean> = context.dataStore.data.map { it[setupCompleteKey] ?: false }
+
+    suspend fun setAssistantMode(mode: AssistantMode) = context.dataStore.edit { it[assistantModeKey] = mode.name }
+    suspend fun setSetupComplete(complete: Boolean) = context.dataStore.edit { it[setupCompleteKey] = complete }
 
     val wakeThreshold: Flow<Float> = context.dataStore.data.map { it[thresholdKey] ?: DEFAULT_THRESHOLD }
     val listeningEnabled: Flow<Boolean> = context.dataStore.data.map { it[enabledKey] ?: false }
