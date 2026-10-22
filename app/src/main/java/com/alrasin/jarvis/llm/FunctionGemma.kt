@@ -31,7 +31,7 @@ object FunctionGemma {
     fun parse(out: String): ToolCall? {
         val m = Regex("<start_function_call>call:([a-z_]+)\\{(.*?)\\}(?:<end_function_call>|$)", RegexOption.DOT_MATCHES_ALL).find(out)
             ?: return null
-        val args = Regex("([a-z_]+):(?:$ESC(.*?)$ESC|([^,}]*))").findAll(m.groupValues[2])
+        val args = Regex("([a-z_]+):(?:$ESC(.*?)$ESC|([^,}]*))", RegexOption.DOT_MATCHES_ALL).findAll(m.groupValues[2])
             .associate { it.groupValues[1] to (it.groupValues[2].ifEmpty { it.groupValues[3] }).trim() }
             .filterValues { it.isNotEmpty() }
         return ToolCall(m.groupValues[1], args)
