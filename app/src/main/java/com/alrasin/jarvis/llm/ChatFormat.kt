@@ -8,6 +8,13 @@ object ChatFormat {
         "\\b(?:dr|mr|mrs|ms|prof|sr|jr|st|vs|etc|e\\.g|i\\.e|a\\.m|p\\.m|[a-z])\\.$",
         RegexOption.IGNORE_CASE,
     )
+    fun lfm(system: String, history: List<Exchange>, user: String): String = buildString {
+        append("<|startoftext|><|im_start|>system\n$system<|im_end|>\n")
+        history.takeLast(3).forEach {
+            append("<|im_start|>user\n${it.user}<|im_end|>\n<|im_start|>assistant\n${it.reply}<|im_end|>\n")
+        }
+        append("<|im_start|>user\n$user<|im_end|>\n<|im_start|>assistant\n")
+    }
 
     fun qwen(system: String, history: List<Exchange>, user: String): String = buildString {
         append("<|im_start|>system\n$system<|im_end|>\n")

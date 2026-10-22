@@ -60,9 +60,9 @@ object PortableModels {
         ModelStatus("llm", "Local chat and tool models (optional)",
             com.alrasin.jarvis.llm.Llama.available && dir(context, "llm").listFiles().orEmpty().let { files ->
                 files.any { it.name.startsWith("functiongemma", true) && it.extension == "gguf" && ModelFiles.present(it) } &&
-                    files.any { (it.name.startsWith("qwen3", true) || it.name.startsWith("gemma-3", true)) && it.extension == "gguf" && ModelFiles.present(it) }
+                    files.any { (it.name.startsWith("qwen3", true) || it.name.startsWith("gemma-3", true) || it.name.startsWith("LFM2.5-1.2B-Instruct-", true)) && it.extension == "gguf" && ModelFiles.present(it) }
             }, "About 300–800 MB per model", false,
-            "Import FunctionGemma and Qwen3/Gemma 3 GGUF files. Rules still work without them. " +
+            "Import FunctionGemma and Qwen3/Gemma 3 GGUF files, or select imported LFM2.5 in Settings. Rules still work without them. " +
                 if (com.alrasin.jarvis.llm.Llama.available) "Local AI library available." else "This APK also needs the native local AI library."),
     )
 
@@ -114,8 +114,8 @@ object PortableModels {
                 if (it.moveToFirst()) it.getString(0) else null
             } ?: error("The selected file has no name")
             require(name.matches(Regex("[A-Za-z0-9_.-]+\\.gguf")) &&
-                listOf("functiongemma", "qwen3", "gemma-3").any { name.startsWith(it, true) }) {
-                "Select a FunctionGemma, Qwen3 or Gemma-3 .gguf model"
+                listOf("functiongemma", "qwen3", "gemma-3", "LFM2.5-1.2B-Instruct-").any { name.startsWith(it, true) }) {
+                "Select a FunctionGemma, Qwen3, Gemma-3 or LFM2.5-1.2B-Instruct .gguf model"
             }
             val destination = File(dir(context, "llm"), name)
             destination.parentFile!!.mkdirs()

@@ -9,6 +9,7 @@ import com.alrasin.jarvis.actions.RootSetup
 import com.alrasin.jarvis.actions.ToolExecutor
 import com.alrasin.jarvis.actions.ToolRegistry
 import com.alrasin.jarvis.brain.ModelBrain
+import com.alrasin.jarvis.llm.ChatModels
 import com.alrasin.jarvis.core.JarvisLog
 import com.alrasin.jarvis.core.Json
 import com.alrasin.jarvis.core.Secrets
@@ -38,6 +39,7 @@ import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.first
@@ -139,6 +141,7 @@ class AppViewModel @Inject constructor(
         refreshDeviceCheck()
         refreshModels()
     }
+    val chatModel = settings.chatModel.state(ChatModels.DEFAULT)
     /** Ids of downloaded voice packs. */
     val installedPacks = MutableStateFlow(installedNow())
     /** Pack id → download progress 0..1. */
@@ -219,6 +222,7 @@ class AppViewModel @Inject constructor(
 
     fun setVoice(id: String) = viewModelScope.launch { settings.setVoice(id) }
     fun setVoiceSpeed(v: Float) = viewModelScope.launch { settings.setVoiceSpeed(v) }
+    fun setChatModel(v: String) = viewModelScope.launch { settings.setChatModel(v) }
 
     /** Loads [v] just for a sample sentence (a few seconds the first time), then frees it. */
     fun tryVoice(v: Voice) {
@@ -264,7 +268,9 @@ class AppViewModel @Inject constructor(
         _message.value = runCatching { "Saved: ${backup.export().path}" }.getOrElse { "Export failed: ${it.message}" }
     }
 
-    fun refreshModels() { modelStatus.value = models.status() }
+    fun refreshModels() {
+        viewModelScope.launch { modelStatus.value = models.status(settings.chatModel.first()) }
+    }
 
     /** Debug: run any tool with JSON args, no voice. Risky tools still ask (confirmed = false). */
     fun runTool(name: String, argsJson: String) = viewModelScope.launch {
