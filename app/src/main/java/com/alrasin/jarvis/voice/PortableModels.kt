@@ -31,6 +31,10 @@ object PortableModels {
     private val wakeFeatures = listOf("melspectrogram.onnx", "embedding_model.onnx")
     private val speechFiles = setOf("encoder.onnx", "decoder.onnx", "joiner.onnx", "tokens.txt")
     private val voiceFiles = setOf("en_GB-alan-medium.onnx", "tokens.txt")
+    private val secondPassFiles = setOf("preprocess.onnx", "encode.int8.onnx", "uncached_decode.int8.onnx", "cached_decode.int8.onnx", "tokens.txt")
+
+    fun secondPassReady(context: Context): Boolean =
+        secondPassFiles.all { ModelFiles.present(File(dir(context, "stt_second_pass"), it)) }
 
     fun dir(context: Context, name: String) =
         File(context.getExternalFilesDir(null) ?: context.filesDir, "models/$name")
@@ -55,6 +59,8 @@ object PortableModels {
             "About 70 MB installed", true, "Kroko English; works offline after download."),
         ModelStatus("tts", "Alan voice and pronunciation data", voiceReady(context),
             "About 80 MB installed", true, "Other voices can be selected in the next step."),
+        ModelStatus("stt_second_pass", "Second-pass speech (optional)", secondPassReady(context),
+            "About 124 MB installed", true, "Experimental Moonshine tiny int8. Enable in Conversation after download; falls back while loading or if slower than 1.5 seconds."),
         ModelStatus("speaker", "Voice ID (optional)", present(context, "speaker", "campplus.onnx"),
             "About 28 MB", true, "Enroll your voice in Settings after installing. Restart Jimi after adding this model."),
         ModelStatus("llm", "Local chat and tool models (optional)",
@@ -75,6 +81,7 @@ object PortableModels {
                     }
                 }
                 "stt" -> archive(context, "$RELEASES/asr-models/sherpa-onnx-streaming-zipformer-en-kroko-2025-08-06.tar.bz2", "stt", progress) { it in speechFiles }
+                "stt_second_pass" -> archive(context, "$RELEASES/asr-models/sherpa-onnx-moonshine-tiny-en-int8.tar.bz2", "stt_second_pass", progress) { it in secondPassFiles }
                 "tts" -> archive(context, "$RELEASES/tts-models/vits-piper-en_GB-alan-medium.tar.bz2", "tts", progress) {
                     it in voiceFiles || it.startsWith("espeak-ng-data/")
                 }
