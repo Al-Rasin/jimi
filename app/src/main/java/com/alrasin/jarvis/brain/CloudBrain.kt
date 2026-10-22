@@ -62,7 +62,8 @@ class CloudBrain @Inject constructor(private val settings: Settings, private val
         if (!enabled() || !(forced || settings.cloudForChat.first())) return null
         val p = provider() ?: return null
         val sendFacts = settings.cloudSendFacts.first()
-        val system = Persona.SYSTEM_PROMPT + if (sendFacts && facts.isNotEmpty()) "\nFacts about the user: " + facts.take(8).joinToString("; ") else ""
+        val query = ASK.replace(text, "").trim().ifEmpty { text }
+        val system = Persona.chatPrompt(query) + if (Persona.isMemoryQuestion(query) && sendFacts && facts.isNotEmpty()) "\nFacts about the user: " + facts.take(8).joinToString("; ") else ""
         return runCatching { p.chat(system, history, ASK.replace(text, "").trim().ifEmpty { text }) }
             .onSuccess { JarvisLog.i("cloud (${p.name}) answered") }
             .onFailure { JarvisLog.e("cloud failed, using local", it) }
