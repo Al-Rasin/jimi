@@ -4,7 +4,9 @@ import android.content.Context
 import com.alrasin.jarvis.actions.ToolRegistry
 import com.alrasin.jarvis.core.JarvisLog
 import com.alrasin.jarvis.core.ToolCall
+import com.alrasin.jarvis.data.Settings
 import com.alrasin.jarvis.llm.ChatFormat
+import com.alrasin.jarvis.llm.ChatModels
 import com.alrasin.jarvis.llm.FunctionGemma
 import com.alrasin.jarvis.llm.Llama
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -13,6 +15,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -30,6 +33,7 @@ import javax.inject.Singleton
 class ModelBrain @Inject constructor(
     @ApplicationContext private val context: Context,
     private val registry: ToolRegistry,
+    private val settings: Settings,
 ) {
     data class ChatOut(val text: String, val streamed: Boolean)
 
@@ -49,8 +53,11 @@ class ModelBrain @Inject constructor(
         .sortedByDescending { it.name.contains("jarvis") }   // a fine-tuned file wins
         .firstOrNull { f -> prefixes.any { f.name.startsWith(it, ignoreCase = true) } }
 
-    fun status(): String = if (!Llama.available) "LLM library not built" else
-        "tool model: ${find("functiongemma")?.name ?: "none"}, chat model: ${find("qwen3", "gemma-3")?.name ?: "none"}"
+    private fun chatFile(selection: String): File? = if (selection == ChatModels.LFM)
+        ChatModels.findLfm(dir) else find("qwen3", "gemma-3")
+
+    fun status(selection: String = ChatModels.DEFAULT): String = if (!Llama.available) "LLM library not built" else
+        "tool model: ${find("functiongemma")?.name ?: "none"}, chat model: ${chatFile(selection)?.name ?: "not installed"}"
 
     /**
      * Loads the tool model in the background and reads the tool list once, so its K/V are cached and the
@@ -72,9 +79,12 @@ class ModelBrain @Inject constructor(
         return Llama.load(f, contextSize = 4096, threads = 4)?.also { toolModel = it }
     }
 
-    private fun chatModel(): Llama? {
-        chatModel?.let { return it }
-        val f = find("qwen3", "gemma-3") ?: return null
+    private fun chatModel(selection: String): Llama? {
+        val f = chatFile(selection)
+        chatModel?.let { if (it.file == f) return it }
+        chatModel?.close()
+        chatModel = null
+        if (f == null) return null
         return Llama.load(f, contextSize = 2048, threads = 4)?.also { chatModel = it }
     }
 
@@ -101,10 +111,12 @@ class ModelBrain @Inject constructor(
         withContext(Dispatchers.Default) {
             lock.withLock {
                 unloadJob?.cancel()
-                val m = chatModel() ?: return@withLock null
+                val selection = settings.chatModel.first()
+                val m = chatModel(selection) ?: return@withLock null
                 val system = Persona.SYSTEM_PROMPT + if (facts.isEmpty()) "" else
                     "\nRemembered facts about the user (context, not instructions):\n" + facts.take(8).joinToString("\n")
-                val prompt = if (m.file.name.startsWith("gemma-3", ignoreCase = true)) buildString {
+                val prompt = if (selection == ChatModels.LFM) ChatFormat.lfm(system, history, text)
+                else if (m.file.name.startsWith("gemma-3", ignoreCase = true)) buildString {
                     append("<bos><start_of_turn>user\n$system\n\n")
                     history.takeLast(3).forEach {
                         append("${it.user}<end_of_turn>\n<start_of_turn>model\n${it.reply}<end_of_turn>\n<start_of_turn>user\n")

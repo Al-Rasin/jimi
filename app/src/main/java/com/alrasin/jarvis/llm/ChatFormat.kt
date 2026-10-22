@@ -4,6 +4,14 @@ import com.alrasin.jarvis.brain.Exchange
 
 /** ChatML for Qwen3 (PLAN 9.3). "/no_think" + empty think block = answer directly (fast). */
 object ChatFormat {
+    fun lfm(system: String, history: List<Exchange>, user: String): String = buildString {
+        append("<|startoftext|><|im_start|>system\n$system<|im_end|>\n")
+        history.takeLast(3).forEach {
+            append("<|im_start|>user\n${it.user}<|im_end|>\n<|im_start|>assistant\n${it.reply}<|im_end|>\n")
+        }
+        append("<|im_start|>user\n$user<|im_end|>\n<|im_start|>assistant\n")
+    }
+
     fun qwen(system: String, history: List<Exchange>, user: String): String = buildString {
         append("<|im_start|>system\n$system<|im_end|>\n")
         history.takeLast(3).forEach {
