@@ -1,0 +1,10 @@
+{
+  "events": [
+    {"event_id": 43, "clip_prefix": "20261022_025905", "verdict": "yes"},
+    {"event_id": 44, "clip_prefix": "20261022_025924", "verdict": "yes"},
+    {"event_id": 47, "clip_prefix": "20261022_030012", "verdict": "yes"},
+    {"event_id": 48, "clip_prefix": "20261022_030019", "verdict": "yes"},
+    {"event_id": 50, "clip_prefix": "20261022_030059", "verdict": "yes"}
+  ],
+  "clips": {}
+}

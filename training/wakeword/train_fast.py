@@ -63,17 +63,18 @@ def main():
     ap.add_argument("--acav_rows", type=int, default=300_000)
     ap.add_argument("--out", default=str(WW / "out/hey_jimi_fast.onnx"))
     ap.add_argument("--seed", type=int, default=0)
+    ap.add_argument("--features-dir", type=Path, default=FEAT)
     a = ap.parse_args()
     rng = np.random.default_rng(a.seed)
     torch.manual_seed(a.seed)
 
-    pos = np.load(FEAT / "positive_features_train.npy")
-    neg = np.load(FEAT / "negative_features_train.npy")
+    pos = np.load(a.features_dir / "positive_features_train.npy")
+    neg = np.load(a.features_dir / "negative_features_train.npy")
     acav_all = np.load(WW / "data/acav_part.npy", mmap_mode="r")
     pick = np.sort(rng.choice(len(acav_all), a.acav_rows, replace=False))
     acav = np.asarray(acav_all[pick], dtype=np.float16)  # float16 keeps RAM low
-    pos_test = np.load(FEAT / "positive_features_test.npy")
-    neg_test = np.load(FEAT / "negative_features_test.npy")
+    pos_test = np.load(a.features_dir / "positive_features_test.npy")
+    neg_test = np.load(a.features_dir / "negative_features_test.npy")
     val = np.load(WW / "data/validation_set_features.npy")
     print(f"pos {len(pos)}  neg {len(neg)}  acav {len(acav)}  val {len(val)} frames")
 
