@@ -1,5 +1,7 @@
 package com.alrasin.jarvis.actions
 
+import com.alrasin.jarvis.brain.MemoryRetriever
+import com.alrasin.jarvis.core.Json
 import com.alrasin.jarvis.core.Tool
 import com.alrasin.jarvis.core.ToolResult
 import com.alrasin.jarvis.data.MemoryDao
@@ -16,7 +18,13 @@ import java.time.format.DateTimeFormatter
 import java.util.Locale
 
 /** Notes, reminders (PLAN 6) and memory facts (PLAN 10). */
-fun dataTools(notes: NoteDao, reminders: ReminderDao, scheduler: ReminderScheduler, memory: MemoryDao): List<Tool> {
+fun dataTools(
+    notes: NoteDao,
+    reminders: ReminderDao,
+    scheduler: ReminderScheduler,
+    memory: MemoryDao,
+    selectedFactId: () -> Long? = { null },
+): List<Tool> {
     val zone = ZoneId.systemDefault()
     fun whenText(ms: Long): String {
         val t = Instant.ofEpochMilli(ms).atZone(zone).toLocalDateTime()
@@ -73,12 +81,25 @@ fun dataTools(notes: NoteDao, reminders: ReminderDao, scheduler: ReminderSchedul
             memory.insert(MemoryFact(timeMs = System.currentTimeMillis(), text = t))
             ToolResult.ok("I'll remember that.")
         },
-        SimpleTool("forget_fact", "Forget a remembered fact", listOf(arg("text", "which fact, or all"))) { c, _ ->
+        SimpleTool("forget_fact", "Forget a remembered fact", listOf(arg("text", "which fact"))) { c, _ ->
             val q = c.arg("text") ?: return@SimpleTool ToolResult.fail("Forget what?")
-            val all = memory.all()
-            val del = if (q == "all" || q == "everything") all else listOfNotNull(Fuzzy.best(q, all, { it.text }, min = 0.4))
-            if (del.isEmpty()) return@SimpleTool ToolResult.fail("I don't remember that.")
-            del.forEach { memory.delete(it.id) }
+            val candidate = MemoryRetriever.selectForgetting(
+                q,
+                memory.all().map { MemoryRetriever.Memory(it.id, it.text, it.timeMs) },
+                selectedFactId(),
+            ) ?: return@SimpleTool ToolResult.fail("Which remembered fact should I forget?")
+            if (candidate.requiresConfirmation) {
+                return@SimpleTool ToolResult(
+                    false,
+                    "Forget '${candidate.memory.text}'?",
+                    Json.write(mapOf(
+                        "type" to "forget_fact_confirmation",
+                        "id" to candidate.memory.id,
+                        "text" to candidate.memory.text,
+                    )),
+                )
+            }
+            memory.delete(candidate.memory.id)
             ToolResult.ok("Forgotten.")
         },
         SimpleTool("recall_facts", "What Jarvis remembers") { _, _ ->
