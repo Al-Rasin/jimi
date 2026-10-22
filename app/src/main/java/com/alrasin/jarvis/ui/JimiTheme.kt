@@ -1,5 +1,7 @@
 package com.alrasin.jarvis.ui
 
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.material3.LocalContentColor
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
@@ -139,6 +141,6 @@ fun GlassCard(modifier: Modifier = Modifier, title: String? = null, content: @Co
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         if (title != null) GradientTitle(title)
-        content()
+        CompositionLocalProvider(LocalContentColor provides JimiColors.Text) { content() }
     }
 }

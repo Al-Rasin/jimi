@@ -17,10 +17,12 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
 import androidx.compose.material3.LinearProgressIndicator
+import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
@@ -88,6 +90,8 @@ fun SetupWizard(vm: AppViewModel, home: HomeViewModel, onFinish: () -> Unit) {
     val message by vm.message.collectAsStateWithLifecycle()
     RefreshOnResume(vm)
     BackHandler(step > 0) { step-- }
+    // Not inside a Surface, so set the text color here (black text on the dark background otherwise).
+    CompositionLocalProvider(LocalContentColor provides JimiColors.Text) {
     Column(Modifier.fillMaxSize().statusBarsPadding().padding(20.dp).verticalScroll(rememberScrollState()),
         verticalArrangement = Arrangement.spacedBy(12.dp)) {
         GradientTitle("Set up Jimi", 28)
@@ -110,6 +114,7 @@ fun SetupWizard(vm: AppViewModel, home: HomeViewModel, onFinish: () -> Unit) {
             else Button(onClick = onFinish) { Text("Finish setup") }
         }
         TextButton(onClick = onFinish) { Text("Finish later") }
+    }
     }
 }
 
