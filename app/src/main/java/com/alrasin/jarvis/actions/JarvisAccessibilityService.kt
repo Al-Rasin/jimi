@@ -5,6 +5,7 @@ import android.graphics.Rect
 import android.os.Bundle
 import android.view.accessibility.AccessibilityEvent
 import android.view.accessibility.AccessibilityNodeInfo
+import android.view.accessibility.AccessibilityWindowInfo
 import com.alrasin.jarvis.core.JarvisLog
 
 /** Screen reading and tapping (PLAN 4.5). Enabled by root at setup (Settings.Secure). */
@@ -38,6 +39,20 @@ class JarvisAccessibilityService : AccessibilityService() {
     }
 
     fun appPackage(): String? = rootInActiveWindow?.packageName?.toString()
+
+    /** Excludes Jimi's panel and accessibility overlays from screen-agent targets. */
+    fun agentRoot(): AccessibilityNodeInfo? {
+        windows.sortedByDescending { it.layer }.forEach { window ->
+            if (window.type != AccessibilityWindowInfo.TYPE_APPLICATION) return@forEach
+            val root = window.root ?: return@forEach
+            if (root.packageName?.toString() != packageName) return root
+            root.recycle()
+        }
+        val root = rootInActiveWindow ?: return null
+        if (root.packageName?.toString() != packageName) return root
+        root.recycle()
+        return null
+    }
 
     /** Clicks the node whose text/description best matches [text]; climbs to a clickable parent. Root tap as fallback. */
     fun clickText(text: String): Boolean {

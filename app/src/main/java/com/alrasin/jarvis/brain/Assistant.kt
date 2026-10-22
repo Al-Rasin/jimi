@@ -4,6 +4,9 @@ import android.content.Context
 import com.alrasin.jarvis.actions.JarvisAccessibilityService
 import com.alrasin.jarvis.actions.Outcome
 import com.alrasin.jarvis.actions.ToolExecutor
+import com.alrasin.jarvis.agent.AgentResult
+import com.alrasin.jarvis.agent.AgentRouting
+import com.alrasin.jarvis.agent.ScreenAgentSession
 import com.alrasin.jarvis.core.JarvisLog
 import com.alrasin.jarvis.core.Json
 import com.alrasin.jarvis.core.ToolCall
@@ -18,6 +21,7 @@ import com.alrasin.jarvis.data.ToolLogDao
 import com.alrasin.jarvis.data.TurnDao
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.sync.withLock
 import java.time.LocalDateTime
 import javax.inject.Inject
@@ -38,6 +42,7 @@ class Assistant @Inject constructor(
     private val memory: MemoryDao,
     private val models: ModelBrain,
     private val cloud: CloudBrain,
+    private val screenAgent: ScreenAgentSession,
 ) {
     data class Input(
         val heard: String,
@@ -65,12 +70,19 @@ class Assistant @Inject constructor(
     private var lastReply = ""
     private val history = ArrayDeque<Exchange>()
 
+    fun stopScreenAgent() = screenAgent.stop()
+
     /** [speak] is called for chat sentences while the model is still writing. */
-    suspend fun handle(input: Input, speak: (String) -> Unit = {}): Reply = lock.withLock {
+    suspend fun handle(input: Input, speak: (String) -> Unit = {}): Reply {
+        if (RuleMatcher.match(input.heard)?.tool in setOf("cancel", "panic")) {
+            screenAgent.stop()
+        }
+        return lock.withLock {
         executor.observeLockState(input.locked)
+        screenAgent.observeLockState(input.locked)
         val text = input.heard.trim()
         val r = if (text.isEmpty()) Reply(Persona.DIDNT_GET) else runCatching { route(text, input, speak) }
-            .onFailure { JarvisLog.e("assistant failed", it) }
+            .onFailure { if (it is CancellationException) throw it; JarvisLog.e("assistant failed", it) }
             .getOrElse { Reply("Sorry ${Persona.ADDRESS}, something went wrong.") }
         val id = turns.insert(
             ConversationTurn(
@@ -84,9 +96,22 @@ class Assistant @Inject constructor(
             while (history.size > 6) history.removeFirst()
         }
         r.copy(turnId = id)
+        }
     }
 
     private suspend fun route(text: String, input: Input, speak: (String) -> Unit): Reply {
+        if (screenAgent.hasPendingQuestion) {
+            return screenReply(screenAgent.answer(text, input.locked, input.voiceOk))
+        }
+        if (screenAgent.hasPendingConfirmation) {
+            if (Persona.isYes(text)) {
+                val voice = input.source in setOf("voice", "follow_up") && input.voiceOk != false
+                if (!voice) return Reply("Please confirm this screen action by voice.", tool = "screen_agent", expectAnswer = true)
+                return screenReply(screenAgent.confirm(true, input.locked, input.voiceOk))
+            }
+            screenAgent.stop()
+            if (Persona.isNo(text)) return Reply("Okay, cancelled.", tool = "screen_agent")
+        }
         pending?.let { (call, at) ->
             pending = null
             if (System.currentTimeMillis() - at < PENDING_MS) {
@@ -99,8 +124,14 @@ class Assistant @Inject constructor(
         }
         val forced = cloud.asked(text)   // "think hard …" skips the tools
         if (!forced) {
-            RuleMatcher.match(text)?.let { return runTool(it, input, "rule") }
-            models.toolCall(text, contextLine())?.let { return runTool(it, input, "llm") }
+            RuleMatcher.match(text)?.takeIf { AgentRouting.acceptsSingleTool(text, it.tool) }
+                ?.let { return runTool(it, input, "rule") }
+            if (!AgentRouting.needsMultiStep(text)) {
+                models.toolCall(text, contextLine())?.let { return runTool(it, input, "llm") }
+            }
+            if (AgentRouting.needsScreen(text)) {
+                return screenReply(screenAgent.run(text, input.locked, input.voiceOk, speak))
+            }
         }
         val facts = memory.all().map { it.text }
         cloud.chat(text, history.toList(), facts, forced)?.let { return Reply(it, tool = "cloud") }
@@ -113,6 +144,10 @@ class Assistant @Inject constructor(
         val app = JarvisAccessibilityService.instance?.appPackage()
         return "time ${now.toLocalDate()} ${now.toLocalTime().withNano(0)}" + (app?.let { ", app $it" } ?: "")
     }
+
+    private fun screenReply(result: AgentResult) = Reply(
+        result.summary, tool = "screen_agent", expectAnswer = result.needsConfirmation || result.question,
+    )
 
     private suspend fun runTool(call: ToolCall, input: Input, source: String, confirmed: Boolean = false): Reply {
         when (call.tool) {
@@ -142,6 +177,7 @@ class Assistant @Inject constructor(
     private suspend fun panic(input: Input): Reply {
         pending = null
         executor.enterLockdown()
+        screenAgent.enterLockdown()
         executor.observeLockState(input.locked)
         val call = ToolCall("lock_phone", emptyMap())
         val r = executor.execute(call, ToolContext(context, input.heard, input.locked), confirmed = true, voiceOk = null)
