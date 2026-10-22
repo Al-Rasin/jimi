@@ -97,7 +97,8 @@ fun Orb(mood: OrbMood, level: Float, size: Dp = 64.dp, modifier: Modifier = Modi
             }
         }
     }
-    val radiusScale = scale
+    val wakePulse = rememberWakePulse(motion && mood == OrbMood.HEARING)
+    val radiusScale = maxOf(scale, 1f + wakePulse)
     val sweepAngle = rotation
     Box(modifier.size(size)) {
         val halo = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {

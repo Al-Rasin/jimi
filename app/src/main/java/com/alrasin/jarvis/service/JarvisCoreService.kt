@@ -35,6 +35,7 @@ import com.alrasin.jarvis.voice.SttVocabularyLoader
 import com.alrasin.jarvis.voice.Chimes
 import com.alrasin.jarvis.voice.PhraseCache
 import com.alrasin.jarvis.voice.TextToSpeech
+import com.alrasin.jarvis.voice.WakeFeedback as WakeFeedbackSignal
 import com.alrasin.jarvis.voice.Wav
 import com.alrasin.jarvis.voice.WakeModels
 import com.alrasin.jarvis.voice.WakeWordDetector
@@ -524,6 +525,7 @@ class JarvisCoreService : LifecycleService() {
                     }
                     _heard.value = heard
                     if (cmd.done) {
+                        if (heard.isNotEmpty()) tone.endListening()
                         command = null
                         _micLevel.value = 0f
                         JarvisLog.i("capture ended ($commandSource): ${cmd.finishReason}")
@@ -596,6 +598,9 @@ class JarvisCoreService : LifecycleService() {
                 if (req != null && stt != null) {
                     listenRequest = null
                     tone.listen()
+                    if (req == "tap") WakeFeedbackSignal.signal(this)
+                    _phase.value = if (req == "follow_up") PHASE_FOLLOW_UP else PHASE_HEARING
+                    if (req == "tap") showPanel()
                     command = stt.session(null, waitStart = if (req == "follow_up") FOLLOW_UP_WAIT else SpeechToText.WAIT_START)
                         .also { it.accept(chunk) }
                     commandSource = req
@@ -603,24 +608,22 @@ class JarvisCoreService : LifecycleService() {
                     commandAudio.add(chunk.copyOf())
                     wasBusy = true
                     _heard.value = ""
-                    _phase.value = if (req == "follow_up") PHASE_FOLLOW_UP else PHASE_HEARING
-                    if (req == "tap") showPanel()
                     continue
                 }
                 if (wasBusy) { wasBusy = false; detector.reset() }   // drop audio from before the command
                 val score = detector.process(chunk)
                 _lastScore.value = score
                 if (clips.onChunk(score, threshold, ring, tone) && stt != null) {
+                    _heard.value = ""
+                    _reply.value = ""
+                    _phase.value = PHASE_HEARING
+                    showPanel()
                     val preRoll = ring.last(PRE_ROLL_SAMPLES)
                     command = stt.session(preRoll)
                     commandSource = "voice"
                     commandAudio.clear()
                     commandAudio.add(preRoll)
                     wasBusy = true
-                    _heard.value = ""
-                    _reply.value = ""
-                    _phase.value = PHASE_HEARING
-                    showPanel()
                 }
             }
         } finally {
@@ -706,6 +709,7 @@ class JarvisCoreService : LifecycleService() {
             if (score >= thr && now - lastWakeMs > WAKE_COOLDOWN_MS) {
                 lastWakeMs = now
                 tone.wake()
+                WakeFeedbackSignal.signal(this@JarvisCoreService)
                 pendingKind = WakeEvent.VERDICT_NONE
                 pendingPeak = score
                 pendingChunks = AFTER_CHUNKS
