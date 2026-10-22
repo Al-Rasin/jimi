@@ -1,7 +1,7 @@
 # Tool-call fine-tune (FunctionGemma 270M)
 
 Teaches FunctionGemma the app's 43 tools, using the exact prompt the app sends.
-Runs on the Mac (M1 8 GB) with MLX. Output: `models/functiongemma-270m-jarvis-Q8_0.gguf`.
+Runs on the Mac (M1 8 GB) with MLX. Output: `models/functiongemma-270m-jarvis-v2-Q8_0.gguf`.
 
 ## Files
 - `make_dataset.py` — builds `training/data/toolcall/{train,valid}.jsonl` from templates (~60 rows per tool + chat rows).
@@ -22,13 +22,31 @@ uv pip install -p .venv-llm/bin/python -e app/src/main/cpp/llama.cpp/gguf-py   #
 ./gradlew testDebugUnitTest            # writes app/build/llm/{prompt_prefix.txt,grammar.gbnf,tools.txt}
 python3 training/toolcall/make_dataset.py
 .venv-llm/bin/python training/toolcall/finetune.py --iters 1200
-python3 training/toolcall/eval.py --bin <llama-completion> --model models/functiongemma-270m-jarvis-Q8_0.gguf \
+python3 training/toolcall/eval.py --bin <llama-completion> --model models/functiongemma-270m-jarvis-v2-Q8_0.gguf \
     --context "time 2026-10-22 10:00:00"
 ```
 
-Push to the phone: `adb push models/functiongemma-270m-jarvis-Q8_0.gguf /sdcard/Android/data/com.alrasin.jarvis/files/models/llm/`.
+Push to the phone: `adb push models/functiongemma-270m-jarvis-v2-Q8_0.gguf /sdcard/Android/data/com.alrasin.jarvis/files/models/llm/`.
 
 Note: the prompt prefix must match the app exactly. If a tool, its description or args change, re-run all steps.
+
+## Re-export an existing adapter
+
+Use `finetune.py --skip-train` with `--base`, `--out` (the adapter directory),
+`--llama` (the pinned converter source), and a new `--gguf` filename when working
+from a separate worktree. Each export creates a fresh `fused-v2-*` directory and
+a GGUF provenance manifest. Existing GGUF files and training adapters are protected
+against accidental replacement; choose new paths for another run.
+
+The evaluator uses `--binary-file --no-escape`: llama-completion's ordinary `-f`
+removes the final newline after `model`, changing the prompt the adapter learned.
+Runtime failures now fail the eval instead of counting as chat. Use `--cpu` if
+Metal is unavailable, `--prompt-cache /tmp/toolcall-model.cache` to reuse the tool
+prefix (use a separate cache for each model), and `--output-jsonl results.jsonl`
+to retain raw answers. `--prompt-dir` selects the app's exported prefix and grammar.
+Native prompts already contain the chat template; do not apply another template.
+For an MLX CLI smoke check, pass `--ignore-chat-template`, remove the leading
+literal `<bos>` because MLX adds it, and preserve the final model-turn newline.
 
 ## Dataset checks without training
 
@@ -47,3 +65,12 @@ python3 training/toolcall/make_dataset.py --out /tmp/jimi-toolcall-data
 prompt export, use `--prefix /path/to/existing/prompt_prefix.txt` to read an existing
 export without rebuilding the app. The default chat budget is up to 600 unique rows,
 capped by available templates. The script prints counts per tool and chat share.
+
+## Round 1
+
+`make_round1.py` builds the separate Round 1 train/dev/locked-test release;
+`r1_contract.py` reads the current Kotlin registry and argument declarations.
+`r1_public.py` acquires pinned public source data and uses `convert_public.py`
+for conservative mappings with attribution. No training is run by these scripts.
+Datasets and downloaded
+sources belong outside git; keep both existing `cases*.jsonl` fixtures unchanged.
