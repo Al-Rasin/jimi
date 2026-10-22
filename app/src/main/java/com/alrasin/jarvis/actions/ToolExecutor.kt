@@ -1,6 +1,8 @@
 package com.alrasin.jarvis.actions
 
 import com.alrasin.jarvis.core.JarvisLog
+import com.alrasin.jarvis.core.SmokeSession
+import kotlin.coroutines.coroutineContext
 import com.alrasin.jarvis.core.Risk
 import com.alrasin.jarvis.core.Tool
 import com.alrasin.jarvis.core.ToolCall
@@ -29,7 +31,9 @@ class ToolExecutor @Inject constructor(private val registry: ToolRegistry) {
 
     suspend fun execute(call: ToolCall, ctx: ToolContext, confirmed: Boolean, voiceOk: Boolean?): Outcome {
         val tool = registry.get(call.tool) ?: return Outcome.Done(ToolResult.fail("I don't know how to ${call.tool.replace('_', ' ')} yet."))
-        return gate.execute(call, tool.risk, ctx.locked, confirmed, voiceOk) { run(tool, call, ctx) }
+        return gate.execute(call, tool.risk, ctx.locked, confirmed, voiceOk) {
+            coroutineContext[SmokeSession]?.intercept(call) ?: run(tool, call, ctx)
+        }
     }
 
     private suspend fun run(tool: Tool, call: ToolCall, ctx: ToolContext): ToolResult =

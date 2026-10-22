@@ -10,6 +10,8 @@ import com.alrasin.jarvis.agent.AgentResult
 import com.alrasin.jarvis.agent.AgentRouting
 import com.alrasin.jarvis.agent.ScreenAgentSession
 import com.alrasin.jarvis.core.JarvisLog
+import com.alrasin.jarvis.core.SmokeSession
+import kotlin.coroutines.coroutineContext
 import com.alrasin.jarvis.core.Json
 import com.alrasin.jarvis.core.ToolCall
 import com.alrasin.jarvis.core.ToolContext
@@ -69,9 +71,14 @@ class Assistant @Inject constructor(
 
     private val lock = Mutex()
     private var pending: Pair<ToolCall, Long>? = null
-    private val contactChoice = PendingContactChoice()
-    private val conversation = ConversationContext()
+    private var contactChoice = PendingContactChoice()
+    private var conversation = ConversationContext()
     private val contacts = Contacts(context)
+    private var smokePending: Pair<ToolCall, Long>? = null
+    private var smokeLastReply = ""
+    private val smokeHistory = ArrayDeque<Exchange>()
+    private val smokeContactChoice = PendingContactChoice()
+    private val smokeConversation = ConversationContext()
     private var lastReply = ""
     private val history = ArrayDeque<Exchange>()
 
@@ -79,17 +86,55 @@ class Assistant @Inject constructor(
 
     /** [speak] is called for chat sentences while the model is still writing. */
     suspend fun handle(input: Input, speak: (String) -> Unit = {}): Reply {
-        if (RuleMatcher.match(input.heard)?.tool in setOf("cancel", "panic")) {
+        val smoke = coroutineContext[SmokeSession]
+        if (smoke == null && RuleMatcher.match(input.heard)?.tool in setOf("cancel", "panic")) {
             screenAgent.stop()
         }
         return lock.withLock {
-        executor.observeLockState(input.locked)
-        screenAgent.observeLockState(input.locked)
+        if (smoke == null) return@withLock handleLocked(input, speak)
+        val liveContactChoice = contactChoice
+        val liveConversation = conversation
+        contactChoice = smokeContactChoice
+        conversation = smokeConversation
+        val livePending = pending
+        val liveReply = lastReply
+        val liveHistory = history.toList()
+        pending = smokePending
+        lastReply = smokeLastReply
+        history.clear()
+        history.addAll(smokeHistory)
+        try {
+            handleLocked(input, {})
+        } finally {
+            smokePending = pending
+            smokeLastReply = lastReply
+            smokeHistory.clear()
+            smokeHistory.addAll(history)
+            contactChoice = liveContactChoice
+            conversation = liveConversation
+            pending = livePending
+            lastReply = liveReply
+            history.clear()
+            history.addAll(liveHistory)
+        }
+    }
+
+    }
+
+    private suspend fun handleLocked(input: Input, speak: (String) -> Unit): Reply {
+        val smoke = coroutineContext[SmokeSession]
+        if (smoke == null) {
+            executor.observeLockState(input.locked)
+            screenAgent.observeLockState(input.locked)
+        }
+        smoke?.route = "empty"
+        smoke?.call = null
+        smoke?.ok = false
         val text = input.heard.trim()
         val r = if (text.isEmpty()) Reply(Persona.DIDNT_GET) else runCatching { route(text, input, speak) }
             .onFailure { if (it is CancellationException) throw it; JarvisLog.e("assistant failed", it) }
-            .getOrElse { Reply("Sorry ${Persona.ADDRESS}, something went wrong.") }
-        val id = turns.insert(
+            .getOrElse { smoke?.ok = false; smoke?.route = "error"; Reply("Sorry ${Persona.ADDRESS}, something went wrong.") }
+        val id = if (smoke != null) 0L else turns.insert(
             ConversationTurn(
                 timeMs = System.currentTimeMillis(), source = input.source, heard = text, rawText = input.raw,
                 audioPath = input.audioPath, reply = r.text, tool = r.tool, wakeId = input.wakeId,
@@ -102,17 +147,22 @@ class Assistant @Inject constructor(
             history.addLast(Exchange(text, r.text))
             while (history.size > 6) history.removeFirst()
         }
-        r.copy(turnId = id)
-        }
+        return r.copy(turnId = id)
     }
 
     private suspend fun route(text: String, input: Input, speak: (String) -> Unit): Reply {
+        val smoke = coroutineContext[SmokeSession]
+        fun trace(route: String, call: ToolCall? = null, ok: Boolean = true) {
+            smoke?.route = route
+            smoke?.call = call
+            smoke?.ok = ok
+        }
         val rule = RuleMatcher.match(text)
         if (rule?.tool in setOf("panic", "cancel")) return runTool(rule!!, input, "rule")
-        if (screenAgent.hasPendingQuestion) {
+        if (smoke == null && screenAgent.hasPendingQuestion) {
             return screenReply(screenAgent.answer(text, input.locked, input.voiceOk))
         }
-        if (screenAgent.hasPendingConfirmation) {
+        if (smoke == null && screenAgent.hasPendingConfirmation) {
             if (Persona.isYes(text)) {
                 val voice = input.source in setOf("voice", "follow_up") && input.voiceOk != false
                 if (!voice) return Reply("Please confirm this screen action by voice.", tool = "screen_agent", expectAnswer = true)
@@ -121,9 +171,11 @@ class Assistant @Inject constructor(
             screenAgent.stop()
             if (Persona.isNo(text)) return Reply("Okay, cancelled.", tool = "screen_agent")
         }
+        trace("smalltalk")
         val smallTalk = Persona.smallTalk(text, LocalDateTime.now().hour)
         if (smallTalk?.startsWith("Bye") == true) return Reply(smallTalk, endConversation = true)
         val followUp = conversation.resolve(text)
+        trace("contact_choice")
         when (val choice = contactChoice.answer(text, newRequest = rule != null || smallTalk != null || followUp != null || cloud.asked(text))) {
             is PendingContactChoice.Reply.Selection -> return runTool(choice.call, input, "contact_choice")
             is PendingContactChoice.Reply.Prompt -> return Reply(choice.question, expectAnswer = true)
@@ -131,27 +183,34 @@ class Assistant @Inject constructor(
                 clearConversation()
                 return Reply("Okay, cancelled.", endConversation = true)
             }
-            PendingContactChoice.Reply.Expired -> return Reply("That contact choice expired. Who should I contact?", expectAnswer = true)
+            PendingContactChoice.Reply.Expired -> {
+                trace("contact_choice", ok = false)
+                return Reply("That contact choice expired. Who should I contact?", expectAnswer = true)
+            }
             PendingContactChoice.Reply.NoPending -> Unit
         }
         pending?.let { (call, at) ->
             if (followUp != null && monotonicMillis() - at in 0 until PENDING_MS) {
+                trace("confirm", call)
                 return Reply("Please confirm the pending request with yes, or cancel it with no first.", expectAnswer = true)
             }
             pending = null
             if (monotonicMillis() - at in 0 until PENDING_MS) {
                 if (Persona.isYes(text)) return runTool(call, input, "confirm", confirmed = true)
                 if (Persona.isNo(text)) {
+                    trace("confirm", call)
                     clearConversation()
                     return Reply("Okay, cancelled.", tool = call.tool, endConversation = true)
                 }
             } else if (Persona.isYes(text)) {
+                trace("confirm", call, false)
                 return Reply("That confirmation expired. Please repeat the request.", expectAnswer = true)
             }
         }
-        smallTalk?.let { return Reply(it) }
+        smallTalk?.let { trace("smalltalk"); return Reply(it) }
         var query = text
         var contextualQuestion = false
+        trace("follow_up")
         when (followUp) {
             is ConversationContext.Resolution.Tool -> return runTool(followUp.call, input, "follow_up")
             is ConversationContext.Resolution.Clarify -> return Reply(followUp.question, expectAnswer = true)
@@ -177,14 +236,22 @@ class Assistant @Inject constructor(
                     models.toolCall(text, contextLine())?.let { return runTool(it, input, "llm") }
                 }
                 if (AgentRouting.needsScreen(text)) {
+                    if (smoke != null) {
+                        val call = ToolCall("screen_agent", mapOf("task" to text))
+                        trace("screen_agent", call)
+                        val result = smoke.intercept(call)!!
+                        return Reply(result.say, tool = call.tool)
+                    }
                     return screenReply(screenAgent.run(text, input.locked, input.voiceOk, speak))
                 }
             }
         }
         val facts = memory.all().map { it.text }
         // Local replies can contain private notes, notifications or screen text (D-035).
-        cloud.chat(query, emptyList(), facts, forced)?.let { return Reply(it, tool = "cloud", expectAnswer = it.trimEnd().endsWith('?')) }
+        if (smoke == null) cloud.chat(query, emptyList(), facts, forced)?.let { return Reply(it, tool = "cloud", expectAnswer = it.trimEnd().endsWith('?')) }
+        trace("chat", ToolCall("chat"))
         models.chat(query, history.toList(), facts, speak)?.let { return Reply(it.text, tool = "chat", spokenAlready = it.streamed, expectAnswer = it.text.trimEnd().endsWith('?')) }
+        trace("fallback", ok = false)
         return Reply(Persona.CANT)
     }
 
@@ -208,6 +275,14 @@ class Assistant @Inject constructor(
 
     private suspend fun runTool(request: ToolCall, input: Input, source: String, confirmed: Boolean = false): Reply {
         var call = request
+        val smoke = coroutineContext[SmokeSession]
+        smoke?.route = source
+        smoke?.call = call
+        smoke?.ok = true
+        if (smoke != null && call.tool in setOf("run_routine", "panic")) {
+            val result = smoke.intercept(call)!!
+            return Reply(result.say, tool = call.tool)
+        }
         when (call.tool) {
             "cancel" -> {
                 clearConversation()
@@ -218,7 +293,10 @@ class Assistant @Inject constructor(
             "panic" -> return panic(input)
         }
         if (!confirmed && call.tool in setOf("call", "send_sms", "send_whatsapp")) {
-            val who = call.arg("contact") ?: return Reply("Who should I contact?", expectAnswer = true)
+            val who = call.arg("contact") ?: run {
+                smoke?.ok = false
+                return Reply("Who should I contact?", expectAnswer = true)
+            }
             when (val resolved = contacts.resolve(who)) {
                 is ContactResolver.Resolution.Ambiguous -> {
                     pending = null
@@ -230,9 +308,13 @@ class Assistant @Inject constructor(
                         else resolved.contact.name
                     call = call.copy(args = call.args + mapOf("contact" to resolved.contact.number, "contact_name" to name))
                 }
-                ContactResolver.Resolution.NotFound -> return Reply("I can't find $who in your contacts. Who did you mean?", expectAnswer = true)
+                ContactResolver.Resolution.NotFound -> {
+                    smoke?.ok = false
+                    return Reply("I can't find $who in your contacts. Who did you mean?", expectAnswer = true)
+                }
             }
         }
+        smoke?.call = call
         val ctx = ToolContext(context, input.heard, input.locked)
         return when (val o = executor.execute(call, ctx, confirmed, input.voiceOk)) {
             is Outcome.NeedConfirm -> {
@@ -247,10 +329,12 @@ class Assistant @Inject constructor(
                 Reply(question, tool = call.tool, expectAnswer = true)
             }
             is Outcome.Denied -> {
+                smoke?.ok = false
                 log(input.heard, call, source, ToolResult.fail(o.why))
                 Reply(o.why, tool = call.tool)
             }
             is Outcome.Done -> {
+                smoke?.ok = o.result.ok
                 log(input.heard, call, source, o.result)
                 if (o.result.ok) conversation.remember(input.heard, call, o.result.say)
                 if (o.result.ok && call.tool in setOf("web_search", "read_page") && o.result.data.isNotBlank()) {
@@ -285,6 +369,7 @@ class Assistant @Inject constructor(
     }
 
     private suspend fun log(heard: String, call: ToolCall, source: String, r: ToolResult) {
+        if (coroutineContext[SmokeSession] != null) return
         runCatching {
             toolLog.insert(
                 ToolCallLog(
