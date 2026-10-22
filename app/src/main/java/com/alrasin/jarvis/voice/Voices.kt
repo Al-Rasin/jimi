@@ -54,6 +54,7 @@ object Voices {
         archive = "sherpa-onnx-supertonic-3-tts-int8-2026-05-11",
     )
     private val ALAN = VoicePack(BUILT_IN, Engine.PIPER, 80, "", listOf("en_GB-alan-medium.onnx", "tokens.txt"))
+    private val fallback = Voice(BUILT_IN, "Alan", true, "UK", ALAN)
 
     private fun piper(name: String, lang: String) =
         VoicePack("piper-$name", Engine.PIPER, 63, "vits-piper-$lang-$name-medium", listOf("$lang-$name-medium.onnx", "tokens.txt"))
@@ -61,29 +62,15 @@ object Voices {
     /** Speaker numbers come from the model metadata (id2speaker). */
     val ALL: List<Voice> = listOf(
         // Supertonic voice.bin = F1..F5, M1..M5 (sorted file names)
-        Voice("supertonic-f1", "Sophia", false, "US", SUPERTONIC, 0),
-        Voice("supertonic-f2", "Olivia", false, "US", SUPERTONIC, 1),
         Voice("supertonic-f3", "Mia", false, "US", SUPERTONIC, 2),
         Voice("supertonic-f4", "Ava", false, "US", SUPERTONIC, 3),
-        Voice("supertonic-f5", "Zoe", false, "US", SUPERTONIC, 4),
-        Voice("supertonic-m1", "James", true, "US", SUPERTONIC, 5),
         Voice("supertonic-m2", "Ethan", true, "US", SUPERTONIC, 6),
-        Voice("supertonic-m3", "Noah", true, "US", SUPERTONIC, 7),
-        Voice("supertonic-m4", "Lucas", true, "US", SUPERTONIC, 8),
         Voice("supertonic-m5", "Owen", true, "US", SUPERTONIC, 9),
-        Voice(BUILT_IN, "Alan", true, "UK", ALAN),
-        Voice("piper-ryan", "Ryan", true, "US", piper("ryan", "en_US")),
-        Voice("piper-joe", "Joe", true, "US", piper("joe", "en_US")),
-        Voice("piper-hfc_male", "Hank", true, "US", piper("hfc_male", "en_US")),
-        Voice("piper-northern_english_male", "Arthur", true, "UK", piper("northern_english_male", "en_GB")),
+        fallback,
         Voice("piper-amy", "Amy", false, "US", piper("amy", "en_US")),
-        Voice("piper-kristin", "Kristin", false, "US", piper("kristin", "en_US")),
-        Voice("piper-hfc_female", "Hannah", false, "US", piper("hfc_female", "en_US")),
-        Voice("piper-jenny_dioco", "Jenny", false, "UK", piper("jenny_dioco", "en_GB")),
-        Voice("piper-cori", "Cori", false, "UK", piper("cori", "en_GB")),
     )
 
-    fun byId(id: String?): Voice = ALL.firstOrNull { it.id == id } ?: ALL.first { it.id == BUILT_IN }
+    fun byId(id: String?): Voice = ALL.firstOrNull { it.id == id } ?: fallback
 
     fun dir(context: Context, pack: VoicePack) = File(context.getExternalFilesDir(null) ?: context.filesDir, "voices/${pack.id}")
 
@@ -112,7 +99,7 @@ object Voices {
         } else {
             pack.files.forEachIndexed { i, name ->
                 val dest = File(dir, name)
-                if (dest.isFile) return@forEachIndexed
+                if (ModelFiles.present(dest)) return@forEachIndexed
                 val part = File(dir, "$name.part")
                 try {
                     fetch("$HF/${pack.repo}/resolve/main/$name", part) { progress((i + it) / pack.files.size) }
@@ -131,7 +118,9 @@ object Voices {
         conn.connectTimeout = 15_000
         conn.readTimeout = 30_000
         try {
-            val total = conn.contentLengthLong.coerceAtLeast(1)
+            check(conn.responseCode == HttpURLConnection.HTTP_OK) { "Download failed: HTTP ${conn.responseCode}" }
+            val expected = conn.contentLengthLong
+            val total = expected.coerceAtLeast(1)
             conn.inputStream.use { input ->
                 dest.outputStream().use { out ->
                     val buf = ByteArray(64 * 1024)
@@ -143,6 +132,7 @@ object Voices {
                         done += n
                         progress((done.toFloat() / total).coerceAtMost(1f))
                     }
+                    ModelFiles.validateDownload(done, expected)
                 }
             }
         } finally {

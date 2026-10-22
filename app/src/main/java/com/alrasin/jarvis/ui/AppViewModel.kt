@@ -230,7 +230,7 @@ class AppViewModel @Inject constructor(
         trying.value = v.id
         viewModelScope.launch(Dispatchers.IO) {
             runCatching { TextToSpeech(app, v, speed = voiceSpeed.value).use { it.speak("Hi Boss, I'm Jimi. How can I help?") } }
-                .onFailure { JarvisLog.e("try voice failed", it) }
+                .onFailure { JarvisLog.e("try voice failed", it); _message.value = "Voice preview failed. Delete its download, then download it again." }
             trying.value = null
         }
     }
