@@ -77,6 +77,8 @@ android {
     packaging {
         // sherpa AAR and onnxruntime-android both have lib/x86/libonnxruntime.so; x86 is not shipped anyway
         jniLibs.excludes += "lib/x86/libonnxruntime.so"
+        // duplicate licence files from the Anthropic SDK's HTTP libraries
+        resources.excludes += setOf("META-INF/DEPENDENCIES", "META-INF/LICENSE*", "META-INF/NOTICE*", "META-INF/INDEX.LIST")
     }
 }
 
@@ -104,6 +106,8 @@ dependencies {
     implementation(libs.libsu.core)
     implementation(libs.okhttp)
     implementation(libs.jsoup)
+    // Optional cloud chat (PLAN 14, off by default)
+    implementation(libs.anthropic.java)
 
     testImplementation(libs.junit)
 }

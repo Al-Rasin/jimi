@@ -69,6 +69,10 @@ class AppViewModel @Inject constructor(
     val enrollStatus = JarvisCoreService.enrollStatus
     val lastVoiceScore = JarvisCoreService.lastVoiceScore
     val voiceSamples = MutableStateFlow(speaker.samples)
+    val cloudEnabled = settings.cloudEnabled.state(false)
+    val cloudForChat = settings.cloudForChat.state(false)
+    val cloudSendFacts = settings.cloudSendFacts.state(false)
+    val cloudKeySet = MutableStateFlow(secrets.has(Secrets.CLOUD_KEY))
     val homeCity = settings.homeCity.state("Dhaka")
     val toolNames: List<String> get() = registry.all.map { it.name }.sorted()
 
@@ -117,6 +121,16 @@ class AppViewModel @Inject constructor(
     fun setAutoClear(v: Boolean) = viewModelScope.launch { settings.setAutoClearNotifications(v) }
     fun setVoiceId(v: Boolean) = viewModelScope.launch { settings.setVoiceId(v) }
     fun setSpeakerThreshold(v: Float) = viewModelScope.launch { settings.setSpeakerThreshold(v) }
+    fun setCloudEnabled(v: Boolean) = viewModelScope.launch { settings.setCloudEnabled(v) }
+    fun setCloudForChat(v: Boolean) = viewModelScope.launch { settings.setCloudForChat(v) }
+    fun setCloudSendFacts(v: Boolean) = viewModelScope.launch { settings.setCloudSendFacts(v) }
+
+    fun setCloudKey(key: String) {
+        secrets.put(Secrets.CLOUD_KEY, key.trim().ifEmpty { null })
+        cloudKeySet.value = secrets.has(Secrets.CLOUD_KEY)
+        _message.value = if (cloudKeySet.value) "API key saved (encrypted)." else "API key removed."
+    }
+
     fun enrollVoice() = JarvisCoreService.enroll(app)
     fun refreshVoice() { voiceSamples.value = speaker.samples }
 

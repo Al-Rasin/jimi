@@ -36,6 +36,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.alrasin.jarvis.data.ConversationTurn
@@ -217,6 +218,11 @@ private fun SettingsTab(vm: AppViewModel) {
     val voiceSamples by vm.voiceSamples.collectAsStateWithLifecycle()
     val speakerThreshold by vm.speakerThreshold.collectAsStateWithLifecycle()
     val lastVoiceScore by vm.lastVoiceScore.collectAsStateWithLifecycle()
+    val cloudOn by vm.cloudEnabled.collectAsStateWithLifecycle()
+    val cloudChat by vm.cloudForChat.collectAsStateWithLifecycle()
+    val cloudFacts by vm.cloudSendFacts.collectAsStateWithLifecycle()
+    val cloudKeySet by vm.cloudKeySet.collectAsStateWithLifecycle()
+    var cloudKey by remember { mutableStateOf("") }
     val models by vm.modelStatus.collectAsStateWithLifecycle()
     var cityText by remember(city) { mutableStateOf(city) }
     var pin by remember { mutableStateOf("") }
@@ -266,6 +272,24 @@ private fun SettingsTab(vm: AppViewModel) {
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             OutlinedTextField(pin, { pin = it.filter(Char::isDigit) }, Modifier.weight(1f), label = { Text("PIN (empty = remove)") }, singleLine = true)
             OutlinedButton(onClick = { vm.setPin(pin); pin = "" }) { Text("Save") }
+        }
+
+        Header("Cloud AI (optional, off by default)")
+        Text(
+            "Uses Claude (needs internet + an Anthropic API key). Phone actions always stay on the phone; " +
+                "only your words go out. Say \"think hard …\" to ask the cloud once.",
+            style = MaterialTheme.typography.bodySmall,
+        )
+        Toggle("Use cloud AI", cloudOn, vm::setCloudEnabled)
+        Toggle("Send all chat to the cloud (not only \"think hard\")", cloudChat, vm::setCloudForChat)
+        Toggle("Also send what Jimi remembers about me", cloudFacts, vm::setCloudSendFacts)
+        Text(if (cloudKeySet) "API key is saved, encrypted." else "No API key saved.", style = MaterialTheme.typography.bodySmall)
+        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            OutlinedTextField(
+                cloudKey, { cloudKey = it.trim() }, Modifier.weight(1f), label = { Text("API key (empty = remove)") }, singleLine = true,
+                visualTransformation = PasswordVisualTransformation(),
+            )
+            OutlinedButton(onClick = { vm.setCloudKey(cloudKey); cloudKey = "" }) { Text("Save") }
         }
 
         Header("Local AI models")

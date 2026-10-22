@@ -24,6 +24,9 @@ class Settings @Inject constructor(@ApplicationContext private val context: Cont
     private val panelKey = booleanPreferencesKey("show_panel")
     private val voiceIdKey = booleanPreferencesKey("voice_id")
     private val speakerThresholdKey = floatPreferencesKey("speaker_threshold")
+    private val cloudKey = booleanPreferencesKey("cloud_enabled")
+    private val cloudChatKey = booleanPreferencesKey("cloud_for_chat")
+    private val cloudFactsKey = booleanPreferencesKey("cloud_send_facts")
 
     val wakeThreshold: Flow<Float> = context.dataStore.data.map { it[thresholdKey] ?: DEFAULT_THRESHOLD }
     val listeningEnabled: Flow<Boolean> = context.dataStore.data.map { it[enabledKey] ?: false }
@@ -39,6 +42,16 @@ class Settings @Inject constructor(@ApplicationContext private val context: Cont
     /** Voice ID match needs cosine similarity ≥ this (higher = stricter). */
     val speakerThreshold: Flow<Float> = context.dataStore.data.map { it[speakerThresholdKey] ?: DEFAULT_SPEAKER_THRESHOLD }
 
+    /** Optional cloud (D-005): off by default; also needs an API key in Secrets. */
+    val cloudEnabled: Flow<Boolean> = context.dataStore.data.map { it[cloudKey] ?: false }
+    /** All chat goes to the cloud when online (else only "think hard …"). */
+    val cloudForChat: Flow<Boolean> = context.dataStore.data.map { it[cloudChatKey] ?: false }
+    /** Privacy (PLAN 14.3): remembered facts are sent only if this is on. Notes, notifications, screen text never are. */
+    val cloudSendFacts: Flow<Boolean> = context.dataStore.data.map { it[cloudFactsKey] ?: false }
+
+    suspend fun setCloudEnabled(v: Boolean) = context.dataStore.edit { it[cloudKey] = v }
+    suspend fun setCloudForChat(v: Boolean) = context.dataStore.edit { it[cloudChatKey] = v }
+    suspend fun setCloudSendFacts(v: Boolean) = context.dataStore.edit { it[cloudFactsKey] = v }
     suspend fun setFollowUp(v: Boolean) = context.dataStore.edit { it[followUpKey] = v }
     suspend fun setAutoClearNotifications(v: Boolean) = context.dataStore.edit { it[autoClearKey] = v }
     suspend fun setHomeCity(v: String) = context.dataStore.edit { it[cityKey] = v }

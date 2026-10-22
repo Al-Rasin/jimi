@@ -37,6 +37,7 @@ class Assistant @Inject constructor(
     private val routines: RoutineDao,
     private val memory: MemoryDao,
     private val models: ModelBrain,
+    private val cloud: CloudBrain,
 ) {
     data class Input(
         val heard: String,
@@ -98,9 +99,13 @@ class Assistant @Inject constructor(
         Persona.smallTalk(text, LocalDateTime.now().hour)?.let {
             return Reply(it, endConversation = it.startsWith("Bye"))
         }
-        RuleMatcher.match(text)?.let { return runTool(it, input, "rule") }
-        models.toolCall(text, contextLine())?.let { return runTool(it, input, "llm") }
+        val forced = cloud.asked(text)   // "think hard …" skips the tools
+        if (!forced) {
+            RuleMatcher.match(text)?.let { return runTool(it, input, "rule") }
+            models.toolCall(text, contextLine())?.let { return runTool(it, input, "llm") }
+        }
         val facts = memory.all().map { it.text }
+        cloud.chat(text, history.toList(), facts, forced)?.let { return Reply(it, tool = "cloud") }
         models.chat(text, history.toList(), facts, speak)?.let { return Reply(it.text, tool = "chat", spokenAlready = it.streamed) }
         return Reply(Persona.CANT)
     }
