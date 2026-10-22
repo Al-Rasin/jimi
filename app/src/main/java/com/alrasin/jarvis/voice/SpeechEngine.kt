@@ -5,7 +5,7 @@ import kotlinx.coroutines.withTimeoutOrNull
 
 enum class SpeechEngine(val label: String) {
     JIMI_OFFLINE("Jimi offline"),
-    PHONE_ON_DEVICE("Phone (Google) on-device");
+    PHONE_ON_DEVICE("Phone (Google): online when available");
 
     companion object {
         fun fromStored(value: String?) = entries.firstOrNull { it.name == value } ?: JIMI_OFFLINE
