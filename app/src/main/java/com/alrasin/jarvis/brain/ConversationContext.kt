@@ -71,6 +71,7 @@ class ConversationContext(
                 return Resolution.Clarify("Who should I send it to?")
             }
             val args = mutableMapOf("contact" to recipient, "text" to message)
+            previous.arg("app")?.let { args["app"] = it }
             if (sameRecipient) current?.entities?.get("contact_name")?.let { name -> args["contact_name"] = name }
             return Resolution.Tool(ToolCall(previous.tool, args))
         }

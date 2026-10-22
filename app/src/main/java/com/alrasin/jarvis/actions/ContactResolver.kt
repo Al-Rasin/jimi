@@ -1,6 +1,7 @@
 package com.alrasin.jarvis.actions
 
 import java.util.Locale
+import java.text.Normalizer
 
 object ContactResolver {
     sealed interface Resolution {
@@ -13,14 +14,19 @@ object ContactResolver {
 
     fun resolve(query: String, contacts: List<Contacts.Contact>): Resolution {
         number(query)?.let { return Resolution.Found(Contacts.Contact(it, it)) }
-        val q = clean(query)
+        val q = queryName(query)
         if (q.isEmpty()) return Resolution.NotFound
         val available = contacts.filter { number(it.number) != null && clean(it.name).isNotEmpty() }
-            .distinctBy { clean(it.name) to number(it.number) }
+            .groupBy { clean(it.name) to number(it.number) }.values.map { rows ->
+                rows.first().copy(aliases = rows.flatMap { it.aliases }.distinct())
+            }
             .sortedWith(compareBy({ clean(it.name) }, { number(it.number) }))
-        val names = available.filter { matches(q, clean(it.name)) }
+        val names = available.filter { contact ->
+            contactNames(contact).any { matches(q, it) || relationMatch(q, it) || phoneticMatch(q, it) }
+        }
         val matches = names.ifEmpty {
-            available.filter { Fuzzy.score(query, it.name) >= 0.65 }
+            if (q.split(' ').any { it in relations }) emptyList()
+            else available.filter { contact -> contactNames(contact).any { Fuzzy.score(q, it) >= 0.65 } }
         }
         return when (matches.size) {
             0 -> Resolution.NotFound
@@ -57,7 +63,11 @@ object ContactResolver {
         if (text.isEmpty()) return null
         val exact = candidates.filter { clean(it.name) == text }
         if (exact.isNotEmpty()) return exact.singleOrNull()
-        return candidates.filter { matches(text, clean(it.name)) }.singleOrNull()
+        val q = queryName(text)
+        if (q.isEmpty()) return null
+        return candidates.filter { contact ->
+            contactNames(contact).any { matches(q, it) || relationMatch(q, it) }
+        }.singleOrNull()
     }
 
     fun question(query: String, candidates: List<Contacts.Contact>): String {
@@ -83,10 +93,48 @@ object ContactResolver {
         return if (trimmed.startsWith('+')) "+$digits" else digits
     }
 
-    private fun clean(text: String) = text.lowercase(Locale.ROOT)
-        .replace(Regex("[^\\p{L}\\p{N}]+"), " ").trim()
+    private fun clean(text: String) = Normalizer.normalize(text, Normalizer.Form.NFD)
+        .replace(Regex("\\p{InCombiningDiacriticalMarks}+"), "")
+        .lowercase(Locale.ROOT).replace(Regex("[^\\p{L}\\p{M}\\p{N}]+"), " ").trim()
+
+    private fun queryName(text: String) = clean(text).removePrefix("my ").removePrefix("amar ")
+
+    private fun contactNames(contact: Contacts.Contact) = (listOf(contact.name) + contact.aliases)
+        .map(::clean).filter(String::isNotEmpty)
+
+    private val relations = listOf(
+        listOf("mother", "mom", "mum", "mummy", "mommy", "mama", "amma", "ammu", "ammum", "ammi", "maa", "ma", "মা", "আম্মু", "আম্মা"),
+        listOf("father", "dad", "daddy", "papa", "baba", "abba", "abbu", "বাবা", "আব্বু", "আব্বা"),
+        listOf("sister", "sis", "apu", "apa", "bon", "বোন", "আপু"),
+        listOf("brother", "bro", "bhai", "vai", "ভাই"),
+        listOf("grandmother", "grandma", "granny", "nani", "nanu", "dadi", "dida", "নানি", "দাদি"),
+        listOf("grandfather", "grandpa", "grandad", "granddad", "nana", "dada", "নানা", "দাদা"),
+        listOf("aunt", "auntie", "aunty", "khala", "fupu", "fufi", "mashi", "masi", "খালা", "ফুপু"),
+        listOf("uncle", "chacha", "kaka", "mamu", "চাচা", "কাকা", "মামা"),
+    ).flatMap { group -> group.map { clean(it) to group.first() } }.toMap()
+
+    private fun relationMatch(query: String, name: String): Boolean {
+        val q = query.split(' ').map { relations[it] ?: it }
+        val n = name.split(' ').map { relations[it] ?: it }
+        return n.windowed(q.size).any { it == q }
+    }
+
+    private fun phoneticMatch(query: String, name: String): Boolean {
+        val q = query.split(' ')
+        val n = name.split(' ')
+        return n.windowed(q.size).any { words ->
+            q.zip(words).all { (a, b) ->
+                a == b || (a !in relations && b !in relations && a.length >= 4 && b.length >= 4 &&
+                    phonetic(a) == phonetic(b))
+            }
+        }
+    }
+
+    private fun phonetic(word: String) = word.replace("ph", "f").replace("sh", "s")
+        .replace("ee", "i").replace("ii", "i").replace("oo", "u")
+        .replace(Regex("(.)\\1+"), "$1")
 
     private fun matches(query: String, name: String): Boolean =
         name == query || name.startsWith("$query ") || name.endsWith(" $query") ||
-            name.contains(" $query ") || name.split(' ').any { it.startsWith(query) }
+            name.contains(" $query ") || (query !in relations && name.split(' ').any { it.startsWith(query) })
 }

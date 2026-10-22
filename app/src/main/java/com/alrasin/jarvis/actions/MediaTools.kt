@@ -1,12 +1,8 @@
 package com.alrasin.jarvis.actions
 
-import android.app.SearchManager
 import android.content.Context
-import android.content.Intent
 import android.media.AudioManager
-import android.net.Uri
 import android.os.SystemClock
-import android.provider.MediaStore
 import android.view.KeyEvent
 import com.alrasin.jarvis.core.Tool
 import com.alrasin.jarvis.core.ToolResult
@@ -28,21 +24,11 @@ fun mediaTools(context: Context): List<Tool> {
         audio.dispatchMediaKeyEvent(KeyEvent(t, t, KeyEvent.ACTION_UP, code, 0))
     }
     return listOf(
-        SimpleTool("play_media", "Play a song, video or music", listOf(arg("query", "what to play"), arg("app", "youtube, spotify or music", required = false))) { c, _ ->
-            val q = c.arg("query") ?: "music"
-            val app = c.arg("app") ?: "youtube"
-            val wasActive = musicActive()
-            val ok = when {
-                app.contains("spotify") && context.isInstalled("com.spotify.music") ->
-                    context.launch(Intent(Intent.ACTION_VIEW, Uri.parse("spotify:search:${Uri.encode(q)}")))
-                app.contains("music") && !app.contains("youtube") ->
-                    context.launch(Intent(MediaStore.INTENT_ACTION_MEDIA_PLAY_FROM_SEARCH).putExtra(SearchManager.QUERY, q))
-                context.isInstalled("com.google.android.youtube") ->
-                    context.launch(Intent(Intent.ACTION_SEARCH).setPackage("com.google.android.youtube").putExtra("query", q))
-                else -> context.launch(Intent(Intent.ACTION_VIEW, Uri.parse("https://www.youtube.com/results?search_query=${Uri.encode(q)}")))
-            }
-            if (ok) MediaTruth.opened(wasActive, awaitMusic(true))
-            else ToolResult.fail("I couldn't open a player, Boss.")
+        SimpleTool("play_media", "Search YouTube, YouTube Music or Spotify and select the first video or song to play",
+            listOf(arg("query", "song, artist or video search text"), arg("app", "preferred installed player; omit to choose an installed player",
+                required = false, choices = listOf("youtube", "youtube_music", "spotify")))) { c, _ ->
+            val query = c.arg("query") ?: return@SimpleTool ToolResult.fail("What should I play?")
+            playSearch(context, query, c.arg("app"))
         },
         SimpleTool("media_control", "Pause, play, next or previous for music/video", listOf(arg("action", "what to do", choices = listOf("play", "pause", "next", "previous")))) { c, _ ->
             val action = c.arg("action")
