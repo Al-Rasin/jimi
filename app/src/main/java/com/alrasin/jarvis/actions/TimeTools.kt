@@ -1,19 +1,23 @@
 package com.alrasin.jarvis.actions
 
+import android.app.AlarmManager
 import android.content.Context
 import android.content.Intent
 import android.provider.AlarmClock
+import com.alrasin.jarvis.core.JarvisLog
 import com.alrasin.jarvis.core.Tool
 import com.alrasin.jarvis.core.ToolResult
+import kotlinx.coroutines.delay
 import java.time.DayOfWeek
 import java.time.LocalDate
 import java.time.LocalDateTime
 import java.time.LocalTime
+import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.util.Calendar
 import java.util.Locale
 
-/** Alarms and timers through the phone's Clock app (no UI shown). */
+/** Alarms and timers through the phone's Clock app. */
 fun timeTools(context: Context): List<Tool> = listOf(
     SimpleTool(
         "set_alarm", "Set an alarm",
@@ -40,22 +44,79 @@ fun timeTools(context: Context): List<Tool> = listOf(
         val days = plan.days
         if (days != null) i.putExtra(AlarmClock.EXTRA_DAYS, ArrayList(days))
         if (!context.launch(i)) return@SimpleTool ToolResult.fail("The clock app didn't take the alarm.")
-        ToolResult.ok("Alarm requested for ${plan.at.format(ALARM_DATE_FORMAT)}${plan.repeatText}. Check the Clock app to confirm.")
+        val expected = plan.at.atZone(ZoneId.systemDefault()).toInstant().toEpochMilli()
+        if (!awaitAlarmState(context) { next ->
+                if (next != null && !matchesAlarmMinute(next, expected)) {
+                    JarvisLog.i(if (next < expected) {
+                        "set_alarm: requested alarm cannot be seen past an earlier alarm; accepting Clock request"
+                    } else {
+                        "set_alarm: next alarm differs from requested time; accepting Clock request"
+                    })
+                }
+                hasScheduledAlarm(next)
+            }) {
+            JarvisLog.e("set_alarm: Clock request sent, but the requested alarm could not be confirmed")
+            return@SimpleTool ToolResult.fail("I asked the clock, but I couldn't confirm the alarm.")
+        }
+        val repeatReply = if (plan.days != null) " I requested${plan.repeatText.removePrefix(",")}." else ""
+        ToolResult.ok("Alarm set for ${plan.at.format(ALARM_DATE_FORMAT)}.$repeatReply")
     },
     SimpleTool("set_timer", "Start a countdown timer", listOf(arg("seconds", "length in seconds"), arg("label", "name", required = false))) { c, _ ->
-        val secs = c.arg("seconds")?.toDoubleOrNull()?.toInt() ?: return@SimpleTool ToolResult.fail("For how long?")
+        val secs = parseTimerSeconds(c.arg("seconds"))
+            ?: return@SimpleTool ToolResult.fail("For how long? Use a positive whole number of seconds.")
         val i = Intent(AlarmClock.ACTION_SET_TIMER)
             .putExtra(AlarmClock.EXTRA_LENGTH, secs)
             .putExtra(AlarmClock.EXTRA_SKIP_UI, true)
         c.arg("label")?.let { i.putExtra(AlarmClock.EXTRA_MESSAGE, it) }
-        if (context.launch(i)) ToolResult.ok("Timer set for ${speakDuration(secs)}.") else ToolResult.fail("The clock app didn't take the timer.")
+        if (!context.launch(i)) return@SimpleTool ToolResult.fail("The clock app didn't take the timer.")
+        JarvisLog.i("set_timer: Clock request sent; Android does not expose timer confirmation")
+        timerSetResult(secs)
     },
     SimpleTool("cancel_alarm", "Turn off alarms and timers") { _, _ ->
-        context.launch(Intent(AlarmClock.ACTION_DISMISS_ALARM).putExtra(AlarmClock.EXTRA_ALARM_SEARCH_MODE, AlarmClock.ALARM_SEARCH_MODE_ALL))
-        context.launch(Intent(AlarmClock.ACTION_DISMISS_TIMER))
-        ToolResult.ok("Okay, I asked the clock to turn them off.")
+        val alarmsSent = context.launch(Intent(AlarmClock.ACTION_DISMISS_ALARM)
+            .putExtra(AlarmClock.EXTRA_ALARM_SEARCH_MODE, AlarmClock.ALARM_SEARCH_MODE_ALL))
+        val timersSent = context.launch(Intent(AlarmClock.ACTION_DISMISS_TIMER))
+        if (!alarmsSent || !timersSent) {
+            JarvisLog.e("cancel_alarm: Clock accepted alarm request=$alarmsSent, timer request=$timersSent")
+            return@SimpleTool ToolResult.fail("The clock didn't accept every turn-off request. Check the Clock app.")
+        }
+        val noNextAlarm = awaitAlarmState(context) { it == null }
+        JarvisLog.i("cancel_alarm: no next alarm confirmed=$noNextAlarm; timer dismissal cannot be verified")
+        cancelAlarmResult(noNextAlarm)
     },
 )
+
+private suspend fun awaitAlarmState(context: Context, matches: (Long?) -> Boolean): Boolean {
+    val manager = context.getSystemService(AlarmManager::class.java) ?: return false
+    repeat(5) { attempt ->
+        if (attempt > 0) delay(500)
+        val next = try {
+            manager.nextAlarmClock?.triggerTime
+        } catch (e: RuntimeException) {
+            JarvisLog.e("Could not read the next Clock alarm", e)
+            return false
+        }
+        if (matches(next)) return true
+    }
+    return false
+}
+
+internal fun hasScheduledAlarm(next: Long?): Boolean = next != null
+
+internal fun timerSetResult(seconds: Int): ToolResult =
+    ToolResult.ok("Timer set for ${speakDuration(seconds)}.")
+
+internal fun cancelAlarmResult(noNextAlarm: Boolean): ToolResult = ToolResult.ok(
+    if (noNextAlarm) "Okay, alarms and timers are off." else "I asked the clock to turn them off."
+)
+
+internal fun matchesAlarmMinute(actual: Long?, expected: Long): Boolean =
+    actual != null && Math.floorDiv(actual, 60_000L) == Math.floorDiv(expected, 60_000L)
+
+internal fun parseTimerSeconds(value: String?): Int? {
+    val seconds = value?.toDoubleOrNull() ?: return null
+    return seconds.takeIf { it.isFinite() && it >= 1 && it <= Int.MAX_VALUE && it % 1 == 0.0 }?.toInt()
+}
 
 private val ALARM_DATE_FORMAT = DateTimeFormatter.ofPattern("EEEE d MMMM, h:mm a", Locale.ENGLISH)
 
