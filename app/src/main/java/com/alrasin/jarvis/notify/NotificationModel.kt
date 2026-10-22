@@ -30,11 +30,13 @@ class NotificationModel private constructor(
     }
 
     fun classify(input: Input, category: String? = null, rule: String? = null): Triage.Verdict {
-        if (rule == "keep" || rule == "clear") {
-            return Triage.classify(input.pkg, input.title, input.text, category, rule)
-        }
+        val rules = Triage.classify(
+            input.pkg, input.title, input.text, category, rule,
+            isConversation = input.isConversation || input.isGroupConversation,
+        )
+        if (rules.important || rule == "clear") return rules
         val probability = predictKeepProbability(input)
-            ?: return Triage.classify(input.pkg, input.title, input.text, category, rule)
+            ?: return rules
         return Triage.Verdict(probability >= threshold, "learned notification preference")
     }
 
