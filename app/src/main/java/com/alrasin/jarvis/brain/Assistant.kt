@@ -5,6 +5,8 @@ import com.alrasin.jarvis.actions.JarvisAccessibilityService
 import com.alrasin.jarvis.actions.Outcome
 import com.alrasin.jarvis.actions.ToolExecutor
 import com.alrasin.jarvis.core.JarvisLog
+import com.alrasin.jarvis.core.SmokeSession
+import kotlin.coroutines.coroutineContext
 import com.alrasin.jarvis.core.Json
 import com.alrasin.jarvis.core.ToolCall
 import com.alrasin.jarvis.core.ToolContext
@@ -63,17 +65,45 @@ class Assistant @Inject constructor(
 
     private val lock = Mutex()
     private var pending: Pair<ToolCall, Long>? = null
+    private var smokePending: Pair<ToolCall, Long>? = null
+    private var smokeLastReply = ""
+    private val smokeHistory = ArrayDeque<Exchange>()
     private var lastReply = ""
     private val history = ArrayDeque<Exchange>()
 
     /** [speak] is called for chat sentences while the model is still writing. */
     suspend fun handle(input: Input, speak: (String) -> Unit = {}): Reply = lock.withLock {
-        executor.observeLockState(input.locked)
+        val smoke = coroutineContext[SmokeSession]
+        if (smoke == null) return@withLock handleLocked(input, speak)
+        val livePending = pending
+        val liveReply = lastReply
+        val liveHistory = history.toList()
+        pending = smokePending
+        lastReply = smokeLastReply
+        history.clear()
+        history.addAll(smokeHistory)
+        try {
+            handleLocked(input, speak)
+        } finally {
+            smokePending = pending
+            smokeLastReply = lastReply
+            smokeHistory.clear()
+            smokeHistory.addAll(history)
+            pending = livePending
+            lastReply = liveReply
+            history.clear()
+            history.addAll(liveHistory)
+        }
+    }
+
+    private suspend fun handleLocked(input: Input, speak: (String) -> Unit): Reply {
+        val smoke = coroutineContext[SmokeSession]
+        if (smoke == null) executor.observeLockState(input.locked)
         val text = input.heard.trim()
         val r = if (text.isEmpty()) Reply(Persona.DIDNT_GET) else runCatching { route(text, input, speak) }
             .onFailure { JarvisLog.e("assistant failed", it) }
-            .getOrElse { Reply("Sorry ${Persona.ADDRESS}, something went wrong.") }
-        val id = turns.insert(
+            .getOrElse { smoke?.ok = false; smoke?.route = "error"; Reply("Sorry ${Persona.ADDRESS}, something went wrong.") }
+        val id = if (smoke != null) 0L else turns.insert(
             ConversationTurn(
                 timeMs = System.currentTimeMillis(), source = input.source, heard = text, rawText = input.raw,
                 audioPath = input.audioPath, reply = r.text, tool = r.tool, wakeId = input.wakeId,
@@ -84,18 +114,23 @@ class Assistant @Inject constructor(
             history.addLast(Exchange(text, r.text))
             while (history.size > 6) history.removeFirst()
         }
-        r.copy(turnId = id)
+        return r.copy(turnId = id)
     }
 
     private suspend fun route(text: String, input: Input, speak: (String) -> Unit): Reply {
+        val smoke = coroutineContext[SmokeSession]
         pending?.let { (call, at) ->
             pending = null
             if (System.currentTimeMillis() - at < PENDING_MS) {
                 if (Persona.isYes(text)) return runTool(call, input, "confirm", confirmed = true)
-                if (Persona.isNo(text)) return Reply("Okay, cancelled.", tool = call.tool)
+                if (Persona.isNo(text)) {
+                    smoke?.route = "confirm"; smoke?.call = call
+                    return Reply("Okay, cancelled.", tool = call.tool)
+                }
             }
         }
         Persona.smallTalk(text, LocalDateTime.now().hour)?.let {
+            smoke?.route = "smalltalk"
             return Reply(it, endConversation = it.startsWith("Bye"))
         }
         val forced = cloud.asked(text)   // "think hard …" skips the tools
@@ -105,8 +140,9 @@ class Assistant @Inject constructor(
         }
         val facts = memory.all().map { it.text }
         // Local replies can contain private notes, notifications or screen text (D-035).
-        cloud.chat(text, emptyList(), facts, forced)?.let { return Reply(it, tool = "cloud") }
-        models.chat(text, history.toList(), facts, speak)?.let { return Reply(it.text, tool = "chat", spokenAlready = it.streamed) }
+        if (smoke == null) cloud.chat(text, emptyList(), facts, forced)?.let { return Reply(it, tool = "cloud") }
+        models.chat(text, history.toList(), facts, speak)?.let { smoke?.route = "chat"; smoke?.call = ToolCall("chat"); return Reply(it.text, tool = "chat", spokenAlready = it.streamed) }
+        smoke?.ok = false
         return Reply(Persona.CANT)
     }
 
@@ -117,6 +153,13 @@ class Assistant @Inject constructor(
     }
 
     private suspend fun runTool(call: ToolCall, input: Input, source: String, confirmed: Boolean = false): Reply {
+        val smoke = coroutineContext[SmokeSession]
+        smoke?.route = source
+        smoke?.call = call
+        if (smoke != null && call.tool in setOf("run_routine", "panic")) {
+            val result = smoke.intercept(call)!!
+            return Reply(result.say, tool = call.tool)
+        }
         when (call.tool) {
             "cancel" -> return Reply("Okay.", tool = "cancel", endConversation = true)
             "repeat_last" -> return Reply(lastReply.ifEmpty { "I haven't said anything yet." }, tool = "repeat_last")
@@ -130,10 +173,12 @@ class Assistant @Inject constructor(
                 Reply(o.question, tool = call.tool, expectAnswer = true)
             }
             is Outcome.Denied -> {
+                smoke?.ok = false
                 log(input.heard, call, source, ToolResult.fail(o.why))
                 Reply(o.why, tool = call.tool)
             }
             is Outcome.Done -> {
+                smoke?.ok = o.result.ok
                 log(input.heard, call, source, o.result)
                 if (o.result.ok && call.tool in setOf("web_search", "read_page") && o.result.data.isNotBlank()) {
                     val answer = try {
@@ -166,6 +211,7 @@ class Assistant @Inject constructor(
     }
 
     private suspend fun log(heard: String, call: ToolCall, source: String, r: ToolResult) {
+        if (coroutineContext[SmokeSession] != null) return
         runCatching {
             toolLog.insert(
                 ToolCallLog(
