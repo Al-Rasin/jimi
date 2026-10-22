@@ -39,6 +39,89 @@ class JarvisAccessibilityService : AccessibilityService() {
 
     fun appPackage(): String? = rootInActiveWindow?.packageName?.toString()
 
+    private fun visibleNodes(packageName: String): List<AccessibilityNodeInfo> {
+        val root = rootInActiveWindow ?: return emptyList()
+        if (root.packageName?.toString() != packageName) return emptyList()
+        val nodes = ArrayList<AccessibilityNodeInfo>()
+        fun walk(node: AccessibilityNodeInfo, depth: Int) {
+            if (depth > 40 || nodes.size >= 1500 || !node.isVisibleToUser ||
+                node.packageName?.toString() != packageName) return
+            nodes.add(node)
+            for (i in 0 until node.childCount) node.getChild(i)?.let { walk(it, depth + 1) }
+        }
+        walk(root, 0)
+        return nodes
+    }
+
+    private fun clickableParent(node: AccessibilityNodeInfo, packageName: String): AccessibilityNodeInfo? {
+        var current: AccessibilityNodeInfo? = node
+        repeat(12) {
+            val n = current ?: return null
+            if (n.packageName?.toString() != packageName || !n.isVisibleToUser || !n.isEnabled) return null
+            if (n.isClickable) return n
+            current = n.parent
+        }
+        return null
+    }
+
+    fun clickExact(packageName: String, labels: List<String> = emptyList(), ids: List<String> = emptyList()): Boolean {
+        val targets = visibleNodes(packageName).filter { n ->
+            !n.isEditable && (n.viewIdResourceName in ids || labels.any {
+                n.text?.toString()?.trim().equals(it, true) || n.contentDescription?.toString()?.trim().equals(it, true)
+            })
+        }.mapNotNull { clickableParent(it, packageName) }.distinct()
+        return targets.singleOrNull()?.performAction(AccessibilityNodeInfo.ACTION_CLICK) ?: false
+    }
+
+    fun clickUniqueText(packageName: String, text: String): Boolean = clickExact(packageName, listOf(text))
+
+    fun hasExactText(packageName: String, text: String): Boolean = visibleNodes(packageName).any {
+        !it.isEditable && (it.text?.toString()?.trim().equals(text, true) ||
+            it.contentDescription?.toString()?.trim().equals(text, true))
+    }
+
+    fun hasConversationTitle(packageName: String, text: String): Boolean = visibleNodes(packageName).any { node ->
+        val expectedNumber = ContactResolver.number(text)
+        val exact = !node.isEditable && listOf(node.text, node.contentDescription).any { value ->
+            val label = value?.toString()?.trim().orEmpty()
+            label.equals(text, true) || (expectedNumber != null && ContactResolver.number(label) == expectedNumber)
+        }
+        if (!exact) return@any false
+        val titleIds = setOf("conversation_contact_name", "thread_name", "thread_title", "thread_title_name")
+        if (node.viewIdResourceName?.substringAfter(":id/") in titleIds) return@any true
+        var ancestor = node.parent
+        repeat(5) {
+            val parent = ancestor ?: return@any false
+            val id = parent.viewIdResourceName.orEmpty().substringAfter(":id/")
+            if (id.contains("toolbar") || id.contains("action_bar") || id == "thread_header") return@any true
+            ancestor = parent.parent
+        }
+        false
+    }
+
+    private fun editable(packageName: String): AccessibilityNodeInfo? {
+        val nodes = visibleNodes(packageName).filter { it.isEditable && it.isEnabled }
+        return nodes.singleOrNull { it.isFocused } ?: nodes.singleOrNull()
+    }
+
+    fun editableText(packageName: String): String? = editable(packageName)?.let {
+        if (it.isShowingHintText) "" else it.text?.toString().orEmpty()
+    }
+
+    fun replaceText(packageName: String, text: String): Boolean = editable(packageName)?.performAction(
+        AccessibilityNodeInfo.ACTION_SET_TEXT,
+        Bundle().apply { putCharSequence(AccessibilityNodeInfo.ACTION_ARGUMENT_SET_TEXT_CHARSEQUENCE, text) },
+    ) ?: false
+
+    fun clickFirstMediaResult(packageName: String): Boolean {
+        val candidates = visibleNodes(packageName).filter { node ->
+            MediaResultSelector.isResult(packageName, node.viewIdResourceName.orEmpty(),
+                node.text?.toString().orEmpty(), node.contentDescription?.toString().orEmpty())
+        }
+        val target = candidates.firstNotNullOfOrNull { clickableParent(it, packageName) } ?: return false
+        return target.performAction(AccessibilityNodeInfo.ACTION_CLICK)
+    }
+
     /** Clicks the node whose text/description best matches [text]; climbs to a clickable parent. Root tap as fallback. */
     fun clickText(text: String): Boolean {
         val root = rootInActiveWindow ?: return false

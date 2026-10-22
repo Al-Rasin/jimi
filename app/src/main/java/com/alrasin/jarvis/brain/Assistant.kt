@@ -1,6 +1,8 @@
 package com.alrasin.jarvis.brain
 
 import android.content.Context
+import com.alrasin.jarvis.actions.ContactResolver
+import com.alrasin.jarvis.actions.Contacts
 import com.alrasin.jarvis.actions.JarvisAccessibilityService
 import com.alrasin.jarvis.actions.Outcome
 import com.alrasin.jarvis.actions.ToolExecutor
@@ -50,7 +52,7 @@ class Assistant @Inject constructor(
         val audioPath: String? = null,
     )
 
-    /** [endConversation]: no follow-up listening (user said cancel / bye). [expectAnswer]: a yes/no question was asked. */
+    /** [endConversation]: no follow-up listening. [expectAnswer]: listen for a confirmation or clarification. */
     data class Reply(
         val text: String,
         val data: String = "",
@@ -63,6 +65,9 @@ class Assistant @Inject constructor(
 
     private val lock = Mutex()
     private var pending: Pair<ToolCall, Long>? = null
+    private val contactChoice = PendingContactChoice()
+    private val conversation = ConversationContext()
+    private val contacts = Contacts(context)
     private var lastReply = ""
     private val history = ArrayDeque<Exchange>()
 
@@ -80,6 +85,8 @@ class Assistant @Inject constructor(
             ),
         )
         if (r.text.isNotBlank()) {
+            if (r.endConversation) clearConversation()
+            else if (r.tool in setOf("chat", "cloud")) conversation.remember(text, null, r.text)
             lastReply = r.text
             history.addLast(Exchange(text, r.text))
             while (history.size > 6) history.removeFirst()
@@ -88,19 +95,50 @@ class Assistant @Inject constructor(
     }
 
     private suspend fun route(text: String, input: Input, speak: (String) -> Unit): Reply {
+        val rule = RuleMatcher.match(text)
+        if (rule?.tool in setOf("panic", "cancel")) return runTool(rule!!, input, "rule")
+        val smallTalk = Persona.smallTalk(text, LocalDateTime.now().hour)
+        if (smallTalk?.startsWith("Bye") == true) return Reply(smallTalk, endConversation = true)
+        val followUp = conversation.resolve(text)
+        when (val choice = contactChoice.answer(text, newRequest = rule != null || smallTalk != null || followUp != null || cloud.asked(text))) {
+            is PendingContactChoice.Reply.Selection -> return runTool(choice.call, input, "contact_choice")
+            is PendingContactChoice.Reply.Prompt -> return Reply(choice.question, expectAnswer = true)
+            PendingContactChoice.Reply.Cancelled -> {
+                clearConversation()
+                return Reply("Okay, cancelled.", endConversation = true)
+            }
+            PendingContactChoice.Reply.Expired -> return Reply("That contact choice expired. Who should I contact?", expectAnswer = true)
+            PendingContactChoice.Reply.NoPending -> Unit
+        }
         pending?.let { (call, at) ->
+            if (followUp != null && monotonicMillis() - at in 0 until PENDING_MS) {
+                return Reply("Please confirm the pending request with yes, or cancel it with no first.", expectAnswer = true)
+            }
             pending = null
-            if (System.currentTimeMillis() - at < PENDING_MS) {
+            if (monotonicMillis() - at in 0 until PENDING_MS) {
                 if (Persona.isYes(text)) return runTool(call, input, "confirm", confirmed = true)
-                if (Persona.isNo(text)) return Reply("Okay, cancelled.", tool = call.tool)
+                if (Persona.isNo(text)) {
+                    clearConversation()
+                    return Reply("Okay, cancelled.", tool = call.tool, endConversation = true)
+                }
+            } else if (Persona.isYes(text)) {
+                return Reply("That confirmation expired. Please repeat the request.", expectAnswer = true)
             }
         }
-        Persona.smallTalk(text, LocalDateTime.now().hour)?.let {
-            return Reply(it, endConversation = it.startsWith("Bye"))
+        smallTalk?.let { return Reply(it) }
+        var query = text
+        var contextualQuestion = false
+        when (followUp) {
+            is ConversationContext.Resolution.Tool -> return runTool(followUp.call, input, "follow_up")
+            is ConversationContext.Resolution.Clarify -> return Reply(followUp.question, expectAnswer = true)
+            is ConversationContext.Resolution.Query -> {
+                query = followUp.text
+                contextualQuestion = true
+            }
+            null -> Unit
         }
         val forced = cloud.asked(text)   // "think hard …" skips the tools
-        if (!forced) {
-            val rule = RuleMatcher.match(text)
+        if (!forced && !contextualQuestion) {
             val intent = IntentRouter.classify(text, rule)
             JarvisLog.i("route ${intent.route} ${intent.confidence}: ${intent.reason}")
             if (intent.isConfident && intent.route == IntentRouter.Route.WEB) {
@@ -115,10 +153,18 @@ class Assistant @Inject constructor(
         }
         val facts = memory.all().map { it.text }
         // Local replies can contain private notes, notifications or screen text (D-035).
-        cloud.chat(text, emptyList(), facts, forced)?.let { return Reply(it, tool = "cloud") }
-        models.chat(text, history.toList(), facts, speak)?.let { return Reply(it.text, tool = "chat", spokenAlready = it.streamed) }
+        cloud.chat(query, emptyList(), facts, forced)?.let { return Reply(it, tool = "cloud", expectAnswer = it.trimEnd().endsWith('?')) }
+        models.chat(query, history.toList(), facts, speak)?.let { return Reply(it.text, tool = "chat", spokenAlready = it.streamed, expectAnswer = it.text.trimEnd().endsWith('?')) }
         return Reply(Persona.CANT)
     }
+
+    private fun clearConversation() {
+        pending = null
+        contactChoice.clear()
+        conversation.clear()
+    }
+
+    private fun monotonicMillis() = System.nanoTime() / 1_000_000
 
     private fun contextLine(): String {
         val now = LocalDateTime.now()
@@ -126,18 +172,45 @@ class Assistant @Inject constructor(
         return "time ${now.toLocalDate()} ${now.toLocalTime().withNano(0)}" + (app?.let { ", app $it" } ?: "")
     }
 
-    private suspend fun runTool(call: ToolCall, input: Input, source: String, confirmed: Boolean = false): Reply {
+    private suspend fun runTool(request: ToolCall, input: Input, source: String, confirmed: Boolean = false): Reply {
+        var call = request
         when (call.tool) {
-            "cancel" -> return Reply("Okay.", tool = "cancel", endConversation = true)
+            "cancel" -> {
+                clearConversation()
+                return Reply("Okay.", tool = "cancel", endConversation = true)
+            }
             "repeat_last" -> return Reply(lastReply.ifEmpty { "I haven't said anything yet." }, tool = "repeat_last")
             "run_routine" -> return runRoutine(call.arg("name") ?: "", input)
             "panic" -> return panic(input)
         }
+        if (!confirmed && call.tool in setOf("call", "send_sms", "send_whatsapp")) {
+            val who = call.arg("contact") ?: return Reply("Who should I contact?", expectAnswer = true)
+            when (val resolved = contacts.resolve(who)) {
+                is ContactResolver.Resolution.Ambiguous -> {
+                    pending = null
+                    conversation.clear()
+                    return Reply(contactChoice.begin(call, resolved).question, tool = call.tool, expectAnswer = true)
+                }
+                is ContactResolver.Resolution.Found -> {
+                    val name = if (source in setOf("contact_choice", "follow_up")) call.arg("contact_name") ?: resolved.contact.name
+                        else resolved.contact.name
+                    call = call.copy(args = call.args + mapOf("contact" to resolved.contact.number, "contact_name" to name))
+                }
+                ContactResolver.Resolution.NotFound -> return Reply("I can't find $who in your contacts. Who did you mean?", expectAnswer = true)
+            }
+        }
         val ctx = ToolContext(context, input.heard, input.locked)
         return when (val o = executor.execute(call, ctx, confirmed, input.voiceOk)) {
             is Outcome.NeedConfirm -> {
-                pending = call to System.currentTimeMillis()
-                Reply(o.question, tool = call.tool, expectAnswer = true)
+                pending = call to monotonicMillis()
+                val recipient = call.arg("contact_name")?.let { "$it (${call.arg("contact")})" }
+                val question = when {
+                    recipient == null -> o.question
+                    call.tool == "call" -> "Call $recipient?"
+                    call.tool in setOf("send_sms", "send_whatsapp") -> "Send \"${call.arg("text")}\" to $recipient?"
+                    else -> o.question
+                }
+                Reply(question, tool = call.tool, expectAnswer = true)
             }
             is Outcome.Denied -> {
                 log(input.heard, call, source, ToolResult.fail(o.why))
@@ -145,6 +218,7 @@ class Assistant @Inject constructor(
             }
             is Outcome.Done -> {
                 log(input.heard, call, source, o.result)
+                if (o.result.ok) conversation.remember(input.heard, call, o.result.say)
                 if (o.result.ok && call.tool in setOf("web_search", "read_page") && o.result.data.isNotBlank()) {
                     val answer = try {
                         models.chat(call.arg("query") ?: input.heard, emptyList(), emptyList(), {}, evidence = o.result.data)
@@ -165,7 +239,7 @@ class Assistant @Inject constructor(
 
     /** Panic word (PLAN 12.4): forget the pending question, lock the screen, refuse risky tools until unlocked. */
     private suspend fun panic(input: Input): Reply {
-        pending = null
+        clearConversation()
         executor.enterLockdown()
         executor.observeLockState(input.locked)
         val call = ToolCall("lock_phone", emptyMap())

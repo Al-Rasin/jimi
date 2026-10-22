@@ -22,25 +22,37 @@ import java.util.UUID
 
 /** Contacts lookup by spoken name. */
 class Contacts(private val context: Context) {
-    data class Contact(val name: String, val number: String)
+    data class Contact(val name: String, val number: String, val aliases: List<String> = emptyList(), val contactId: Long? = null)
 
     fun all(): List<Contact> {
         if (context.checkSelfPermission(Manifest.permission.READ_CONTACTS) != PackageManager.PERMISSION_GRANTED) return emptyList()
         val out = ArrayList<Contact>()
+        val aliases = mutableMapOf<Long, MutableList<String>>()
+        context.contentResolver.query(
+            ContactsContract.Data.CONTENT_URI,
+            arrayOf(ContactsContract.Data.CONTACT_ID, ContactsContract.Data.DATA1),
+            "${ContactsContract.Data.MIMETYPE} = ?",
+            arrayOf(ContactsContract.CommonDataKinds.Nickname.CONTENT_ITEM_TYPE),
+            null,
+        )?.use { c ->
+            while (c.moveToNext()) {
+                c.getString(1)?.takeIf { it.isNotBlank() }?.let { aliases.getOrPut(c.getLong(0)) { mutableListOf() }.add(it) }
+            }
+        }
         context.contentResolver.query(
             ContactsContract.CommonDataKinds.Phone.CONTENT_URI,
-            arrayOf(ContactsContract.CommonDataKinds.Phone.DISPLAY_NAME, ContactsContract.CommonDataKinds.Phone.NUMBER),
+            arrayOf(ContactsContract.CommonDataKinds.Phone.DISPLAY_NAME, ContactsContract.CommonDataKinds.Phone.NUMBER, ContactsContract.CommonDataKinds.Phone.CONTACT_ID),
             null, null, null,
-        )?.use { c -> while (c.moveToNext()) out.add(Contact(c.getString(0) ?: "", c.getString(1) ?: "")) }
-        return out.distinctBy { it.name }
+        )?.use { c -> while (c.moveToNext()) out.add(Contact(c.getString(0) ?: "", c.getString(1) ?: "", aliases[c.getLong(2)].orEmpty(), c.getLong(2))) }
+        return out.distinctBy { it.name to ContactResolver.number(it.number) }
     }
 
     /** Spoken digits ("01712 345678") are used as the number. */
-    fun find(name: String): Contact? {
-        val digits = name.filter { it.isDigit() || it == '+' }
-        if (digits.length >= 5 && digits.length >= name.replace(" ", "").length - 1) return Contact(digits, digits)
-        return Fuzzy.best(name, all(), { it.name }, min = 0.65)
-    }
+    fun find(name: String): Contact? = (resolve(name) as? ContactResolver.Resolution.Found)?.contact
+
+    fun resolve(name: String): ContactResolver.Resolution = ContactResolver.resolve(
+        name, if (ContactResolver.number(name) != null) emptyList() else all(),
+    )
 
     /** Contact name for a sender. Senders like "Teletalk" or short codes have too few digits to match: keep them as they are. */
     fun nameFor(number: String): String {
@@ -55,36 +67,50 @@ class Contacts(private val context: Context) {
 }
 
 fun commsTools(context: Context, contacts: Contacts): List<Tool> = listOf(
-    SimpleTool("call", "Phone call to a contact", listOf(arg("contact", "name or number"), arg("app", "phone or whatsapp", required = false)), Risk.CONFIRM) { c, _ ->
+    SimpleTool("call", "Call a contact by phone, WhatsApp or Messenger; set video=true for an app video call", listOf(arg("contact", "name, nickname, relation or number"), arg("app", "calling app", required = false, choices = listOf("phone", "whatsapp", "messenger")), arg("video", "video call instead of voice", required = false, choices = listOf("true", "false"))), Risk.CONFIRM) { c, _ ->
         val who = c.arg("contact") ?: return@SimpleTool ToolResult.fail("Call who?")
-        val p = contacts.find(who) ?: return@SimpleTool ToolResult.fail("I can't find $who in your contacts.")
+        val app = c.arg("app")?.lowercase() ?: "phone"
+        if (app !in listOf("phone", "whatsapp", "messenger")) return@SimpleTool ToolResult.fail("I can call using phone, WhatsApp or Messenger.")
+        val video = c.arg("video")?.lowercase() ?: "false"
+        if (video !in listOf("true", "false")) return@SimpleTool ToolResult.fail("Should this be a voice or video call?")
+        if (app == "phone" && video == "true") return@SimpleTool ToolResult.fail("Choose WhatsApp or Messenger for a video call.")
+        val p = when (val match = contacts.resolve(who)) {
+            is ContactResolver.Resolution.Found -> match.contact
+            is ContactResolver.Resolution.Ambiguous -> return@SimpleTool ToolResult.fail(match.question)
+            ContactResolver.Resolution.NotFound -> return@SimpleTool ToolResult.fail("I can't find $who in your contacts.")
+        }.let { it.copy(name = c.arg("contact_name")?.takeIf { ContactResolver.number(who) != null } ?: it.name) }
+        if (app != "phone") return@SimpleTool AppCommunications(context, contacts).call(p, app, video == "true")
         if (context.checkSelfPermission(Manifest.permission.CALL_PHONE) != PackageManager.PERMISSION_GRANTED)
             return@SimpleTool ToolResult.fail("I need the phone permission. Open Jarvis setup.")
         if (context.launch(Intent(Intent.ACTION_CALL, Uri.parse("tel:" + Uri.encode(p.number)))))
-            ToolResult.ok("Boss, I requested a call to ${p.name}.")
+            ToolResult.ok("Boss, I requested a call to ${c.arg("contact_name")?.takeIf { ContactResolver.number(who) != null } ?: p.name}.")
         else ToolResult.fail("Boss, I couldn't open the phone app.")
     },
-    SimpleTool("send_sms", "Send a text message (SMS)", listOf(arg("contact", "name or number"), arg("text", "message")), Risk.CONFIRM) { c, _ ->
+    SimpleTool("send_sms", "Send an SMS, or send a Messenger message with app=messenger", listOf(arg("contact", "name, nickname, relation or number"), arg("text", "message"), arg("app", "messaging app", required = false, choices = listOf("sms", "messenger"))), Risk.CONFIRM) { c, _ ->
         val who = c.arg("contact") ?: return@SimpleTool ToolResult.fail("To who?")
         val text = c.arg("text") ?: return@SimpleTool ToolResult.fail("What should I say?")
-        val p = contacts.find(who) ?: return@SimpleTool ToolResult.fail("I can't find $who in your contacts.")
+        val app = c.arg("app")?.lowercase() ?: "sms"
+        if (app !in listOf("sms", "messenger")) return@SimpleTool ToolResult.fail("Choose SMS or Messenger for this message.")
+        val p = when (val match = contacts.resolve(who)) {
+            is ContactResolver.Resolution.Found -> match.contact
+            is ContactResolver.Resolution.Ambiguous -> return@SimpleTool ToolResult.fail(match.question)
+            ContactResolver.Resolution.NotFound -> return@SimpleTool ToolResult.fail("I can't find $who in your contacts.")
+        }.let { it.copy(name = c.arg("contact_name")?.takeIf { ContactResolver.number(who) != null } ?: it.name) }
+        if (app == "messenger") return@SimpleTool AppCommunications(context, contacts).message(p, app, text)
         if (context.checkSelfPermission(Manifest.permission.SEND_SMS) != PackageManager.PERMISSION_GRANTED)
             return@SimpleTool ToolResult.fail("I need the SMS permission. Open Jarvis setup.")
         @Suppress("DEPRECATION") val sms = SmsManager.getDefault()
         sendSms(context, sms, p, text)
     },
-    SimpleTool("send_whatsapp", "Send a WhatsApp message", listOf(arg("contact", "name or number"), arg("text", "message")), Risk.CONFIRM) { c, _ ->
+    SimpleTool("send_whatsapp", "Open the contact's WhatsApp conversation and send the exact message using accessibility", listOf(arg("contact", "name, nickname, relation or number"), arg("text", "message")), Risk.CONFIRM) { c, _ ->
         val who = c.arg("contact") ?: return@SimpleTool ToolResult.fail("To who?")
         val text = c.arg("text") ?: return@SimpleTool ToolResult.fail("What should I say?")
-        val p = contacts.find(who) ?: return@SimpleTool ToolResult.fail("I can't find $who in your contacts.")
-        val pkg = listOf("com.whatsapp", "com.whatsapp.w4b").firstOrNull { context.isInstalled(it) }
-            ?: return@SimpleTool ToolResult.fail("WhatsApp is not installed.")
-        var number = p.number.filter { it.isDigit() || it == '+' }.removePrefix("+")
-        if (number.startsWith("0")) number = "88$number"   // Bangladesh local → international (+880)
-        val uri = Uri.parse("https://api.whatsapp.com/send?phone=$number&text=${Uri.encode(text)}")
-        if (context.launch(Intent(Intent.ACTION_VIEW, uri).setPackage(pkg)))
-            ToolResult.ok("Boss, I opened WhatsApp with the message ready. Tap send.")
-        else ToolResult.fail("Boss, I couldn't open WhatsApp.")
+        val p = when (val match = contacts.resolve(who)) {
+            is ContactResolver.Resolution.Found -> match.contact
+            is ContactResolver.Resolution.Ambiguous -> return@SimpleTool ToolResult.fail(match.question)
+            ContactResolver.Resolution.NotFound -> return@SimpleTool ToolResult.fail("I can't find $who in your contacts.")
+        }.let { it.copy(name = c.arg("contact_name")?.takeIf { ContactResolver.number(who) != null } ?: it.name) }
+        AppCommunications(context, contacts).message(p, "whatsapp", text)
     },
     SimpleTool("read_messages", "Read the latest text messages") { _, _ ->
         if (context.checkSelfPermission(Manifest.permission.READ_SMS) != PackageManager.PERMISSION_GRANTED)
