@@ -1,6 +1,7 @@
 package com.alrasin.jarvis.actions
 
 import android.content.Context
+import android.os.Build
 import com.alrasin.jarvis.notify.JarvisNotificationListener
 
 /**
@@ -15,24 +16,33 @@ object RootSetup {
     )
 
     /** Returns one line per step: "ok …" or "fail …". */
-    suspend fun run(context: Context): List<String> {
-        if (!RootShell.available) return listOf("fail: no root (allow Jarvis in Magisk)")
+    suspend fun run(context: Context, replaceAssistant: Boolean = false): List<String> {
+        if (!RootShell.available) return listOf("Root unavailable. Use Setup to grant permissions through Android settings.")
         val pkg = context.packageName
         val out = ArrayList<String>()
         suspend fun step(name: String, vararg cmds: String) {
             out += (if (RootShell.run(*cmds).ok) "ok " else "fail ") + name
         }
-        RUNTIME.forEach { step("permission $it", "pm grant $pkg android.permission.$it 2>/dev/null || true") }
+        RUNTIME.filter {
+            when (it) {
+                "POST_NOTIFICATIONS" -> Build.VERSION.SDK_INT >= 33
+                "BLUETOOTH_CONNECT" -> Build.VERSION.SDK_INT >= 31
+                "READ_EXTERNAL_STORAGE" -> Build.VERSION.SDK_INT <= 32
+                else -> true
+            }
+        }.forEach { step("permission $it", "pm grant $pkg android.permission.$it") }
         step("display over apps", "appops set $pkg SYSTEM_ALERT_WINDOW allow")
-        step("MIUI: start in background", "appops set $pkg 10021 allow 2>/dev/null || true")
-        step("MIUI: show on lock screen", "appops set $pkg 10020 allow 2>/dev/null || true")
+        if (DeviceActionPolicy.hasMiuiSettings(Build.MANUFACTURER) && context.isInstalled("com.miui.securitycenter")) {
+            step("MIUI: start in background", "appops set $pkg 10021 allow")
+            step("MIUI: show on lock screen", "appops set $pkg 10020 allow")
+        }
         step("change settings", "appops set $pkg WRITE_SETTINGS allow")
-        step("exact alarms", "appops set $pkg SCHEDULE_EXACT_ALARM allow 2>/dev/null || true")
+        if (Build.VERSION.SDK_INT >= 31) step("exact alarms", "appops set $pkg SCHEDULE_EXACT_ALARM allow")
         step("battery: never sleep", "dumpsys deviceidle whitelist +$pkg")
         step("do not disturb access", "cmd notification allow_dnd $pkg")
         step("notification access", "cmd notification allow_listener ${JarvisNotificationListener.COMPONENT}")
         val vis = "$pkg/com.alrasin.jarvis.assist.JarvisVoiceInteractionService"
-        step(
+        if (replaceAssistant) step(
             "default assistant (instead of Google / Gemini)",
             "cmd role add-role-holder android.app.role.ASSISTANT $pkg 0 2>/dev/null || true",
             "settings put secure assistant $vis",

@@ -22,12 +22,15 @@ import kotlin.math.sqrt
 class SpeakerVerifier @Inject constructor(@ApplicationContext private val context: Context) {
     private val file = File(context.filesDir, "speaker/owner.bin")
     private val extractor: SpeakerEmbeddingExtractor? by lazy {
-        if (context.assets.list("speaker")?.contains("campplus.onnx") != true) {
+        val downloaded = File(PortableModels.dir(context, "speaker"), "campplus.onnx")
+        val local = ModelFiles.present(downloaded)
+        if (!local && context.assets.list("speaker")?.contains("campplus.onnx") != true) {
             JarvisLog.i("voice ID model missing (run tools/fetch_speech.sh)")
             return@lazy null
         }
         runCatching {
-            SpeakerEmbeddingExtractor(context.assets, SpeakerEmbeddingExtractorConfig("speaker/campplus.onnx", 2, false, "cpu"))
+            SpeakerEmbeddingExtractor(if (local) null else context.assets,
+                SpeakerEmbeddingExtractorConfig(if (local) downloaded.path else "speaker/campplus.onnx", 2, false, "cpu"))
         }.onFailure { JarvisLog.e("voice ID model failed to load", it) }.getOrNull()
     }
     private var owner: List<FloatArray> = load()

@@ -20,7 +20,7 @@ import java.io.File
  * [CaptureEndpoint] combines audio activity and partial text for adaptive command ending.
  */
 class SpeechToText(context: Context, dir: File? = null, hotwords: Collection<String> = emptyList()) : AutoCloseable {
-    private val modelDir = dir ?: overrideDir(context).takeIf { File(it, "tokens.txt").isFile }
+    private val modelDir = dir ?: overrideDir(context).takeIf(ModelFiles::speechReady)
     val modelName: String = modelDir?.name ?: "built-in Kroko en"
 
     private val bias = if (hotwords.isEmpty()) SttHotwords.Prepared(reason = "no vocabulary") else {
@@ -133,7 +133,7 @@ class SpeechToText(context: Context, dir: File? = null, hotwords: Collection<Str
     companion object {
         private const val DIR = "stt"
 
-        fun overrideDir(context: Context) = File(context.getExternalFilesDir(null), "models/stt")
+        fun overrideDir(context: Context) = PortableModels.dir(context, "stt")
 
         /** Lower case, no punctuation (Kroko writes "Hey, Jimmy."), keeps apostrophes: "what's". */
         fun normalize(text: String) =

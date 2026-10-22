@@ -37,7 +37,7 @@ class ModelBrain @Inject constructor(
 ) {
     data class ChatOut(val text: String, val streamed: Boolean)
 
-    private val dir get() = File(context.getExternalFilesDir(null), "models/llm")
+    private val dir get() = com.alrasin.jarvis.voice.PortableModels.dir(context, "llm")
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
     private val lock = Mutex()
     private var toolModel: Llama? = null
