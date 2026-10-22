@@ -25,7 +25,7 @@ import javax.inject.Singleton
 
 /**
  * The conversation (PLAN 5.2–5.5, 8.1, 9.4): text in → reply out. Order:
- * pending yes/no → small talk → rules → local tool caller → chat model → "can't do that yet".
+ * pending yes/no → small talk → intent router → rules / local tool caller / chat.
  * Every turn goes to conversation_turn; every tool call to tool_call_log (training data).
  */
 @Singleton
@@ -99,8 +99,18 @@ class Assistant @Inject constructor(
         }
         val forced = cloud.asked(text)   // "think hard …" skips the tools
         if (!forced) {
-            RuleMatcher.match(text)?.let { return runTool(it, input, "rule") }
-            models.toolCall(text, contextLine())?.let { return runTool(it, input, "llm") }
+            val rule = RuleMatcher.match(text)
+            val intent = IntentRouter.classify(text, rule)
+            JarvisLog.i("route ${intent.route} ${intent.confidence}: ${intent.reason}")
+            if (intent.isConfident && intent.route == IntentRouter.Route.WEB) {
+                val call = rule?.takeIf { it.tool in WEB_TOOLS }
+                    ?: ToolCall("web_search", mapOf("query" to text))
+                return runTool(call, input, "router")
+            }
+            if (!intent.isConfident || intent.route != IntentRouter.Route.CHAT) {
+                rule?.let { return runTool(it, input, "rule") }
+                models.toolCall(text, contextLine())?.let { return runTool(it, input, "llm") }
+            }
         }
         val facts = memory.all().map { it.text }
         cloud.chat(text, history.toList(), facts, forced)?.let { return Reply(it, tool = "cloud") }
@@ -192,6 +202,7 @@ class Assistant @Inject constructor(
 
     companion object {
         private const val PENDING_MS = 30_000L
+        private val WEB_TOOLS = setOf("web_search", "weather", "news", "wiki_lookup", "read_page", "open_url")
         private val INFO_TOOLS = setOf("device_status", "list_reminders", "weather", "notification_summary", "read_notes", "news")
 
         fun stepsJson(steps: List<ToolCall>) = Json.write(steps.map { mapOf("tool" to it.tool, "args" to it.args) })
