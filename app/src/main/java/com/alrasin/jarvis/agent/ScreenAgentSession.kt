@@ -7,7 +7,11 @@ import com.alrasin.jarvis.core.JarvisLog
 import com.alrasin.jarvis.core.Risk
 import com.alrasin.jarvis.core.ToolCall
 import com.alrasin.jarvis.core.ToolResult
+import com.alrasin.jarvis.ui.AssistantActivity
 import dagger.hilt.android.qualifiers.ApplicationContext
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.withContext
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -20,6 +24,8 @@ class ScreenAgentSession @Inject constructor(
     @Volatile private var agent: ScreenAgent? = null
     private var model: AgentModel? = null
     private var panel: AgentPanel? = null
+    @Volatile var running = false
+        private set
     val hasPendingConfirmation get() = agent?.hasPendingConfirmation == true
     val hasPendingQuestion get() = agent?.hasPendingQuestion == true
 
@@ -33,28 +39,37 @@ class ScreenAgentSession @Inject constructor(
             val backend = models.create()
             model = backend
             panel = AgentPanel(context, ::stop)
-            val next = ScreenAgent(backend, AccessibilityAgentScreen(context)) { step ->
+            val next = ScreenAgent(backend, AccessibilityAgentScreen(context), onStep = { step ->
                 JarvisLog.i("screen agent: $step")
                 panel?.show(step)
-            }
+            })
             agent = next
             speak(backend.description)
-            try { next.run(task) } finally { release() }
+            acting { next.run(task) }
         }
 
     suspend fun confirm(voiceConfirmed: Boolean, locked: Boolean, voiceOk: Boolean?): AgentResult =
         guarded(locked, voiceOk) {
             panel = AgentPanel(context, ::stop)
-            try { agent?.confirm(voiceConfirmed) ?: AgentResult("There is no screen action to confirm.") }
-            finally { release() }
+            acting { agent?.confirm(voiceConfirmed) ?: AgentResult("There is no screen action to confirm.") }
         }
 
     suspend fun answer(text: String, locked: Boolean, voiceOk: Boolean?): AgentResult =
         guarded(locked, voiceOk) {
             panel = AgentPanel(context, ::stop)
-            try { agent?.answer(text) ?: AgentResult("Please ask for the screen task again.") }
-            finally { release() }
+            acting { agent?.answer(text) ?: AgentResult("Please ask for the screen task again.") }
         }
+
+    private suspend fun acting(block: suspend () -> AgentResult): AgentResult {
+        running = true
+        return try {
+            withContext(Dispatchers.Main.immediate) { AssistantActivity.hideForScreenAgent() }
+            delay(150) // Let the activity window disappear before reading the app below.
+            block()
+        } finally {
+            try { release() } finally { running = false }
+        }
+    }
 
     private suspend fun guarded(locked: Boolean, voiceOk: Boolean?, block: suspend () -> AgentResult): AgentResult {
         var result: AgentResult? = null

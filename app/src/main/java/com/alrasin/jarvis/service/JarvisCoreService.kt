@@ -14,9 +14,11 @@ import android.media.AudioRecord
 import android.media.MediaRecorder
 import android.os.BatteryManager
 import android.os.PowerManager
+import android.os.SystemClock
 import androidx.lifecycle.LifecycleService
 import androidx.lifecycle.lifecycleScope
 import com.alrasin.jarvis.actions.RootShell
+import com.alrasin.jarvis.agent.ScreenAgentSession
 import com.alrasin.jarvis.brain.Assistant
 import com.alrasin.jarvis.brain.ModelBrain
 import com.alrasin.jarvis.brain.Persona
@@ -28,6 +30,7 @@ import com.alrasin.jarvis.ui.AssistantActivity
 import com.alrasin.jarvis.voice.AudioRing
 import com.alrasin.jarvis.voice.SpeakerVerifier
 import com.alrasin.jarvis.voice.SpeechToText
+import com.alrasin.jarvis.voice.ScreenAgentInterrupt
 import com.alrasin.jarvis.voice.Chimes
 import com.alrasin.jarvis.voice.PhraseCache
 import com.alrasin.jarvis.voice.TextToSpeech
@@ -49,6 +52,7 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.runBlocking
 import java.util.concurrent.atomic.AtomicInteger
+import java.util.concurrent.atomic.AtomicReference
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.currentCoroutineContext
@@ -74,11 +78,14 @@ class JarvisCoreService : LifecycleService() {
     @Inject lateinit var assistant: Assistant
     @Inject lateinit var models: ModelBrain
     @Inject lateinit var speaker: SpeakerVerifier
+    @Inject lateinit var screenAgent: ScreenAgentSession
 
     @Volatile private var threshold = Settings.DEFAULT_THRESHOLD
     @Volatile private var missedRequested = false
     /** True while thinking or speaking: the mic loop ignores audio (it would hear our own voice). */
     @Volatile private var speaking = false
+    @Volatile private var playbackActive = false
+    private val agentInterrupt = AtomicReference<String?>(null)
     /** Set to "follow_up" or "tap": the mic loop opens a command session without the wake word. */
     @Volatile private var listenRequest: String? = null
     @Volatile private var followUp = true
@@ -160,10 +167,14 @@ class JarvisCoreService : LifecycleService() {
         lifecycleScope.launch(Dispatchers.IO) {
             for ((epoch, a) in audio) {
                 try {
-                    if (epoch == speechEpoch) TextToSpeech.playPcm(a.samples, a.sampleRate) { epoch != speechEpoch }
+                    if (epoch == speechEpoch) {
+                        playbackActive = true
+                        TextToSpeech.playPcm(a.samples, a.sampleRate) { epoch != speechEpoch }
+                    }
                 } catch (t: Throwable) {
                     JarvisLog.e("play failed", t)
                 } finally {
+                    playbackActive = false
                     speechLeft.decrementAndGet()
                 }
             }
@@ -297,7 +308,7 @@ class JarvisCoreService : LifecycleService() {
                 var started = false
                 // slow answer (model loading, web): say something so the user knows Jimi heard (PLAN 9.4)
                 val filler = launch { delay(FILLER_MS); if (!started) say(Persona.FILLER) }
-                val r = try {
+                var r = try {
                     assistant.handle(input) { sentence ->
                         started = true
                         _phase.value = PHASE_SPEAKING
@@ -306,6 +317,13 @@ class JarvisCoreService : LifecycleService() {
                 } finally {
                     filler.cancel()
                 }
+                val interrupted = agentInterrupt.getAndSet(null)
+                if (interrupted == "panic") {
+                    r = assistant.handle(input.copy(heard = "panic", raw = "panic", source = "voice", audioPath = null))
+                } else if (interrupted != null) {
+                    r = r.copy(text = "Screen task stopped.", endConversation = true, expectAnswer = false)
+                }
+                if (r.tool == "screen_agent" || interrupted != null) showPanel()
                 JarvisLog.i("reply (${r.tool ?: "talk"}): ${r.text}")
                 _reply.value = r.text
                 _turnId.value = r.turnId
@@ -317,6 +335,7 @@ class JarvisCoreService : LifecycleService() {
                 awaitSpeech()
                 if (r.expectAnswer || (followUp && !r.endConversation && source != "typed")) next = "follow_up"
             } catch (t: Throwable) {
+                agentInterrupt.set(null)
                 JarvisLog.e("command failed", t)
             } finally {
                 delay(TAIL_MS)   // let the speaker go quiet before the mic listens again
@@ -340,7 +359,7 @@ class JarvisCoreService : LifecycleService() {
     }
 
     private fun showPanel() {
-        if (!showPanel) return
+        if (!showPanel || screenAgent.running) return
         runCatching {
             startActivity(
                 Intent(this, AssistantActivity::class.java)
@@ -380,6 +399,9 @@ class JarvisCoreService : LifecycleService() {
             .onFailure { JarvisLog.e("speech-to-text not loaded (run tools/fetch_speech.sh)", it) }
             .getOrNull()
         var command: SpeechToText.Session? = null
+        var stopCommand: SpeechToText.Session? = null
+        var stopChunks = 0
+        val stopListener = ScreenAgentInterrupt()
         var commandSource = "voice"
         var commandChunks = 0
         val commandAudio = ArrayList<ShortArray>()
@@ -409,6 +431,35 @@ class JarvisCoreService : LifecycleService() {
                     got += n
                 }
                 ring.write(chunk)
+                val agentRunning = screenAgent.running
+                val listenForStop = stopListener.canListen(agentRunning, playbackActive, SystemClock.elapsedRealtime())
+                if (!listenForStop || agentInterrupt.get() != null) {
+                    stopCommand?.close()
+                    stopCommand = null
+                    stopChunks = 0
+                }
+                if (agentRunning) {
+                    wasBusy = true
+                    command?.close()
+                    command = null
+                    if (listenForStop && agentInterrupt.get() == null && stt != null) {
+                        val stop = stopCommand ?: stt.session(waitStart = 3f).also { stopCommand = it }
+                        stop.accept(chunk)
+                        val phrase = stopListener.accept(stop.text, stop.done, SystemClock.elapsedRealtime())
+                        if (phrase != null && screenAgent.running && agentInterrupt.compareAndSet(null, phrase)) {
+                            assistant.stopScreenAgent()
+                            shutUp()
+                            JarvisLog.i("screen agent voice interruption: $phrase")
+                        }
+                        if (phrase != null || stop.done || ++stopChunks * chunk.size >= WakeWordDetector.SAMPLE_RATE * 3) {
+                            stop.close()
+                            stopCommand = null
+                            stopChunks = 0
+                            stopListener.reset()
+                        }
+                    }
+                    continue
+                }
                 val cmd = command
                 if (cmd != null) {
                     clips.onChunk(0f, threshold, ring, tone)   // only finishes the pending wake clip
@@ -478,6 +529,7 @@ class JarvisCoreService : LifecycleService() {
                 }
             }
         } finally {
+            stopCommand?.close()
             command?.close()
             stt?.close()
             rec.stop()

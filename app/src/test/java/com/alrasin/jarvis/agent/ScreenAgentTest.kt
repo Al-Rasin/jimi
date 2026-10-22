@@ -75,6 +75,14 @@ class ScreenAgentTest {
         assertTrue(screen.actions.isEmpty())
     }
 
+    @Test fun stopBeforeFirstSnapshotPreventsAction() = runBlocking {
+        val screen = Screen(safe)
+        val agent = ScreenAgent(model(AgentAction.Tap(1)), screen)
+        agent.stop()
+        assertEquals("Screen task stopped.", agent.run("task").summary)
+        assertTrue(screen.actions.isEmpty())
+    }
+
     @Test fun stopDuringModelPreventsAction() = runBlocking {
         val screen = Screen(safe)
         lateinit var agent: ScreenAgent

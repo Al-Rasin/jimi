@@ -42,8 +42,8 @@ class ScreenAgent(
     fun stop() { stopped = true; pending = null; hasPendingQuestion = false; activeJob?.cancel(Stopped()) }
 
     suspend fun run(task: String): AgentResult {
+        if (stopped) return limitResult()
         this.task = task
-        stopped = false
         pending = null
         hasPendingQuestion = false
         steps = 0
