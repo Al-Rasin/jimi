@@ -40,14 +40,14 @@ class JarvisAccessibilityService : AccessibilityService() {
 
     fun appPackage(): String? = rootInActiveWindow?.packageName?.toString()
 
-    /** Active window of [packageName], else its top on-screen window (Messenger chat heads are not the active window). */
-    private fun rootFor(packageName: String): AccessibilityNodeInfo? {
-        rootInActiveWindow?.takeIf { it.packageName?.toString() == packageName }?.let { return it }
+    /** Active window of [packageName], else all its on-screen windows (Messenger chat heads use several, none active). */
+    private fun rootsFor(packageName: String): List<AccessibilityNodeInfo> {
+        rootInActiveWindow?.takeIf { it.packageName?.toString() == packageName }?.let { return listOf(it) }
         return runCatching { windows }.getOrDefault(emptyList()).sortedByDescending { it.layer }
-            .firstNotNullOfOrNull { w -> w.root?.takeIf { it.packageName?.toString() == packageName } }
+            .mapNotNull { w -> w.root?.takeIf { it.packageName?.toString() == packageName } }
     }
 
-    fun hasWindow(packageName: String): Boolean = rootFor(packageName) != null
+    fun hasWindow(packageName: String): Boolean = rootsFor(packageName).isNotEmpty()
 
     /** WhatsApp "Message yourself" chat: title "<name> (You)" or the "Message yourself" subtitle. */
     fun isSelfChat(packageName: String): Boolean = visibleNodes(packageName).any { n ->
@@ -58,7 +58,6 @@ class JarvisAccessibilityService : AccessibilityService() {
     }
 
     private fun visibleNodes(packageName: String): List<AccessibilityNodeInfo> {
-        val root = rootFor(packageName) ?: return emptyList()
         val nodes = ArrayList<AccessibilityNodeInfo>()
         fun walk(node: AccessibilityNodeInfo, depth: Int) {
             if (depth > 40 || nodes.size >= 1500 || !node.isVisibleToUser ||
@@ -66,7 +65,7 @@ class JarvisAccessibilityService : AccessibilityService() {
             nodes.add(node)
             for (i in 0 until node.childCount) node.getChild(i)?.let { walk(it, depth + 1) }
         }
-        walk(root, 0)
+        rootsFor(packageName).forEach { walk(it, 0) }
         return nodes
     }
 
@@ -124,6 +123,11 @@ class JarvisAccessibilityService : AccessibilityService() {
     fun editableText(packageName: String): String? = editable(packageName)?.let {
         if (it.isShowingHintText) "" else it.text?.toString().orEmpty()
     }
+
+    /** Taps and focuses the message box; Messenger ignores set-text until its box has focus. */
+    fun focusEditable(packageName: String): Boolean = editable(packageName)?.let {
+        it.performAction(AccessibilityNodeInfo.ACTION_CLICK) or it.performAction(AccessibilityNodeInfo.ACTION_FOCUS)
+    } ?: false
 
     fun replaceText(packageName: String, text: String): Boolean = editable(packageName)?.performAction(
         AccessibilityNodeInfo.ACTION_SET_TEXT,

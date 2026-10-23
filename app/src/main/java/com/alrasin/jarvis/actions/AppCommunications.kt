@@ -87,7 +87,7 @@ internal class AppCommunications(private val context: Context, private val conta
             return ToolResult.fail("I couldn't enter the exact message in ${person.name}'s $label chat. Nothing was sent.")
         val ids = if (app == "whatsapp") listOf("$pkg:id/send") else emptyList()
         if (!conversationMatches(service, pkg, person)) return ToolResult.fail("The $label conversation changed. Nothing was sent.")
-        if (!service.clickExact(pkg, labels = listOf("Send", "Send message"), ids = ids))
+        if (!waitFor { service.clickExact(pkg, labels = listOf("Send", "Send message"), ids = ids) })
             return ToolResult.fail("The message is ready in $label, but I couldn't identify Send. Nothing was sent.")
         return ToolResult.ok("Boss, I tapped send for ${person.name} in $label. Delivery isn't confirmed.")
     }
@@ -109,11 +109,14 @@ internal class AppCommunications(private val context: Context, private val conta
         // Messenger has no "you" mark in the thread; the deep link to the owner's own id is the check there.
         val opened = waitFor { service.editableText(pkg) != null && (app != "whatsapp" || service.isSelfChat(pkg)) }
         if (!opened) return ToolResult.fail("I couldn't open your own $label chat. Nothing was sent. Unlock the phone and try again.")
-        if (!service.replaceText(pkg, text) || service.editableText(pkg) != text)
+        service.focusEditable(pkg)
+        delay(300)
+        if (!service.replaceText(pkg, text) || !waitFor { service.editableText(pkg) == text })
             return ToolResult.fail("I couldn't enter the exact message in your $label chat. Nothing was sent.")
         if (app == "whatsapp" && !service.isSelfChat(pkg)) return ToolResult.fail("The WhatsApp chat changed. Nothing was sent.")
         val ids = if (app == "whatsapp") listOf("$pkg:id/send") else emptyList()
-        if (!service.clickExact(pkg, labels = listOf("Send", "Send message"), ids = ids))
+        // Messenger swaps the like button for Send only after the text is in.
+        if (!waitFor { service.clickExact(pkg, labels = listOf("Send", "Send message"), ids = ids) })
             return ToolResult.fail("The message is ready in $label, but I couldn't identify Send. Nothing was sent.")
         return ToolResult.ok("Boss, I sent it to your own $label chat.")
     }
