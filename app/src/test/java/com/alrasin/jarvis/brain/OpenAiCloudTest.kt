@@ -11,18 +11,17 @@ import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
-/** OpenAI-style providers (Kimi, Groq, OpenRouter, Cloudflare) and the provider chain (D-063). */
-class KimiCloudTest {
+/** OpenAI-style providers (Groq, OpenRouter, Cloudflare) and the provider chain (D-063). */
+class OpenAiCloudTest {
     private fun body(preset: Preset, maxTokens: Int = 120) =
         Json.parse(OpenAiProvider.request(preset, "sys", listOf(Exchange("hi", "hello")), "what time", maxTokens, stream = true)) as Map<*, *>
 
-    @Test fun requestHasRolesAndThinkingOff() {
-        val body = body(Preset.KIMI)
+    @Test fun requestHasRolesStreamAndTokens() {
+        val body = body(Preset.cloudflare("acc"))
         assertEquals(listOf("system", "user", "assistant", "user"), (body["messages"] as List<*>).map { (it as Map<*, *>)["role"] })
-        assertEquals("disabled", (body["thinking"] as Map<*, *>)["type"])
         assertEquals(true, body["stream"])
         assertEquals(120L, (body["max_tokens"] as Number).toLong())
-        assertEquals("kimi-k2.6", body["model"])
+        assertEquals("@cf/meta/llama-3.3-70b-instruct-fp8-fast", body["model"])
     }
 
     @Test fun thinkingModelsGetExtraTokensAndTheirOwnModel() {
@@ -49,11 +48,10 @@ class KimiCloudTest {
         assertNull(OpenAiProvider.sseText(""))
     }
 
-    @Test fun chainOrderGroqFirstKimiLast() {
-        assertEquals("Groq+Gemini+OpenRouter+Cloudflare+Kimi",
-            CloudBrain.chain(CloudKeys("AIzaTest", "gsk_x", "sk-or-x", "cf", "acc", "sk-kimi"))?.name)
-        assertEquals("Gemini+Kimi", CloudBrain.chain(CloudKeys(main = "AIzaTest", kimi = "sk-kimi"))?.name)
-        assertEquals("Kimi", CloudBrain.chain(CloudKeys(kimi = "sk-kimi"))?.name)
+    @Test fun chainOrderGroqFirst() {
+        assertEquals("Groq+Gemini+OpenRouter+Cloudflare",
+            CloudBrain.chain(CloudKeys("AIzaTest", "gsk_x", "sk-or-x", "cf", "acc"))?.name)
+        assertEquals("Gemini+OpenRouter", CloudBrain.chain(CloudKeys(main = "AIzaTest", openRouter = "sk-or-x"))?.name)
         assertEquals("Gemini", CloudBrain.chain(CloudKeys(main = "AIzaTest"))?.name)
         assertNull(CloudBrain.chain(CloudKeys(cloudflare = "cf")))   // no account ID → Cloudflare skipped
         assertNull(CloudBrain.chain(CloudKeys()))

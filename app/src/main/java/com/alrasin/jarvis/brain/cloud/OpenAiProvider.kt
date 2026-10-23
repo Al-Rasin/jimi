@@ -33,16 +33,10 @@ data class Preset(
             "Cloudflare", "https://api.cloudflare.com/client/v4/accounts/${accountId.trim()}/ai/v1/chat/completions",
             "@cf/meta/llama-3.3-70b-instruct-fp8-fast",
         )
-
-        /** D-055. Thinking off for fast spoken answers. */
-        val KIMI = Preset(
-            "Kimi", "https://api.moonshot.ai/v1/chat/completions", "kimi-k2.6",
-            mapOf("thinking" to mapOf("type" to "disabled")),
-        )
     }
 }
 
-/** Any OpenAI-style chat API: Groq, OpenRouter, Cloudflare, Kimi … (D-063). The key is never logged. */
+/** Any OpenAI-style chat API: Groq, OpenRouter, Cloudflare … (D-063). The key is never logged. */
 class OpenAiProvider(private val preset: Preset, private val apiKey: String) : CloudProvider {
     override val name = preset.label
     private val headers = mapOf("Authorization" to "Bearer $apiKey")

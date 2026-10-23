@@ -169,6 +169,7 @@ class AppViewModel @Inject constructor(
     init {
         viewModelScope.launch(Dispatchers.IO) {
             voiceSamples.value = speaker.samples
+            secrets.put(Secrets.OLD_KIMI_KEY, null)   // Kimi removed (D-065)
             refreshKeys()
             pinSet.value = secrets.has(Secrets.PIN)
         }

@@ -50,7 +50,7 @@ interface CloudProvider {
 /** Saved cloud keys (null = not saved). [toString] hides them so a log line can never show a key. */
 data class CloudKeys(
     val main: String? = null, val groq: String? = null, val openRouter: String? = null,
-    val cloudflare: String? = null, val cloudflareAccount: String? = null, val kimi: String? = null,
+    val cloudflare: String? = null, val cloudflareAccount: String? = null,
 ) {
     override fun toString() = "CloudKeys(hidden)"
 }
@@ -251,7 +251,7 @@ class CloudBrain @Inject constructor(
     private fun savedKeys() = CloudKeys(
         main = secrets.get(Secrets.CLOUD_KEY), groq = secrets.get(Secrets.GROQ_KEY),
         openRouter = secrets.get(Secrets.OPENROUTER_KEY), cloudflare = secrets.get(Secrets.CLOUDFLARE_KEY),
-        cloudflareAccount = secrets.get(Secrets.CLOUDFLARE_ACCOUNT), kimi = secrets.get(Secrets.KIMI_KEY),
+        cloudflareAccount = secrets.get(Secrets.CLOUDFLARE_ACCOUNT),
     )
 
     /**
@@ -265,7 +265,6 @@ class CloudBrain @Inject constructor(
             Secrets.GROQ_KEY -> CloudKeys(groq = keys.groq)
             Secrets.OPENROUTER_KEY -> CloudKeys(openRouter = keys.openRouter)
             Secrets.CLOUDFLARE_KEY, Secrets.CLOUDFLARE_ACCOUNT -> CloudKeys(cloudflare = keys.cloudflare, cloudflareAccount = keys.cloudflareAccount)
-            Secrets.KIMI_KEY -> CloudKeys(kimi = keys.kimi)
             else -> CloudKeys()
         }
         val p = chain(only) ?: return "No key saved for this yet."
@@ -296,14 +295,13 @@ class CloudBrain @Inject constructor(
         /** Google keys start with "AIza"; anything else is treated as an Anthropic key. */
         fun providerFor(key: String): CloudProvider = if (key.startsWith("AIza")) GeminiProvider(key) else ClaudeProvider(key)
 
-        /** Saved keys in try order (D-064): Groq → main (Gemini/Claude) → OpenRouter → Cloudflare → Kimi. */
+        /** Saved keys in try order (D-064, D-065): Groq → main (Gemini/Claude) → OpenRouter → Cloudflare. */
         fun chain(k: CloudKeys): CloudProvider? {
             val list = listOfNotNull(
                 k.groq?.let { OpenAiProvider(Preset.GROQ, it) },
                 k.main?.let(::providerFor),
                 k.openRouter?.let { OpenAiProvider(Preset.OPENROUTER, it) },
                 if (k.cloudflare != null && k.cloudflareAccount != null) OpenAiProvider(Preset.cloudflare(k.cloudflareAccount), k.cloudflare) else null,
-                k.kimi?.let { OpenAiProvider(Preset.KIMI, it) },
             )
             return if (list.size > 1) ProviderChain(list) else list.firstOrNull()
         }
