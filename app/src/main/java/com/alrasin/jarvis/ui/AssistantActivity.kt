@@ -57,7 +57,6 @@ import java.lang.ref.WeakReference
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
@@ -70,7 +69,7 @@ import androidx.compose.ui.unit.IntSize
 import kotlin.math.roundToInt
 
 /**
- * The assistant panel (replaces the Google Assistant / Gemini sheet, D-036): a floating light glass card that shows a blurred
+ * The assistant panel (replaces the Google Assistant / Gemini sheet, D-036): a floating glass card that shows a blurred
  * picture of the screen behind it, with Jimi's living Möbius strip (D-050, D-051). Opens on the wake word, also on the lock screen.
  * Shows live text and the answer, and lets the user fix wrong text without a pop-up. Closes itself
  * [IDLE_MS] after the conversation ends and nothing was touched.
@@ -159,10 +158,9 @@ private fun Panel(vm: PanelViewModel, onClose: () -> Unit) {
     var cardAt by remember { mutableStateOf(Offset.Zero) }
     val image = remember(backdrop) { backdrop?.asImageBitmap() }
     val shape = RoundedCornerShape(32.dp)
-    // no dark shade (D-057): the screen stays as it is, with a colour glow round its edge
-    EdgeGlow(mood, level, fade)
     Box(
         Modifier.fillMaxSize().onSizeChanged { screen = it }
+            .background(Color.Black.copy(alpha = 0.12f * fade))
             .clickable(remember { MutableInteractionSource() }, null, onClick = ::close)
             .navigationBarsPadding().imePadding().padding(12.dp),
         contentAlignment = Alignment.BottomCenter,
@@ -171,7 +169,6 @@ private fun Panel(vm: PanelViewModel, onClose: () -> Unit) {
             Modifier.fillMaxWidth().heightIn(max = with(density) { (screen.height * 0.72f).toDp() })
                 .graphicsLayer { alpha = fade; translationY = (1f - fade) * 48.dp.toPx() }
                 .onGloballyPositioned { cardAt = it.positionInWindow() }
-                .shadow(24.dp, shape, ambientColor = Color(0x33000000), spotColor = Color(0x33000000))
                 .clip(shape)
                 // the blurred screen, placed so the card shows exactly what is behind it
                 .drawBehind {
@@ -182,9 +179,8 @@ private fun Panel(vm: PanelViewModel, onClose: () -> Unit) {
                         )
                     }
                 }
-                // light frosted glass (D-057): white tint over the blurred screen
-                .background(Hud.Tint.copy(alpha = if (image != null) 0.74f else 0.97f))
-                .border(1.dp, Hud.Hairline, shape)
+                .background(Hud.SheetBottom.copy(alpha = if (image != null) 0.55f else 0.92f))
+                .border(1.dp, Hud.edgeBrush, shape)
                 .clickable(remember { MutableInteractionSource() }, null) { touch() }
                 .padding(start = 18.dp, end = 18.dp, top = 6.dp, bottom = 14.dp)
                 .animateContentSize(tween(if (motion) 200 else 0)),

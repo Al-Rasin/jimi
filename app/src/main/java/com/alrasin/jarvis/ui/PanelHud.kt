@@ -49,14 +49,17 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
-/** Light frosted glass for the assistant panel (D-057): white tint over the blurred screen, hairline edge, ink text. */
+/** Futuristic but quiet look for the assistant panel: dark glass, hairline light edges, one HUD ring. */
 object Hud {
-    val Tint = Color.White
-    val Glass = Color.Black.copy(alpha = 0.04f)
-    val Hairline = Color.Black.copy(alpha = 0.08f)
+    val SheetTop = Color(0xFF111726)
+    val SheetBottom = Color(0xFF07090F)
+    val Glass = Color.White.copy(alpha = 0.06f)
+    val Hairline = Color.White.copy(alpha = 0.10f)
+    val sheetBrush = Brush.verticalGradient(listOf(SheetTop, SheetBottom))
+    val edgeBrush = Brush.horizontalGradient(
+        listOf(Color.Transparent, PanelColors.Cyan.copy(alpha = 0.7f), PanelColors.Violet.copy(alpha = 0.7f), Color.Transparent),
+    )
     val accentBrush = Brush.linearGradient(listOf(PanelColors.Cyan, PanelColors.Violet))
-    /** Siri-like edge colours: cyan, blue, violet, pink. */
-    val Glow = listOf(Color(0xFF3DD5F3), Color(0xFF5B7CFA), Color(0xFF9B6BFF), Color(0xFFFF6FB5), Color(0xFF3DD5F3))
 }
 
 /** The orb inside a thin ring; a short arc travels around it while Jimi is busy. */
@@ -75,7 +78,7 @@ fun HudOrb(mood: OrbMood, level: Float, size: Dp = 84.dp) {
             val w = 1.5.dp.toPx()
             val inset = w / 2
             val arcSize = Size(this.size.width - w, this.size.height - w)
-            drawCircle(Color.Black.copy(alpha = 0.06f), radius = this.size.minDimension / 2 - inset, style = Stroke(w))
+            drawCircle(Color.White.copy(alpha = 0.08f), radius = this.size.minDimension / 2 - inset, style = Stroke(w))
             if (arcAlpha > 0f) {
                 drawArc(
                     Brush.sweepGradient(listOf(Color.Transparent, PanelColors.Cyan, PanelColors.Violet), center),
@@ -104,7 +107,7 @@ fun HudLabel(text: String, active: Boolean) {
     )
 }
 
-/** User line: right, soft. Jimi line: left, ink, with a thin light bar. No heavy bubbles. */
+/** User line: right, soft. Jimi line: left, bright, with a thin light bar. No heavy bubbles. */
 @Composable
 fun HudLine(text: String, mine: Boolean) {
     if (text.isBlank()) return
@@ -173,14 +176,14 @@ fun HudInput(text: String, onText: (String) -> Unit, onGo: () -> Unit) {
             Modifier.size(44.dp).clip(CircleShape).background(Hud.accentBrush).clickable(onClick = onGo),
             contentAlignment = Alignment.Center,
         ) {
-            if (text.isBlank()) MicGlyph(Color.White)
-            else Icon(Icons.AutoMirrored.Filled.Send, contentDescription = "Send", tint = Color.White, modifier = Modifier.size(20.dp))
+            if (text.isBlank()) MicGlyph(Color(0xFF07090F))
+            else Icon(Icons.AutoMirrored.Filled.Send, contentDescription = "Send", tint = Color(0xFF07090F), modifier = Modifier.size(20.dp))
         }
     }
 }
 
 @Composable
-fun MicGlyph(color: Color) {
+private fun MicGlyph(color: Color) {
     Canvas(Modifier.size(20.dp)) {
         val s = size.minDimension
         val w = s * 0.1f

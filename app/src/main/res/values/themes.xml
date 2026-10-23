@@ -1,16 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <!-- App window: light (D-057), so no black flash before Compose draws. -->
-    <style name="Theme.Jarvis" parent="@android:style/Theme.Material.Light.NoActionBar">
-        <item name="android:windowBackground">@color/jimi_background</item>
-        <item name="android:statusBarColor">@android:color/transparent</item>
-        <item name="android:navigationBarColor">@android:color/transparent</item>
-        <item name="android:windowLightStatusBar">true</item>
-        <item name="android:windowLightNavigationBar">true</item>
-    </style>
-
     <!-- Assistant panel: see-through; it draws its own blurred, tinted backdrop (D-050), so no window dim. -->
-    <style name="Theme.Jarvis.Panel" parent="@android:style/Theme.Material.Light.NoActionBar">
+    <style name="Theme.Jarvis.Panel" parent="@android:style/Theme.Material.NoActionBar">
         <item name="android:windowIsTranslucent">true</item>
         <item name="android:windowBackground">@android:color/transparent</item>
         <item name="android:backgroundDimEnabled">false</item>
