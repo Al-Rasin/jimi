@@ -32,6 +32,7 @@ class ToolRegistry @Inject constructor(
     val apps = AppList(context)
     val contacts = Contacts(context)
     val location = CurrentLocation(context)
+    val profile = PhoneProfile(context, apps)
 
     val all: List<Tool> = buildList {
         addAll(appTools(context, apps))
@@ -45,6 +46,7 @@ class ToolRegistry @Inject constructor(
         addAll(notificationTools(notifications))
         addAll(webTools(Web(), FastWeather(context), { location.get() }) { settings.homeCity.first() })
         add(myLocationTool(location))
+        add(phoneProfileTool(profile))
     }
 
     private val byName = all.associateBy { it.name }.also {

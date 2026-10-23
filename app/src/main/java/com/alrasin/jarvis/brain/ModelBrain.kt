@@ -145,7 +145,8 @@ class ModelBrain @Inject constructor(
 
     suspend fun toolCall(text: String, ctx: String): ToolCall? = withContext(Dispatchers.Default) {
         withModels {
-            val tools = ToolShortlist.pick(text, llmTools)
+            val labels = registry.profile.current()?.apps ?: registry.apps.all().map { it.label }
+            val tools = ToolShortlist.pick(text, llmTools, appWords = ToolShortlist.appWords(labels))
             if (tools.isEmpty()) { JarvisLog.i("llm tool skipped: no likely tool"); return@withModels null }
             val m = toolModel() ?: return@withModels null
             val t0 = System.currentTimeMillis()

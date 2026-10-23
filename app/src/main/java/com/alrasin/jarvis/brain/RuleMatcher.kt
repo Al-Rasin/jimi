@@ -374,6 +374,8 @@ object RuleMatcher {
 
     private fun knowledge(t: String): ToolCall? {
         WeatherRequest.match(t)?.let { return it }
+        if (t.matches(re("(?:re ?)?scan (?:my|this|the) (?:phone|device)(?: again)?"))) return call("phone_profile", "scan" to "true")
+        if (t.matches(re("what do you know about (?:my|this) (?:phone|device)|(?:tell me )?about (?:my|this) phone|what apps do i have|which apps do i have"))) return call("phone_profile")
         if (t.matches(re("where am i(?: right)?(?: now)?|(?:whats|what is|tell me|show me) my (?:current )?location|my (?:current )?location|where are we(?: now)?"))) return call("my_location")
         Regex("^(?:whats |what is |how is |hows )?(?:the )?weather(?: like)?(?: (?:today|now|tomorrow))?(?: in ([a-z ]+?))?(?: (?:today|now|tomorrow))?$").find(t)
             ?.let { return call("weather", "place" to it.groupValues[1], "day" to if (t.contains("tomorrow")) "tomorrow" else null) }

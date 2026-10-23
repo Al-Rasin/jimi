@@ -16,6 +16,7 @@ import androidx.lifecycle.LifecycleService
 import androidx.lifecycle.lifecycleScope
 import com.alrasin.jarvis.actions.RootShell
 import com.alrasin.jarvis.agent.ScreenAgentSession
+import com.alrasin.jarvis.actions.ToolRegistry
 import com.alrasin.jarvis.brain.Assistant
 import com.alrasin.jarvis.brain.CloudBrain
 import com.alrasin.jarvis.brain.ModelBrain
@@ -95,6 +96,7 @@ class JarvisCoreService : LifecycleService() {
     @Inject lateinit var assistant: Assistant
     @Inject lateinit var models: ModelBrain
     @Inject lateinit var cloud: CloudBrain
+    @Inject lateinit var registry: ToolRegistry
     @Inject lateinit var speaker: SpeakerVerifier
     @Inject lateinit var screenAgent: ScreenAgentSession
 
@@ -153,6 +155,9 @@ class JarvisCoreService : LifecycleService() {
                 stopSelf()
                 return START_NOT_STICKY
             }
+        }
+        if (intent?.action != ACTION_STOP) lifecycleScope.launch(Dispatchers.IO) {
+            runCatching { registry.profile.refreshIfOld() }.onFailure { JarvisLog.e("phone scan failed", it) }   // D-049
         }
         when (intent?.action) {
             ACTION_STOP -> {

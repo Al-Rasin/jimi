@@ -3,6 +3,7 @@ package com.alrasin.jarvis.brain
 import android.content.Context
 import android.net.ConnectivityManager
 import android.net.NetworkCapabilities
+import com.alrasin.jarvis.actions.PhoneProfile
 import com.alrasin.jarvis.actions.ToolRegistry
 import com.alrasin.jarvis.core.JarvisLog
 import com.alrasin.jarvis.core.Json
@@ -237,7 +238,8 @@ class CloudBrain @Inject constructor(
         if (!enabled() || !settings.cloudForChat.first()) return null
         val p = provider() ?: return null
         val t0 = System.currentTimeMillis()
-        val out = runCatching { p.quick(toolPrompt(registry.all), history.takeLast(HISTORY), text, TOOL_TOKENS) }
+        val phone = registry.profile.current()?.let { "\n" + PhoneProfile.cloudLine(it) }.orEmpty()
+        val out = runCatching { p.quick(toolPrompt(registry.all) + phone, history.takeLast(HISTORY), text, TOOL_TOKENS) }
             .onFailure { JarvisLog.e("cloud tool pick failed, using local", it) }
             .getOrNull() ?: return null
         val call = parseToolCall(out, registry.all)

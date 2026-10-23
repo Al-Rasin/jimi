@@ -63,11 +63,15 @@ object ToolShortlist {
         "now", "jimi", "jarvis", "hey", "boss", "set", "make", "get", "turn", "want", "need", "let", "s", "im",
     )
 
+    /** Distinct words (4+ letters) of app names, e.g. "Mi Remote" → "remote". */
+    fun appWords(labels: List<String>): Set<String> = labels.flatMap { words(it) }.filter { it.length >= 4 }.toSet()
+
     fun words(text: String): List<String> =
         text.lowercase().split(Regex("[^a-z0-9]+")).filter { it.isNotEmpty() && it !in STOP }
 
     /** Up to [size] tools, in registry order. Empty when nothing in the command points at any tool. */
-    fun pick(text: String, tools: List<Tool>, size: Int = SIZE): List<Tool> {
+    /** [appWords]: words from installed app names (phone profile); saying one hints "open_app". */
+    fun pick(text: String, tools: List<Tool>, size: Int = SIZE, appWords: Set<String> = emptySet()): List<Tool> {
         val said = words(text)
         if (said.isEmpty()) return emptyList()
         val score = HashMap<String, Int>()
@@ -78,6 +82,7 @@ object ToolShortlist {
             if (hits > 0) score[t.name] = hits
         }
         said.forEach { w -> (HINTS[w] ?: HINTS[w.removeSuffix("s")])?.forEach { score[it] = (score[it] ?: 0) + 2 } }
+        if (said.any { it in appWords }) score["open_app"] = (score["open_app"] ?: 0) + 2
         val keep = score.entries.sortedByDescending { it.value }.take(size).map { it.key }.toSet()
         return tools.filter { it.name in keep }
     }
