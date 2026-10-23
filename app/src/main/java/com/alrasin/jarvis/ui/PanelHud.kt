@@ -136,10 +136,15 @@ fun HudLine(text: String, mine: Boolean) {
 }
 
 @Composable
-fun HudChip(text: String, enabled: Boolean = true, onClick: () -> Unit) {
+/** [selected] = the user's choice (cyan); a chip that is only locked is dimmed, so it never looks chosen. */
+fun HudChip(text: String, enabled: Boolean = true, selected: Boolean = false, onClick: () -> Unit) {
     Text(
         text,
-        color = if (enabled) PanelColors.Text else PanelColors.Cyan,
+        color = when {
+            selected -> PanelColors.Cyan
+            enabled -> PanelColors.Text
+            else -> PanelColors.Text.copy(alpha = 0.35f)
+        },
         style = MaterialTheme.typography.labelLarge,
         modifier = Modifier.clip(CircleShape)
             .border(1.dp, Hud.Hairline, CircleShape)

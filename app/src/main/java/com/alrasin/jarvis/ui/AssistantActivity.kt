@@ -235,8 +235,8 @@ private fun Panel(vm: PanelViewModel, onClose: () -> Unit) {
             if (last != null && !live && !fixing) {
                 // just right or wrong; wrong answers are saved with the question and log for later diagnosis
                 FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    HudChip(if (rated) "✓ Thanks" else "✓ Right", enabled = !rated && reported != last.id) { touch(); rated = true; vm.right() }
-                    HudChip(if (reported == last.id) "✗ Saved" else "✗ Wrong", enabled = reported != last.id && !rated) { touch(); vm.wrongAnswer("") }
+                    HudChip(if (rated) "✓ Thanks" else "✓ Right", enabled = !rated && reported != last.id, selected = rated) { touch(); rated = true; vm.right() }
+                    HudChip(if (reported == last.id) "✗ Saved" else "✗ Wrong", enabled = reported != last.id && !rated, selected = reported == last.id) { touch(); vm.wrongAnswer("") }
                     HudChip("✎ Wrong text") { touch(); fixText = last.heard; fixing = true }
                     HudChip("I didn't call") { vm.notCalled(); close() }
                 }

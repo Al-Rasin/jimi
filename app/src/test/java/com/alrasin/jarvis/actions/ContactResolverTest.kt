@@ -71,6 +71,17 @@ class ContactResolverTest {
         assertTrue(ContactResolver.resolve("Kamil", similar) is ContactResolver.Resolution.Ambiguous)
     }
 
+    @Test fun wholeRelationNameBeatsLongerNameContainingIt() {
+        val mother = Contacts.Contact("Mother G", "+15550100005")
+        val aunt = Contacts.Contact("Choto Ammu G", "+15550100006")
+        val both = listOf(mother, aunt)
+        // phone speech hears "Mother G" as "madar ji"
+        assertEquals(ContactResolver.Resolution.Found(mother), ContactResolver.resolve("madar ji", both))
+        assertEquals(ContactResolver.Resolution.Found(mother), ContactResolver.resolve("mother g", both))
+        assertEquals(mother, ContactResolver.choose("madar ji", both))
+        assertEquals(ContactResolver.Resolution.Found(aunt), ContactResolver.resolve("choto ammu g", both))
+    }
+
     @Test fun unknownNameHasNoMatch() {
         assertEquals(ContactResolver.Resolution.NotFound, ContactResolver.resolve("Elizabeth", contacts))
     }

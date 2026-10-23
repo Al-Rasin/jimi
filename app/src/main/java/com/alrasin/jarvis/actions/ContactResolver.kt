@@ -28,12 +28,25 @@ object ContactResolver {
             if (q.split(' ').any { it in relations }) emptyList()
             else available.filter { contact -> contactNames(contact).any { Fuzzy.score(q, it) >= 0.65 } }
         }
-        return when (matches.size) {
+        val best = wholeName(q, matches)
+        return when (best.size) {
             0 -> Resolution.NotFound
-            1 -> Resolution.Found(matches.single())
-            else -> Resolution.Ambiguous(query.trim(), matches)
+            1 -> Resolution.Found(best.single())
+            else -> Resolution.Ambiguous(query.trim(), best)
         }
     }
+
+    /**
+     * A multi-word name that is a contact's whole name beats names that only contain it:
+     * "mother g" (heard "madar ji") is "Mother G", not "Choto Ammu G". One word ("Rahim") still asks.
+     */
+    private fun wholeName(q: String, matches: List<Contacts.Contact>): List<Contacts.Contact> {
+        if (matches.size < 2 || ' ' !in q) return matches
+        val key = relationKey(q)
+        return matches.filter { c -> contactNames(c).any { relationKey(it) == key } }.ifEmpty { matches }
+    }
+
+    private fun relationKey(name: String) = name.split(' ').map { relations[it] ?: it }
 
     fun choose(reply: String, candidates: List<Contacts.Contact>): Contacts.Contact? {
         if (Regex("^\\s*-\\s*[0-9]").containsMatchIn(reply)) return null
@@ -65,9 +78,9 @@ object ContactResolver {
         if (exact.isNotEmpty()) return exact.singleOrNull()
         val q = queryName(text)
         if (q.isEmpty()) return null
-        return candidates.filter { contact ->
+        return wholeName(q, candidates.filter { contact ->
             contactNames(contact).any { matches(q, it) || relationMatch(q, it) }
-        }.singleOrNull()
+        }).singleOrNull()
     }
 
     fun question(query: String, candidates: List<Contacts.Contact>): String {
