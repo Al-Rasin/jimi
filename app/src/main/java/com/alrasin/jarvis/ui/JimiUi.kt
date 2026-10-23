@@ -1,7 +1,6 @@
 package com.alrasin.jarvis.ui
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -56,20 +55,19 @@ fun Hint(text: String, modifier: Modifier = Modifier) =
 fun Meta(text: String, modifier: Modifier = Modifier) =
     Text(text, modifier, style = MaterialTheme.typography.labelSmall, color = JimiColors.TertiaryText, maxLines = 1)
 
-/** Small rounded action. [selected] lights it cyan; used for every little action in lists. */
+/** Small quiet action: grey pill, no border. [selected] turns it blue. Used for every little action in lists. */
 @Composable
 fun Chip(text: String, selected: Boolean = false, enabled: Boolean = true, onClick: () -> Unit) {
     val shape = RoundedCornerShape(50)
     Box(
         Modifier.height(34.dp).clip(shape)
-            .background(if (selected) JimiColors.Cyan.copy(alpha = 0.14f) else JimiColors.Surface2)
-            .border(1.dp, if (selected) JimiColors.Cyan.copy(alpha = 0.6f) else JimiColors.Outline, shape)
+            .background(if (selected) JimiColors.Accent.copy(alpha = 0.18f) else JimiColors.Surface2)
             .clickable(enabled = enabled, onClick = onClick)
             .alpha(if (enabled) 1f else 0.45f)
             .padding(horizontal = 14.dp),
         contentAlignment = Alignment.Center,
     ) {
-        Text(text, style = MaterialTheme.typography.labelMedium, color = if (selected) JimiColors.Cyan else JimiColors.Text, maxLines = 1)
+        Text(text, style = MaterialTheme.typography.labelMedium, color = if (selected) JimiColors.AccentLight else JimiColors.SecondaryText, maxLines = 1)
     }
 }
 
@@ -96,7 +94,10 @@ fun ToggleRow(title: String, value: Boolean, subtitle: String? = null, set: (Boo
         }
         Switch(
             checked = checked, onCheckedChange = { checked = it; set(it) },
-            colors = SwitchDefaults.colors(uncheckedTrackColor = JimiColors.Surface3, uncheckedBorderColor = JimiColors.OutlineStrong),
+            colors = SwitchDefaults.colors(
+                checkedThumbColor = JimiColors.OnAccent, checkedTrackColor = JimiColors.Accent, checkedBorderColor = JimiColors.Accent,
+                uncheckedThumbColor = JimiColors.TertiaryText, uncheckedTrackColor = JimiColors.Surface3, uncheckedBorderColor = JimiColors.Surface3,
+            ),
         )
     }
 }
@@ -115,7 +116,7 @@ fun ItemRow(text: String, meta: String? = null, actions: @Composable RowScope.()
 
 /** Thin line between rows in a card. */
 @Composable
-fun RowDivider() = HorizontalDivider(color = JimiColors.Outline.copy(alpha = 0.6f), thickness = 1.dp)
+fun RowDivider() = HorizontalDivider(color = JimiColors.Outline.copy(alpha = 0.5f), thickness = 1.dp)
 
 /** Shown when a list has nothing in it yet. */
 @Composable
@@ -127,6 +128,6 @@ fun EmptyState(title: String, text: String) {
     }
 }
 
-/** Little round light: cyan when on, grey when off. */
+/** Little round light: blue when on, grey when off. */
 @Composable
-fun StatusDot(on: Boolean) = Box(Modifier.size(8.dp).clip(CircleShape).background(if (on) JimiColors.Cyan else JimiColors.TertiaryText))
+fun StatusDot(on: Boolean) = Box(Modifier.size(8.dp).clip(CircleShape).background(if (on) JimiColors.Accent else JimiColors.TertiaryText))

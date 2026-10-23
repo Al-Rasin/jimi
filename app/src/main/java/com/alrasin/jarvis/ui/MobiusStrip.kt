@@ -27,9 +27,9 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.foundation.layout.size
 import kotlin.math.sin
 
-/** Jimi's colors round the band: cyan → blue → violet → pink and back. */
+/** Jimi's colors round the band: one blue, light → deep and back (D-067, no rainbow). */
 internal val MOBIUS_COLORS = intArrayOf(
-    0xFF5BD8E6.toInt(), 0xFF6A8DFF.toInt(), 0xFFA35BFF.toInt(), 0xFFFF5BC8.toInt(), 0xFFA35BFF.toInt(), 0xFF6A8DFF.toInt(),
+    0xFF9CC0FF.toInt(), 0xFF3A7BFF.toInt(), 0xFF1E4FD8.toInt(), 0xFF2A5FF0.toInt(), 0xFF1E4FD8.toInt(), 0xFF3A7BFF.toInt(),
 )
 
 /**

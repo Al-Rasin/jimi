@@ -39,10 +39,10 @@ object PanelColors {
     val Field = JimiColors.Surface3
     val Text = JimiColors.Text
     val Dim = JimiColors.SecondaryText
-    val Cyan = JimiColors.Cyan
-    val Blue = JimiColors.OrbBlue
-    val Violet = JimiColors.Violet
-    val Energy = listOf(Cyan, Blue, Violet, Cyan)
+    val Accent = JimiColors.Accent
+    val AccentDeep = JimiColors.AccentDeep
+    val AccentLight = JimiColors.AccentLight
+    val Energy = listOf(AccentLight, Accent, AccentDeep, AccentLight)
 }
 
 enum class OrbMood { IDLE, HEARING, THINKING, SPEAKING }
@@ -55,9 +55,9 @@ fun moodOf(phase: String) = when (phase) {
 }
 
 private fun orbBrush(center: Offset, radius: Float) = Brush.radialGradient(
-    0f to PanelColors.Cyan,
-    0.55f to PanelColors.Blue,
-    0.8f to PanelColors.Violet,
+    0f to PanelColors.Accent,
+    0.55f to PanelColors.AccentDeep,
+    0.8f to PanelColors.AccentLight,
     1f to Color.Transparent,
     center = center,
     radius = radius,
@@ -115,7 +115,7 @@ fun Orb(mood: OrbMood, level: Float, size: Dp = 64.dp, modifier: Modifier = Modi
             if (mood == OrbMood.THINKING) {
                 rotate(sweepAngle) {
                     drawCircle(
-                        Brush.sweepGradient(listOf(Color.Transparent, PanelColors.Cyan, Color.Transparent), center),
+                        Brush.sweepGradient(listOf(Color.Transparent, PanelColors.Accent, Color.Transparent), center),
                         radius * 0.8f, alpha = 0.6f, style = Stroke(2.dp.toPx()),
                     )
                 }
@@ -129,7 +129,7 @@ fun GlowEdge(active: Boolean, modifier: Modifier = Modifier) {
     val strength by animateFloatAsState(if (active) 0.6f else 0f, tween(200), label = "listening edge")
     Canvas(modifier) {
         drawRect(
-            Brush.sweepGradient(listOf(Color.Transparent, PanelColors.Cyan, Color.Transparent), center),
+            Brush.sweepGradient(listOf(Color.Transparent, PanelColors.Accent, Color.Transparent), center),
             topLeft = Offset(0f, (size.height - 2.dp.toPx()).coerceAtLeast(0f)),
             size = size.copy(height = 2.dp.toPx()),
             alpha = strength,

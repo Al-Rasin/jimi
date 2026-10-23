@@ -199,8 +199,8 @@ fun ArcDial(
                             ), outerPx, center,
                         )
                         val dot = Offset(center.x, center.y - outerPx - 3.dp.toPx())
-                        drawCircle(Brush.radialGradient(listOf(JimiColors.Cyan.copy(alpha = 0.4f), Color.Transparent), dot, 9.dp.toPx()), 9.dp.toPx(), dot)
-                        drawCircle(JimiColors.Cyan, 3.dp.toPx(), dot)
+                        drawCircle(Brush.radialGradient(listOf(JimiColors.Accent.copy(alpha = 0.4f), Color.Transparent), dot, 9.dp.toPx()), 9.dp.toPx(), dot)
+                        drawCircle(JimiColors.Accent, 3.dp.toPx(), dot)
                     }
                     items.forEachIndexed { index, (label, icon) ->
                         val degrees = index * step - angle
@@ -217,14 +217,14 @@ fun ArcDial(
                                     )
                                 }.size(56.dp).graphicsLayer { alpha = fade }
                                     .clip(CircleShape)
-                                    .background(if (active) JimiColors.Cyan.copy(alpha = 0.14f) else Color.Transparent)
+                                    .background(if (active) JimiColors.Accent.copy(alpha = 0.14f) else Color.Transparent)
                                     .selectable(selected = active, role = Role.Tab, onClick = { settle(index) })
                                     .semantics { contentDescription = label },
                                 contentAlignment = Alignment.Center,
                             ) {
                                 Icon(
                                     icon, contentDescription = null,
-                                    tint = if (active) JimiColors.Cyan else JimiColors.TertiaryText.copy(alpha = 0.6f),
+                                    tint = if (active) JimiColors.Accent else JimiColors.TertiaryText.copy(alpha = 0.6f),
                                     modifier = Modifier.size(if (active) 28.dp else 22.dp).graphicsLayer {
                                         scaleX = if (active) 1f else 0.7f
                                         scaleY = scaleX

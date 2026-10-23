@@ -3,7 +3,6 @@ package com.alrasin.jarvis.ui
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.material3.LocalContentColor
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
@@ -27,20 +26,24 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.alrasin.jarvis.R
 
+/**
+ * One hue only (D-067): black + electric blue, like the human-made reference designs. Blue is for "alive / chosen"
+ * things only (orb, glow, selected item, send button); everything else is greys.
+ */
 object JimiColors {
-    val Background = Color(0xFF0B0D12)
-    val Surface1 = Color(0xFF12151C)
-    val Surface2 = Color(0xFF1A1E27)
-    val Surface3 = Color(0xFF232836)
-    val Outline = Color(0xFF2E3442)
-    val OutlineStrong = Color(0xFF3A4152)
-    val Cyan = Color(0xFF5BD8E6)
-    val OnCyan = Color(0xFF00363D)
-    val OrbBlue = Color(0xFF6A8DFF)
-    val Violet = Color(0xFF8E9BFF)
-    val Text = Color(0xFFECEFF4)
-    val SecondaryText = Color(0xFFA3AAB8)
-    val TertiaryText = Color(0xFF858DA0)
+    val Background = Color(0xFF030407)
+    val Surface1 = Color(0xFF0E1014)
+    val Surface2 = Color(0xFF15181E)
+    val Surface3 = Color(0xFF1D2129)
+    val Outline = Color(0xFF23272F)
+    val OutlineStrong = Color(0xFF2E333D)
+    val Accent = Color(0xFF3A7BFF)
+    val OnAccent = Color(0xFFFFFFFF)
+    val AccentDeep = Color(0xFF1E4FD8)
+    val AccentLight = Color(0xFF8CB2FF)
+    val Text = Color(0xFFF2F4F7)
+    val SecondaryText = Color(0xFF9097A3)
+    val TertiaryText = Color(0xFF626976)
     val Error = Color(0xFFFF6B7A)
     val Success = Color(0xFF4ADE9B)
     val Warning = Color(0xFFF5B84A)
@@ -56,15 +59,16 @@ val JimiBody = FontFamily(
 )
 val JimiMono = FontFamily(Font(R.font.jetbrains_mono_regular, FontWeight.Normal))
 
-private val displayStyle = TextStyle(fontFamily = JimiDisplay, fontWeight = FontWeight.Medium, fontSize = 34.sp, lineHeight = 40.sp)
-private val titleStyle = TextStyle(fontFamily = JimiDisplay, fontWeight = FontWeight.SemiBold, fontSize = 22.sp, lineHeight = 28.sp)
+// one font family everywhere (calmer than mixing); big text gets tighter letter spacing
+private val displayStyle = TextStyle(fontFamily = JimiBody, fontWeight = FontWeight.Medium, fontSize = 34.sp, lineHeight = 40.sp, letterSpacing = (-0.8).sp)
+private val titleStyle = TextStyle(fontFamily = JimiBody, fontWeight = FontWeight.Medium, fontSize = 22.sp, lineHeight = 28.sp, letterSpacing = (-0.3).sp)
 private val bodyStyle = TextStyle(fontFamily = JimiBody, fontWeight = FontWeight.Normal, fontSize = 16.sp, lineHeight = 24.sp)
 private val bodyMediumStyle = bodyStyle.copy(fontSize = 15.sp, lineHeight = 22.sp)
 // small text is always helper text, so it is always the quiet colour
 private val bodySmallStyle = bodyStyle.copy(fontSize = 13.sp, lineHeight = 19.sp, color = JimiColors.SecondaryText)
 private val labelStyle = TextStyle(fontFamily = JimiBody, fontWeight = FontWeight.Medium, fontSize = 13.sp, lineHeight = 20.sp, letterSpacing = 0.2.sp)
 private val labelSmallStyle = labelStyle.copy(fontSize = 12.sp, lineHeight = 16.sp)
-private val cardTitleStyle = titleStyle.copy(fontSize = 17.sp, lineHeight = 24.sp)
+private val cardTitleStyle = titleStyle.copy(fontSize = 16.sp, lineHeight = 22.sp, letterSpacing = 0.sp)
 private val jimiTypography = Typography(
     displayLarge = displayStyle, displayMedium = displayStyle, displaySmall = displayStyle,
     headlineLarge = displayStyle, headlineMedium = titleStyle, headlineSmall = titleStyle,
@@ -77,17 +81,17 @@ private val jimiTypography = Typography(
 fun JimiTheme(content: @Composable () -> Unit) {
     MaterialTheme(
         colorScheme = darkColorScheme(
-            primary = JimiColors.Cyan,
-            onPrimary = JimiColors.OnCyan,
-            primaryContainer = JimiColors.OnCyan,
-            onPrimaryContainer = JimiColors.Cyan,
-            inversePrimary = JimiColors.OnCyan,
-            secondary = JimiColors.Cyan,
-            onSecondary = JimiColors.OnCyan,
+            primary = JimiColors.Accent,
+            onPrimary = JimiColors.OnAccent,
+            primaryContainer = JimiColors.AccentDeep,
+            onPrimaryContainer = JimiColors.Text,
+            inversePrimary = JimiColors.AccentDeep,
+            secondary = JimiColors.Accent,
+            onSecondary = JimiColors.OnAccent,
             secondaryContainer = JimiColors.Surface3,
             onSecondaryContainer = JimiColors.Text,
-            tertiary = JimiColors.Cyan,
-            onTertiary = JimiColors.OnCyan,
+            tertiary = JimiColors.Accent,
+            onTertiary = JimiColors.OnAccent,
             tertiaryContainer = JimiColors.Surface3,
             onTertiaryContainer = JimiColors.Text,
             background = JimiColors.Background,
@@ -126,7 +130,7 @@ fun JimiTheme(content: @Composable () -> Unit) {
     )
 }
 
-val EnergyBrush = Brush.linearGradient(listOf(JimiColors.Cyan, JimiColors.Cyan))
+val EnergyBrush = Brush.linearGradient(listOf(JimiColors.Accent, JimiColors.Accent))
 
 @Composable
 fun GradientTitle(text: String, size: Int = 22, modifier: Modifier = Modifier) = Text(
@@ -141,7 +145,6 @@ fun GlassCard(modifier: Modifier = Modifier, title: String? = null, content: @Co
     Column(
         modifier.fillMaxWidth()
             .background(JimiColors.Surface1, RoundedCornerShape(20.dp))
-            .border(1.dp, JimiColors.Outline, RoundedCornerShape(20.dp))
             .padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {

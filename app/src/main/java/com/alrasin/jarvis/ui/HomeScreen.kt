@@ -50,7 +50,7 @@ fun HomeScreen(vm: HomeViewModel) {
             if (model.isNotEmpty()) Text(
                 if (jimi) "Model: Hey Jimi ($model)" else "Model: OLD fallback \"Hey Jarvis\" ($model) — Hey Jimi model missing",
                 style = MaterialTheme.typography.bodySmall,
-                color = if (jimi) JimiColors.Cyan else JimiColors.Error,
+                color = if (jimi) JimiColors.Accent else JimiColors.Error,
             )
         }
         item {

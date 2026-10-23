@@ -57,9 +57,9 @@ object Hud {
     val Hairline = Color.White.copy(alpha = 0.10f)
     val sheetBrush = Brush.verticalGradient(listOf(SheetTop, SheetBottom))
     val edgeBrush = Brush.horizontalGradient(
-        listOf(Color.Transparent, PanelColors.Cyan.copy(alpha = 0.7f), PanelColors.Violet.copy(alpha = 0.7f), Color.Transparent),
+        listOf(Color.Transparent, PanelColors.Accent.copy(alpha = 0.7f), PanelColors.AccentLight.copy(alpha = 0.7f), Color.Transparent),
     )
-    val accentBrush = Brush.linearGradient(listOf(PanelColors.Cyan, PanelColors.Violet))
+    val accentBrush = Brush.linearGradient(listOf(PanelColors.Accent, PanelColors.AccentLight))
 }
 
 /** The orb inside a thin ring; a short arc travels around it while Jimi is busy. */
@@ -81,7 +81,7 @@ fun HudOrb(mood: OrbMood, level: Float, size: Dp = 84.dp) {
             drawCircle(Color.White.copy(alpha = 0.08f), radius = this.size.minDimension / 2 - inset, style = Stroke(w))
             if (arcAlpha > 0f) {
                 drawArc(
-                    Brush.sweepGradient(listOf(Color.Transparent, PanelColors.Cyan, PanelColors.Violet), center),
+                    Brush.sweepGradient(listOf(Color.Transparent, PanelColors.Accent, PanelColors.AccentLight), center),
                     startAngle = angle, sweepAngle = 90f, useCenter = false,
                     topLeft = Offset(inset, inset), size = arcSize, alpha = arcAlpha,
                     style = Stroke(w * 1.4f, cap = StrokeCap.Round),
@@ -101,7 +101,7 @@ fun HudLabel(text: String, active: Boolean) {
         if (short) text.uppercase() else text,
         style = if (short) MaterialTheme.typography.labelMedium.copy(letterSpacing = 3.sp, fontWeight = FontWeight.Medium)
         else MaterialTheme.typography.bodySmall,
-        color = if (active) PanelColors.Cyan else PanelColors.Dim,
+        color = if (active) PanelColors.Accent else PanelColors.Dim,
         textAlign = TextAlign.Center,
         modifier = Modifier.padding(horizontal = 48.dp),
     )
@@ -141,7 +141,7 @@ fun HudChip(text: String, enabled: Boolean = true, selected: Boolean = false, on
     Text(
         text,
         color = when {
-            selected -> PanelColors.Cyan
+            selected -> PanelColors.Accent
             enabled -> PanelColors.Text
             else -> PanelColors.Text.copy(alpha = 0.35f)
         },
@@ -165,7 +165,7 @@ fun HudInput(text: String, onText: (String) -> Unit, onGo: () -> Unit) {
         BasicTextField(
             value = text, onValueChange = onText, singleLine = true,
             textStyle = MaterialTheme.typography.bodyLarge.copy(color = PanelColors.Text),
-            cursorBrush = SolidColor(PanelColors.Cyan),
+            cursorBrush = SolidColor(PanelColors.Accent),
             modifier = Modifier.weight(1f).padding(vertical = 10.dp),
             decorationBox = { inner ->
                 if (text.isEmpty()) Text("Ask Jimi…", color = PanelColors.Dim)

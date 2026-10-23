@@ -193,7 +193,7 @@ fun MobiusNav(items: List<Pair<String, ImageVector>>, pager: PagerState, modifie
                     val focus = (1f - abs(wrapDist(turn.value, i.toFloat(), n))).coerceIn(0f, 1f)
                     if (focus > 0f) {
                         drawCircle(
-                            Brush.radialGradient(listOf(JimiColors.Cyan.copy(alpha = 0.45f * focus), Color.Transparent), Offset(x, y), glowR),
+                            Brush.radialGradient(listOf(JimiColors.Accent.copy(alpha = 0.45f * focus), Color.Transparent), Offset(x, y), glowR),
                             glowR, Offset(x, y),
                         )
                     }
@@ -228,7 +228,7 @@ fun MobiusNav(items: List<Pair<String, ImageVector>>, pager: PagerState, modifie
                 Modifier.align(Alignment.TopCenter).padding(top = with(density) { (cy - 9.dp.toPx()).toDp() }),
                 label = "tab name",
             ) {
-                Text(it, style = MaterialTheme.typography.labelMedium, color = JimiColors.Cyan)
+                Text(it, style = MaterialTheme.typography.labelMedium, color = JimiColors.Accent)
             }
         }
     }

@@ -1,7 +1,6 @@
 package com.alrasin.jarvis.ui
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
@@ -26,7 +25,11 @@ import androidx.compose.material3.FilledTonalButton
 import androidx.compose.ui.res.painterResource
 import com.alrasin.jarvis.R
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.geometry.Offset
 import com.alrasin.jarvis.voice.Engine
 import com.alrasin.jarvis.voice.Voice
 import com.alrasin.jarvis.voice.VoicePack
@@ -116,7 +119,6 @@ fun AppShell(vm: AppViewModel, home: HomeViewModel) {
                 Row(
                     Modifier.clip(RoundedCornerShape(50))
                         .background(JimiColors.Surface2)
-                        .border(1.dp, if (running) JimiColors.Cyan.copy(alpha = 0.5f) else JimiColors.Outline, RoundedCornerShape(50))
                         .clickable { if (running) home.stop() else home.start() }
                         .padding(horizontal = 14.dp, vertical = 8.dp),
                     verticalAlignment = Alignment.CenterVertically,
@@ -166,19 +168,33 @@ private fun ChatTab(vm: AppViewModel) {
     var text by remember { mutableStateOf("") }
     Column(Modifier.fillMaxSize().padding(horizontal = 20.dp).imePadding()) {
         if (turns.isEmpty()) {
-            Column(
-                Modifier.weight(1f).fillMaxWidth(),
-                horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.Center,
-            ) {
-                MobiusStrip(OrbMood.IDLE, size = 160.dp)
-                GradientTitle("Hi Boss", 30, Modifier.padding(top = 12.dp))
-                Hint("Say \"Hey Jimi\" or type below.", Modifier.padding(top = 4.dp))
-                FlowRow(
-                    Modifier.padding(top = 24.dp),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally),
-                    verticalArrangement = Arrangement.spacedBy(8.dp),
-                ) { SUGGESTIONS.forEach { s -> Pill(s) { vm.ask(s) } } }
+            // home like a real assistant app: orb, small greeting, one big line, soft blue light from below (D-067)
+            Box(Modifier.weight(1f).fillMaxWidth()) {
+                Box(
+                    Modifier.matchParentSize().drawBehind {
+                        drawRect(
+                            Brush.radialGradient(
+                                listOf(JimiColors.AccentDeep.copy(alpha = 0.30f), Color.Transparent),
+                                center = Offset(size.width / 2f, size.height),
+                                radius = size.width * 0.85f,
+                            ),
+                        )
+                    },
+                )
+                Column(
+                    Modifier.fillMaxSize(),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.Center,
+                ) {
+                    MobiusStrip(OrbMood.IDLE, size = 150.dp)
+                    Text("Hi Boss", Modifier.padding(top = 20.dp), style = MaterialTheme.typography.bodyLarge, color = JimiColors.SecondaryText)
+                    GradientTitle("How can I help?", 32, Modifier.padding(top = 4.dp))
+                    FlowRow(
+                        Modifier.padding(top = 28.dp),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally),
+                        verticalArrangement = Arrangement.spacedBy(8.dp),
+                    ) { SUGGESTIONS.forEach { s -> Pill(s) { vm.ask(s) } } }
+                }
             }
         } else {
             LazyColumn(
@@ -199,22 +215,23 @@ private fun ChatTab(vm: AppViewModel) {
     }
 }
 
-/** User messages align right with a soft cyan tint; Jimi's align left on a dark card. */
+/** Your words: small grey pill on the right. Jimi's answer: plain text, no bubble (D-067). */
 @Composable
 fun Bubble(text: String, mine: Boolean) {
     if (text.isBlank()) return
-    val shape = RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp, bottomStart = if (mine) 20.dp else 6.dp, bottomEnd = if (mine) 6.dp else 20.dp)
-    Row(Modifier.fillMaxWidth(), horizontalArrangement = if (mine) Arrangement.End else Arrangement.Start, verticalAlignment = Alignment.Bottom) {
-        if (!mine) MobiusStrip(OrbMood.IDLE, size = 26.dp, modifier = Modifier.padding(end = 8.dp, bottom = 4.dp), still = true)
+    if (!mine) {
+        Text(text, Modifier.fillMaxWidth().padding(end = 24.dp, top = 2.dp, bottom = 6.dp), style = MaterialTheme.typography.bodyLarge, color = JimiColors.Text)
+        return
+    }
+    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
         Text(
             text,
-            style = MaterialTheme.typography.bodyLarge,
-            color = PanelColors.Text,
-            modifier = Modifier.widthIn(max = 290.dp)
-                .clip(shape)
-                .background(if (mine) JimiColors.Cyan.copy(alpha = 0.12f) else JimiColors.Surface1)
-                .border(1.dp, if (mine) JimiColors.Cyan.copy(alpha = 0.18f) else JimiColors.Outline.copy(alpha = 0.6f), shape)
-                .padding(horizontal = 16.dp, vertical = 12.dp),
+            style = MaterialTheme.typography.bodyMedium,
+            color = JimiColors.Text,
+            modifier = Modifier.widthIn(max = 280.dp)
+                .clip(RoundedCornerShape(20.dp))
+                .background(JimiColors.Surface2)
+                .padding(horizontal = 16.dp, vertical = 10.dp),
         )
     }
 }
@@ -224,15 +241,14 @@ fun Bubble(text: String, mine: Boolean) {
 fun InputPill(text: String, onText: (String) -> Unit, modifier: Modifier = Modifier, onGo: () -> Unit) {
     Row(
         modifier.fillMaxWidth()
-            .background(JimiColors.Surface1, RoundedCornerShape(28.dp))
-            .border(1.dp, JimiColors.Outline, RoundedCornerShape(28.dp))
+            .background(JimiColors.Surface2.copy(alpha = 0.85f), RoundedCornerShape(28.dp))
             .padding(start = 20.dp, end = 6.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         BasicTextField(
             value = text, onValueChange = onText, singleLine = true,
             textStyle = MaterialTheme.typography.bodyLarge.copy(color = PanelColors.Text),
-            cursorBrush = SolidColor(PanelColors.Cyan),
+            cursorBrush = SolidColor(PanelColors.Accent),
             modifier = Modifier.weight(1f).padding(vertical = 16.dp),
             decorationBox = { inner ->
                 if (text.isEmpty()) Text("Type to Jimi", color = JimiColors.TertiaryText)
@@ -240,11 +256,11 @@ fun InputPill(text: String, onText: (String) -> Unit, modifier: Modifier = Modif
             },
         )
         Box(
-            Modifier.size(44.dp).clip(CircleShape).background(PanelColors.Cyan).clickable(onClick = onGo),
+            Modifier.size(44.dp).clip(CircleShape).background(PanelColors.Accent).clickable(onClick = onGo),
             contentAlignment = Alignment.Center,
         ) {
-            if (text.isBlank()) Icon(painterResource(R.drawable.ic_mic), contentDescription = "Speak", tint = JimiColors.OnCyan, modifier = Modifier.size(22.dp))
-            else Icon(Icons.AutoMirrored.Filled.Send, contentDescription = "Send", tint = JimiColors.OnCyan, modifier = Modifier.size(20.dp))
+            if (text.isBlank()) Icon(painterResource(R.drawable.ic_mic), contentDescription = "Speak", tint = JimiColors.OnAccent, modifier = Modifier.size(22.dp))
+            else Icon(Icons.AutoMirrored.Filled.Send, contentDescription = "Send", tint = JimiColors.OnAccent, modifier = Modifier.size(20.dp))
         }
     }
 }
@@ -270,7 +286,7 @@ private fun TurnCard(t: ConversationTurn, vm: AppViewModel) {
     GlassCard {
         Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
             Meta("${time(t.timeMs)} · ${t.source}${t.tool?.let { " · $it" } ?: ""}")
-            Text("“${t.heard}”", color = PanelColors.Cyan, style = MaterialTheme.typography.bodyMedium)
+            Text("“${t.heard}”", color = PanelColors.Accent, style = MaterialTheme.typography.bodyMedium)
             if (t.rawText.isNotBlank() && t.rawText != t.heard) Hint("Heard: ${t.rawText}")
             Text(t.reply, style = MaterialTheme.typography.bodyMedium)
             when (t.textOk) {

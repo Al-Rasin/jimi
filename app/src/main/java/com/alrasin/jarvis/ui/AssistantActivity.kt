@@ -189,7 +189,7 @@ private fun Panel(vm: PanelViewModel, onClose: () -> Unit) {
             Box(Modifier.fillMaxWidth()) {
                 Row(Modifier.align(Alignment.TopEnd)) {
                     if (phase == JarvisCoreService.PHASE_SPEAKING) {
-                        TextButton(onClick = { touch(); vm.shutUp() }) { Text("STOP", color = PanelColors.Cyan, letterSpacing = 2.sp) }
+                        TextButton(onClick = { touch(); vm.shutUp() }) { Text("STOP", color = PanelColors.Accent, letterSpacing = 2.sp) }
                     }
                     TextButton(onClick = ::close) { Text("✕", color = PanelColors.Dim, fontSize = 18.sp) }
                 }
