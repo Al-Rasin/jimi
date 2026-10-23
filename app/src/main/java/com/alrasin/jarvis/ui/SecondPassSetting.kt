@@ -17,6 +17,6 @@ internal fun SecondPassSetting() {
     val scope = rememberCoroutineScope()
     ToggleRow(
         "Second-pass speech recognition", enabled,
-        "Experimental; download Second-pass speech below. Keeps the original words if unavailable or slow. Restart listening to retry after a timeout.",
+        "Experimental. Keeps your words if it is slow.",
     ) { scope.launch { settings.setSttSecondPass(it) } }
 }

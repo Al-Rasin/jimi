@@ -8,14 +8,18 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.material3.Button
-import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Column
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -39,64 +43,73 @@ fun HomeScreen(vm: HomeViewModel) {
     val phase by vm.phase.collectAsStateWithLifecycle()
     val heard by vm.heard.collectAsStateWithLifecycle()
 
+    var showLog by remember { mutableStateOf(false) }
+    val c = counts.associate { it.verdict to it.n }
+
     LazyColumn(
         Modifier.fillMaxSize(),
         contentPadding = PaddingValues(start = 20.dp, end = 20.dp, top = 8.dp, bottom = 24.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp),
+        verticalArrangement = Arrangement.spacedBy(16.dp),
     ) {
+        item { PageTitle("Wake word") }
         item {
-            val jimi = model.startsWith("hey_jimi")
-            PageTitle("Wake word", if (running) "Listening — $phase" else "Not listening")
-            if (model.isNotEmpty()) Text(
-                if (jimi) "Model: Hey Jimi ($model)" else "Model: OLD fallback \"Hey Jarvis\" ($model) — Hey Jimi model missing",
-                style = MaterialTheme.typography.bodySmall,
-                color = if (jimi) JimiColors.Accent else JimiColors.Error,
-            )
-        }
-        item {
-            GlassCard {
-                Meta("You said")
-                Text(heard.ifEmpty { "—" }, style = MaterialTheme.typography.titleSmall)
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Button(onClick = vm::start, enabled = !running) { Text("Start") }
-                    FilledTonalButton(onClick = vm::stop, enabled = running) { Text("Stop") }
+            // big live score: the one number that matters here
+            RowsCard {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Column(Modifier.weight(1f)) {
+                        Text("%.2f".format(score), style = MaterialTheme.typography.displaySmall, color = JimiColors.Text)
+                        Meta(if (running) "Live score · listening" else "Not listening")
+                    }
+                    Chip(if (running) "Stop" else "Start", selected = !running) { if (running) vm.stop() else vm.start() }
                 }
-                FilledTonalButton(onClick = vm::missed, enabled = running, modifier = Modifier.fillMaxWidth()) {
-                    Text("Missed it — I said \"Hey Jimi\" (tap within 3 s)")
-                }
-            }
-        }
-        item {
-            GlassCard(title = "Sensitivity") {
-                Hint("Live score ${"%.2f".format(score)}")
-                LinearProgressIndicator(progress = { score }, modifier = Modifier.fillMaxWidth(), trackColor = JimiColors.Surface3)
-                Hint("Wake threshold ${"%.2f".format(threshold)} (lower = wakes easier, more false wakes)")
-                Slider(value = threshold, onValueChange = { vm.setThreshold(it) }, valueRange = 0.2f..0.95f)
-                val c = counts.associate { it.verdict to it.n }
-                Meta(
-                    "Feedback: ✓ ${c[WakeEvent.VERDICT_YES] ?: 0}   ✗ ${c[WakeEvent.VERDICT_NO] ?: 0}   " +
-                        "missed ${c[WakeEvent.VERDICT_MISSED] ?: 0}   near ${c[WakeEvent.VERDICT_NEAR] ?: 0}   " +
-                        "no answer ${c[WakeEvent.VERDICT_NONE] ?: 0}",
+                LinearProgressIndicator(
+                    progress = { score }, modifier = Modifier.fillMaxWidth().padding(top = 12.dp),
+                    color = JimiColors.Accent, trackColor = JimiColors.Surface3, drawStopIndicator = {},
                 )
+                if (heard.isNotEmpty()) Hint("You said: $heard", Modifier.padding(top = 10.dp))
+                if (model.isNotEmpty() && !model.startsWith("hey_jimi")) Text(
+                    "Old \"Hey Jarvis\" model in use — Hey Jimi model missing", Modifier.padding(top = 8.dp),
+                    style = MaterialTheme.typography.bodySmall, color = JimiColors.Error,
+                )
+                ChipRow(Modifier.padding(top = 8.dp)) { Chip("I said it, missed", enabled = running, onClick = vm::missed) }
             }
         }
-        items(events, key = { it.id }) { e -> EventRow(e, vm) }
         item {
-            GlassCard(title = "Log") {
-                log.takeLast(30).reversed().forEach { Text(it, style = MaterialTheme.typography.bodySmall.copy(fontFamily = JimiMono)) }
+            RowsCard("Sensitivity") {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text("Threshold", Modifier.weight(1f), style = MaterialTheme.typography.bodyMedium)
+                    Text("%.2f".format(threshold), style = MaterialTheme.typography.bodySmall)
+                }
+                JimiSlider(threshold, { vm.setThreshold(it) }, 0.2f..0.95f)
+                Meta("Lower = wakes easier · ✓ ${c[WakeEvent.VERDICT_YES] ?: 0}  ✗ ${c[WakeEvent.VERDICT_NO] ?: 0}  missed ${c[WakeEvent.VERDICT_MISSED] ?: 0}")
+            }
+        }
+        item { ListCard("Recent wakes", events.take(30), "No wakes yet.") { e -> EventRow(e, vm) } }
+        item {
+            RowsCard {
+                Row(Modifier.fillMaxWidth().clickable { showLog = !showLog }.padding(vertical = 4.dp)) {
+                    Text("Log", Modifier.weight(1f), style = MaterialTheme.typography.bodyMedium)
+                    Meta(if (showLog) "Hide" else "Show")
+                }
+                if (showLog) log.takeLast(30).reversed().forEach { Text(it, style = MaterialTheme.typography.bodySmall.copy(fontFamily = JimiMono)) }
             }
         }
     }
 }
 
+/** One wake: time and result; tap to play it and say if it was you. */
 @Composable
 private fun EventRow(e: WakeEvent, vm: HomeViewModel) {
-    GlassCard {
-        Meta("${timeFormat.format(Date(e.timeMs))} · score ${"%.2f".format(e.score)} · ${WakeFeedback.label(e.verdict)}")
+    OpenRow(
+        WakeFeedback.label(e.verdict).replaceFirstChar { it.uppercase() },
+        null,
+        "${shortTime(e.timeMs)} · ${"%.2f".format(e.score)}",
+    ) {
+        Meta(timeFormat.format(Date(e.timeMs)))
         ChipRow {
-            Chip("▶ Play") { vm.play(e.clipPath) }
-            Chip("✓ Me", selected = e.verdict == WakeEvent.VERDICT_YES) { vm.setVerdict(e.id, WakeEvent.VERDICT_YES) }
-            Chip("✗ Not me", selected = e.verdict == WakeEvent.VERDICT_NO) { vm.setVerdict(e.id, WakeEvent.VERDICT_NO) }
+            Chip("Play") { vm.play(e.clipPath) }
+            Chip("It was me", selected = e.verdict == WakeEvent.VERDICT_YES) { vm.setVerdict(e.id, WakeEvent.VERDICT_YES) }
+            Chip("Not me", selected = e.verdict == WakeEvent.VERDICT_NO) { vm.setVerdict(e.id, WakeEvent.VERDICT_NO) }
         }
     }
 }

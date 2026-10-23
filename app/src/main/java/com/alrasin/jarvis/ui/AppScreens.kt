@@ -272,38 +272,31 @@ fun Pill(text: String, selected: Boolean = false, onClick: () -> Unit) = Chip(te
 private fun HistoryTab(vm: AppViewModel) {
     val turns by vm.turnList.collectAsStateWithLifecycle()
     TabList {
-        item { PageTitle("History", "Wrong saves the answer for checking. Fix text corrects what Jimi heard (saved for training).") }
+        item { PageTitle("History") }
         if (turns.isEmpty()) item { EmptyState("No talks yet", "Say \"Hey Jimi\" to start.") }
-        items(turns, key = { it.id }) { TurnCard(it, vm) }
+        else item { ListCard(null, turns.take(100), "") { TurnRow(it, vm) } }
     }
 }
 
+/** One talk: what you said, Jimi's answer under it. Tap for play / right / wrong / fix. */
 @Composable
-private fun TurnCard(t: ConversationTurn, vm: AppViewModel) {
+private fun TurnRow(t: ConversationTurn, vm: AppViewModel) {
     var fixing by remember { mutableStateOf(false) }
     var fix by remember { mutableStateOf(t.heard) }
     var wrong by remember { mutableStateOf(false) }
-    GlassCard {
-        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
-            Meta("${time(t.timeMs)} · ${t.source}${t.tool?.let { " · $it" } ?: ""}")
-            Text("“${t.heard}”", color = PanelColors.Accent, style = MaterialTheme.typography.bodyMedium)
-            if (t.rawText.isNotBlank() && t.rawText != t.heard) Hint("Heard: ${t.rawText}")
-            Text(t.reply, style = MaterialTheme.typography.bodyMedium)
-            when (t.textOk) {
-                true -> Hint("✓ Text was right")
-                false -> Hint("Fixed to: ${t.correction ?: ""}")
-                null -> {}
-            }
-            ChipRow {
-                t.audioPath?.let { p -> Chip("▶ Play") { vm.play(p) } }
-                Chip("✓ Right", selected = t.textOk == true) { vm.rate(t.id, true) }
-                Chip(if (wrong) "Saved" else "✗ Wrong", enabled = !wrong) { wrong = true; vm.wrongAnswer(t) }
-                Chip("✎ Fix text", selected = fixing) { fixing = !fixing }
-            }
-            if (fixing) {
-                OutlinedTextField(fix, { fix = it }, Modifier.fillMaxWidth().padding(top = 4.dp), label = { Text("What you said") })
-                Button(onClick = { fixing = false; vm.fix(t.id, fix.trim()) }, enabled = fix.isNotBlank()) { Text("Fix and run") }
-            }
+    OpenRow(t.heard.ifBlank { "…" }, t.reply.ifBlank { null }, shortTime(t.timeMs)) {
+        Meta("${time(t.timeMs)} · ${t.source}${t.tool?.let { " · $it" } ?: ""}")
+        if (t.rawText.isNotBlank() && t.rawText != t.heard) Hint("Heard: ${t.rawText}")
+        if (t.textOk == false) Hint("Fixed to: ${t.correction ?: ""}")
+        ChipRow {
+            t.audioPath?.let { p -> Chip("Play") { vm.play(p) } }
+            Chip("Right", selected = t.textOk == true) { vm.rate(t.id, true) }
+            Chip(if (wrong) "Saved" else "Wrong", enabled = !wrong) { wrong = true; vm.wrongAnswer(t) }
+            Chip("Fix text", selected = fixing) { fixing = !fixing }
+        }
+        if (fixing) {
+            OutlinedTextField(fix, { fix = it }, Modifier.fillMaxWidth(), label = { Text("What you said") })
+            Button(onClick = { fixing = false; vm.fix(t.id, fix.trim()) }, enabled = fix.isNotBlank()) { Text("Fix and run") }
         }
     }
 }
@@ -313,32 +306,38 @@ private fun AlertsTab(vm: AppViewModel) {
     val list by vm.notificationList.collectAsStateWithLifecycle()
     val rules by vm.rules.collectAsStateWithLifecycle()
     val ruleOf = rules.associate { it.pkg to it.mode }
+    // same app + same title shown once, with a count (D-068)
+    val groups = list.groupBy { Triple(it.pkg, it.title, it.text) }.values.toList()
+    val (important, other) = groups.partition { isImportant(it.first()) }
     TabList {
-        item { PageTitle("Alerts", "Tap Important or Noise to teach Jimi. Keep app / Clear app sets a rule for the whole app.") }
+        item { PageTitle("Alerts") }
         if (list.isEmpty()) item { EmptyState("No alerts yet", "New notifications show up here.") }
-        items(list, key = { it.id }) { NotificationCard(it, ruleOf[it.pkg], vm) }
+        else {
+            item { ListCard("Important", important.take(50), "Nothing important.") { NotificationRow(it, ruleOf[it.first().pkg], vm) } }
+            item { ListCard("Other", other.take(50), "Nothing else.") { NotificationRow(it, ruleOf[it.first().pkg], vm) } }
+        }
     }
 }
 
+private fun isImportant(n: NotificationLog) = n.label?.let { it == "important" } ?: n.important
+
+/** App letter, title, app · time. Tap to see the text and teach Jimi. */
 @Composable
-private fun NotificationCard(n: NotificationLog, rule: String?, vm: AppViewModel) {
-    val important = n.label?.let { it == "important" } ?: n.important
-    GlassCard {
-        Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                StatusDot(important)
-                Text(n.appName, Modifier.weight(1f), style = MaterialTheme.typography.labelLarge, maxLines = 1, overflow = TextOverflow.Ellipsis)
-                Meta(time(n.timeMs))
-            }
-            Text(n.title, maxLines = 1, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Medium)
-            if (n.text.isNotBlank()) Text(n.text, maxLines = 2, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.bodySmall)
-            Meta("${n.status} · ${n.reason}")
-            ChipRow {
-                Chip("Important", selected = important) { vm.label(n.id, true) }
-                Chip("Noise", selected = !important) { vm.label(n.id, false) }
-                Chip("Keep app", selected = rule == "keep") { vm.setRule(n.pkg, if (rule == "keep") null else "keep") }
-                Chip("Clear app", selected = rule == "clear") { vm.setRule(n.pkg, if (rule == "clear") null else "clear") }
-            }
+private fun NotificationRow(same: List<NotificationLog>, rule: String?, vm: AppViewModel) {
+    val n = same.first()
+    val important = isImportant(n)
+    OpenRow(
+        n.title.ifBlank { n.appName },
+        n.text.ifBlank { null },
+        shortTime(n.timeMs) + if (same.size > 1) "  ×${same.size}" else "",
+        lead = { Avatar(n.appName, lit = important) },
+    ) {
+        Meta("${n.appName} · ${n.status} · ${n.reason}")
+        ChipRow {
+            Chip("Important", selected = important) { same.forEach { vm.label(it.id, true) } }
+            Chip("Noise", selected = !important) { same.forEach { vm.label(it.id, false) } }
+            Chip("Always keep app", selected = rule == "keep") { vm.setRule(n.pkg, if (rule == "keep") null else "keep") }
+            Chip("Always clear app", selected = rule == "clear") { vm.setRule(n.pkg, if (rule == "clear") null else "clear") }
         }
     }
 }
@@ -349,7 +348,7 @@ private fun NotesTab(vm: AppViewModel) {
     val reminders by vm.reminderList.collectAsStateWithLifecycle()
     val facts by vm.facts.collectAsStateWithLifecycle()
     TabList {
-        item { PageTitle("Notes", "Reminders, notes and what Jimi remembers about you.") }
+        item { PageTitle("Notes") }
         item {
             ListCard("Reminders", reminders, "No reminders. Say \"remind me…\"") { r ->
                 ItemRow(
@@ -366,20 +365,6 @@ private fun NotesTab(vm: AppViewModel) {
         item {
             ListCard("What Jimi remembers", facts, "Nothing yet. Say \"remember that…\"") { f ->
                 ItemRow(f.text) { Chip("Forget") { vm.forget(f.id) } }
-            }
-        }
-    }
-}
-
-/** One card holding a short list, with thin lines between rows. */
-@Composable
-private fun <T> ListCard(title: String, rows: List<T>, empty: String, row: @Composable (T) -> Unit) {
-    GlassCard(title = title) {
-        Column {
-            if (rows.isEmpty()) Hint(empty)
-            rows.forEachIndexed { i, r ->
-                if (i > 0) RowDivider()
-                row(r)
             }
         }
     }
@@ -411,95 +396,137 @@ private fun SettingsTab(vm: AppViewModel, onSetup: () -> Unit, onDeviceCheck: ()
     var tool by remember { mutableStateOf("device_status") }
     var args by remember { mutableStateOf("{\"what\":\"battery\"}") }
 
-    Column(
-        Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(start = 20.dp, end = 20.dp, top = 8.dp, bottom = 24.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp),
-    ) {
-        PageTitle("Settings")
-        GlassCard(title = "Conversation") {
-            SpeechEngineSetting()
-            RowDivider()
-            SecondPassSetting()
-            RowDivider()
-            ToggleRow("Spoken wake reply", spokenWake, "Off = a short beep") { vm.setSpokenWake(it) }
-            ToggleRow("Keep listening after an answer", followUp, "No \"Hey Jimi\" needed for the next question") { vm.setFollowUp(it) }
-            ToggleRow("Show panel on wake", panel, "Also on the lock screen") { vm.setShowPanel(it) }
-            ToggleRow("Auto-clear unimportant alerts", autoClear) { vm.setAutoClear(it) }
-            RowDivider()
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                OutlinedTextField(cityText, { cityText = it }, Modifier.weight(1f), label = { Text("Home city (weather)") }, singleLine = true)
-                FilledTonalButton(onClick = { vm.setHomeCity(cityText) }) { Text("Save") }
-            }
+    val voice by vm.voice.collectAsStateWithLifecycle()
+    var page by rememberSaveable { mutableStateOf("") }
+    val close = { page = "" }
+    val localLabel = mapOf(ChatModels.DEFAULT to "Qwen3 / Gemma", ChatModels.LFM to "LFM2.5 1.2B")
+
+    when (page) {
+        "speech" -> SubPage("Speech", close) {
+            RowsCard { SpeechEngineSetting(); RowDivider(); SecondPassSetting() }
         }
-        VoiceCard(vm)
-        GlassCard(title = "Voice ID") {
-            Hint(
-                "When on and the phone is locked, calls, messages and unlock only work for your voice. " +
-                    "Record 3–5 times, in a normal voice, in different places. Say \"panic\" or \"code red\" to lock everything.",
-            )
-            ToggleRow("Voice ID for risky actions when locked", voiceId) { vm.setVoiceId(it) }
-            LaunchedEffect(enrollStatus) { vm.refreshVoice() }
-            Hint("$voiceSamples recording(s) saved." + if (enrollStatus.isNotBlank()) " $enrollStatus" else "")
-            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                Button(onClick = vm::enrollVoice) { Text("Record my voice (8 s)") }
-                FilledTonalButton(onClick = vm::resetVoice) { Text("Delete") }
-            }
-            Hint(
-                "Match needed: ${"%.2f".format(speakerThreshold)}" +
-                    (lastVoiceScore?.let { "   (last locked command: ${"%.2f".format(it)})" } ?: ""),
-            )
-            Slider(speakerThreshold, vm::setSpeakerThreshold, valueRange = 0.2f..0.8f, steps = 11)
-        }
-        GlassCard(title = "Phone PIN") {
-            Hint(if (pinSet) "Saved, encrypted in Android Keystore. Used for \"unlock my phone\"." else "No PIN saved. Needed for \"unlock my phone\".")
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                OutlinedTextField(pin, { pin = it.filter(Char::isDigit) }, Modifier.weight(1f), label = { Text("PIN (empty = remove)") }, singleLine = true)
-                FilledTonalButton(onClick = { vm.setPin(pin); pin = "" }) { Text("Save") }
-            }
-        }
-        GlassCard(title = "Cloud AI") {
-            Hint(
-                "Optional, off by default. Free keys work: Groq, Gemini (Google key, starts with AIza), OpenRouter, Cloudflare. Jimi tries them " +
-                    "in this order and uses the next one when a free limit is reached. Claude keys go in the Gemini box. " +
-                    "Needs internet. Phone actions always run on the phone; only your words go out. With \"send all " +
-                    "chat\" on, the cloud also picks actions fast and answers web questions. Say \"think hard …\" to " +
-                    "ask the cloud once.",
-            )
-            ToggleRow("Use cloud AI", cloudOn) { vm.setCloudEnabled(it) }
-            ToggleRow("Send all chat to the cloud", cloudChat, "Not only \"think hard\"") { vm.setCloudForChat(it) }
-            ToggleRow("Also send what Jimi remembers about me", cloudFacts) { vm.setCloudSendFacts(it) }
-            CLOUD_KEY_ROWS.forEach { row ->
-                RowDivider()
-                KeyRow(row, row.secret in savedKeys, onSave = { vm.setKey(row.secret, row.label, it) }, onTest = { vm.testKey(row.secret) })
-            }
-            if (message.isNotEmpty()) Hint(message)
-        }
-        GlassCard(title = "Local AI model") {
-            listOf(ChatModels.DEFAULT to "Default (Qwen3 / Gemma)", ChatModels.LFM to "LFM2.5 1.2B Instruct").forEach { (id, label) ->
-                Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).clickable { vm.setChatModel(id) }, verticalAlignment = Alignment.CenterVertically) {
-                    RadioButton(selected = chatModel == id, onClick = { vm.setChatModel(id) })
-                    Text(label, style = MaterialTheme.typography.bodyMedium)
+        "voice" -> SubPage("Voice", close) { VoiceCard(vm) }
+        "city" -> SubPage("Home city", close) {
+            RowsCard {
+                Hint("Used for the weather.")
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    OutlinedTextField(cityText, { cityText = it }, Modifier.weight(1f), label = { Text("City") }, singleLine = true)
+                    FilledTonalButton(onClick = { vm.setHomeCity(cityText); close() }) { Text("Save") }
                 }
             }
-            Hint(models)
-            ChipRow { Chip("Check again", onClick = vm::refreshModels) }
         }
-        AssistantModeCard(vm)
-        GlassCard(title = "Setup") {
-            Hint("Root is optional. Extra permissions and background settings depend on this phone.")
-            ChipRow {
-                Chip("Run setup wizard", onClick = onSetup)
-                Chip("Device check", onClick = onDeviceCheck)
-                Chip("Set up with root", onClick = vm::rootSetup)
-                Chip("Export all data (JSON)", onClick = vm::export)
+        "voiceid" -> SubPage("Voice ID", close) {
+            LaunchedEffect(enrollStatus) { vm.refreshVoice() }
+            RowsCard {
+                ToggleRow("Only my voice when locked", voiceId, "Calls, messages and unlock") { vm.setVoiceId(it) }
+            }
+            RowsCard("My voice") {
+                Hint("$voiceSamples recording(s). Record 3–5 times." + if (enrollStatus.isNotBlank()) " $enrollStatus" else "")
+                ChipRow {
+                    Chip("Record (8 s)", selected = true, onClick = vm::enrollVoice)
+                    Chip("Delete all", onClick = vm::resetVoice)
+                }
+            }
+            RowsCard("Match needed") {
+                Hint("%.2f".format(speakerThreshold) + (lastVoiceScore?.let { " · last ${"%.2f".format(it)}" } ?: ""))
+                JimiSlider(speakerThreshold, vm::setSpeakerThreshold, 0.2f..0.8f, steps = 11)
+            }
+            Hint("Say \"panic\" or \"code red\" to lock everything.")
+        }
+        "pin" -> SubPage("Phone PIN", close) {
+            RowsCard {
+                Hint(if (pinSet) "Saved, encrypted." else "Not set. Needed for \"unlock my phone\".")
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    OutlinedTextField(pin, { pin = it.filter(Char::isDigit) }, Modifier.weight(1f), label = { Text("PIN (empty = remove)") }, singleLine = true)
+                    FilledTonalButton(onClick = { vm.setPin(pin); pin = "" }) { Text("Save") }
+                }
+            }
+        }
+        "cloud" -> SubPage("Cloud AI", close) {
+            RowsCard {
+                ToggleRow("Use cloud AI", cloudOn) { vm.setCloudEnabled(it) }
+                ToggleRow("Send all chat", cloudChat, "Off = only \"think hard …\"") { vm.setCloudForChat(it) }
+                ToggleRow("Share what Jimi remembers", cloudFacts) { vm.setCloudSendFacts(it) }
+            }
+            RowsCard("Keys") {
+                CLOUD_KEY_ROWS.forEachIndexed { i, row ->
+                    if (i > 0) RowDivider()
+                    KeyRow(row, row.secret in savedKeys, onSave = { vm.setKey(row.secret, row.label, it) }, onTest = { vm.testKey(row.secret) })
+                }
+                if (message.isNotEmpty()) Hint(message)
+            }
+            Hint("Tried in order: Groq, Gemini/Claude, OpenRouter, Cloudflare. Phone actions stay on the phone.")
+        }
+        "local" -> SubPage("Local AI", close) {
+            RowsCard {
+                localLabel.forEach { (id, label) ->
+                    Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).clickable { vm.setChatModel(id) }, verticalAlignment = Alignment.CenterVertically) {
+                        RadioButton(selected = chatModel == id, onClick = { vm.setChatModel(id) })
+                        Text(label, style = MaterialTheme.typography.bodyMedium)
+                    }
+                }
+            }
+            RowsCard {
+                Hint(models)
+                ChipRow { Chip("Check again", onClick = vm::refreshModels) }
+            }
+        }
+        "assistant" -> SubPage("Assistant mode", close) { AssistantModeCard(vm) }
+        "setup" -> SubPage("Setup & data", close) {
+            RowsCard {
+                NavRow("Setup wizard", onClick = onSetup)
+                RowDivider()
+                NavRow("Device check", onClick = onDeviceCheck)
+                RowDivider()
+                NavRow("Set up with root", onClick = vm::rootSetup)
+                RowDivider()
+                NavRow("Export all data (JSON)", onClick = vm::export)
             }
             if (message.isNotBlank()) Hint(message)
         }
-        GlassCard(title = "Debug: run a tool") {
+        "debug" -> SubPage("Run a tool", close) {
+            RowsCard {
+                OutlinedTextField(tool, { tool = it.trim() }, Modifier.fillMaxWidth(), label = { Text("Tool") }, singleLine = true)
+                OutlinedTextField(args, { args = it }, Modifier.fillMaxWidth(), label = { Text("Args JSON") })
+                ChipRow { Chip("Run", selected = true) { vm.runTool(tool, args) } }
+            }
             Hint(vm.toolNames.joinToString(", "))
-            OutlinedTextField(tool, { tool = it.trim() }, Modifier.fillMaxWidth(), label = { Text("Tool") }, singleLine = true)
-            OutlinedTextField(args, { args = it }, Modifier.fillMaxWidth(), label = { Text("Args JSON") })
-            FilledTonalButton(onClick = { vm.runTool(tool, args) }) { Text("Run") }
+        }
+        else -> Column(
+            Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(start = 20.dp, end = 20.dp, top = 8.dp, bottom = 24.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp),
+        ) {
+            PageTitle("Settings")
+            RowsCard {
+                ToggleRow("Spoken wake reply", spokenWake) { vm.setSpokenWake(it) }
+                ToggleRow("Keep listening after answer", followUp) { vm.setFollowUp(it) }
+                ToggleRow("Panel on wake", panel) { vm.setShowPanel(it) }
+                ToggleRow("Auto-clear noise alerts", autoClear) { vm.setAutoClear(it) }
+            }
+            RowsCard {
+                NavRow("Voice", Voices.byId(voice).label.substringBefore(" ·")) { page = "voice" }
+                RowDivider()
+                NavRow("Speech") { page = "speech" }
+                RowDivider()
+                NavRow("Home city", city.ifBlank { "Not set" }) { page = "city" }
+            }
+            RowsCard {
+                NavRow("Voice ID", if (voiceId) "On" else "Off") { page = "voiceid" }
+                RowDivider()
+                NavRow("Phone PIN", if (pinSet) "Saved" else "Not set") { page = "pin" }
+            }
+            RowsCard {
+                NavRow("Cloud AI", if (cloudOn) "On" else "Off") { page = "cloud" }
+                RowDivider()
+                NavRow("Local AI", localLabel[chatModel]) { page = "local" }
+                RowDivider()
+                NavRow("Assistant mode") { page = "assistant" }
+            }
+            RowsCard {
+                NavRow("Setup & data") { page = "setup" }
+                RowDivider()
+                NavRow("Run a tool") { page = "debug" }
+            }
         }
     }
 }
@@ -542,11 +569,11 @@ internal fun VoiceCard(vm: AppViewModel) {
         }
     }
 
-    GlassCard(title = "Voice") {
+    RowsCard {
         ItemRow(Voices.byId(current).label, "Speed ${"%.2f".format(speed)}x") {
             Chip(if (open) "Hide voices" else "Change", selected = open) { open = !open }
         }
-        Slider(speed, vm::setVoiceSpeed, valueRange = 0.8f..1.3f, steps = 9)
+        JimiSlider(speed, vm::setVoiceSpeed, 0.8f..1.3f, steps = 9)
         if (open) {
             Voices.PHONE.forEach { VoiceRow(it) }
             Meta("Backup (if Google speech is missing)", Modifier.padding(top = 8.dp))
@@ -572,13 +599,18 @@ private val CLOUD_KEY_ROWS = listOf(
 @Composable
 private fun KeyRow(spec: KeyRowSpec, saved: Boolean, onSave: (String) -> Unit, onTest: () -> Unit) {
     var value by remember { mutableStateOf("") }
-    ItemRow(spec.label, if (saved) "Saved, encrypted" else "Not saved")
-    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+    var editing by remember { mutableStateOf(false) }
+    ItemRow(spec.label, if (saved) "Saved" else "Not saved") {
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            if (spec.testable && saved && !editing) Chip("Test", onClick = onTest)
+            Chip(if (editing) "Cancel" else if (saved) "Change" else "Add", selected = !saved && !editing) { editing = !editing }
+        }
+    }
+    if (editing) Row(Modifier.padding(bottom = 8.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         OutlinedTextField(
-            value, { value = it.trim() }, Modifier.weight(1f), label = { Text("${spec.hint} (empty = remove)") }, singleLine = true,
+            value, { value = it.trim() }, Modifier.weight(1f), placeholder = { Text(spec.hint) }, singleLine = true,
             visualTransformation = if (spec.hidden) PasswordVisualTransformation() else VisualTransformation.None,
         )
-        FilledTonalButton(onClick = { onSave(value); value = "" }) { Text("Save") }
-        if (spec.testable && saved) Chip("Test", onClick = onTest)
+        Chip(if (value.isEmpty() && saved) "Remove" else "Save", selected = true) { onSave(value); value = ""; editing = false }
     }
 }
