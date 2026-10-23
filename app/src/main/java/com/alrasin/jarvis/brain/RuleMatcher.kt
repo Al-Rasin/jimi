@@ -324,7 +324,20 @@ object RuleMatcher {
         return null
     }
 
+    /** Any setting (D-056): "open nfc settings", "turn on dark mode", "disable battery saver mode". */
+    private fun setting(t: String): ToolCall? {
+        Regex("^(?:open |show |go to |take me to )(?:the |my )?(.+?) settings?$").find(t)?.let {
+            return call("setting", "name" to it.groupValues[1], "state" to "open")
+        }
+        val m = Regex("^(turn on|switch on|enable|turn off|switch off|disable) (?:the |my )?(.+)$").find(t) ?: return null
+        val name = m.groupValues[2]
+        if (!Regex("\\b(?:mode|saver|sync|nfc|rotation|vibration|vibrate|haptics?|feedback|night light|eye comfort|dark theme|always on display|settings?)$").containsMatchIn(name)) return null
+        val on = m.groupValues[1].let { it == "turn on" || it == "switch on" || it == "enable" }
+        return call("setting", "name" to name.replace(Regex(" settings?$"), ""), "state" to if (on) "on" else "off")
+    }
+
     private fun system(t: String): ToolCall? {
+        setting(t)?.let { return it }
         Regex("^(?:set |change |turn )?(?:the )?(?:screen )?brightness(?: to| at)? (\\d+)(?: percent)?$").find(t)
             ?.let { return call("set_brightness", "level" to it.groupValues[1]) }
         when {

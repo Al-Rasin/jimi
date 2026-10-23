@@ -13,6 +13,16 @@ class RuleMatcherTest {
     private fun m(text: String) = RuleMatcher.match(text, now)
     private fun c(tool: String, vararg args: Pair<String, String>) = ToolCall(tool, args.toMap())
 
+    @Test fun anySetting() {
+        assertEquals(c("setting", "name" to "nfc", "state" to "open"), m("open nfc settings"))
+        assertEquals(c("setting", "name" to "dark mode", "state" to "on"), m("turn on dark mode"))
+        assertEquals(c("setting", "name" to "reading mode", "state" to "off"), m("disable reading mode"))
+        assertEquals(c("setting", "name" to "haptic feedback", "state" to "on"), m("turn on haptic feedback"))
+        // fixed toggles still win
+        assertEquals(c("toggle", "target" to "airplane", "state" to "on"), m("turn on airplane mode"))
+        assertEquals(null, m("turn on the tv")?.takeIf { it.tool == "setting" })
+    }
+
     @Test fun flashlight() {
         assertEquals(c("toggle", "target" to "flashlight", "state" to "on"), m("turn on flashlight"))
         assertEquals(c("toggle", "target" to "flashlight", "state" to "on"), m("Turn on the flash light."))

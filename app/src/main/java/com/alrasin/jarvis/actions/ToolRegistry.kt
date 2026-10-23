@@ -47,6 +47,7 @@ class ToolRegistry @Inject constructor(
         addAll(webTools(Web(), FastWeather(context), { location.get() }) { settings.homeCity.first() })
         add(myLocationTool(location))
         add(phoneProfileTool(profile))
+        add(settingTool(SettingsPages(context)))
     }
 
     private val byName = all.associateBy { it.name }.also {

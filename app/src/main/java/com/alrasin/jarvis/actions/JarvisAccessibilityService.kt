@@ -73,6 +73,32 @@ class JarvisAccessibilityService : AccessibilityService() {
         return nodes
     }
 
+    /** Non-editable visible texts of [packageName], top to bottom. */
+    fun texts(packageName: String): List<String> = visibleNodes(packageName)
+        .filter { !it.isEditable }.mapNotNull { it.text?.toString()?.trim()?.ifEmpty { null } }.distinct()
+
+    /** The on/off switch in the row labelled [label]: true/false, or null when the row has no switch. */
+    fun switchState(packageName: String, label: String): Boolean? = switchIn(rowOf(packageName, label))?.isChecked
+
+    /** Clicks the row labelled [label] if its switch is not already [on]. True when it is [on] afterwards (or clicked). */
+    fun setSwitch(packageName: String, label: String, on: Boolean): Boolean {
+        val row = rowOf(packageName, label) ?: return false
+        val sw = switchIn(row) ?: return false
+        if (sw.isChecked == on) return true
+        return (if (sw.isClickable) sw else row).performAction(AccessibilityNodeInfo.ACTION_CLICK)
+    }
+
+    private fun rowOf(packageName: String, label: String): AccessibilityNodeInfo? = visibleNodes(packageName)
+        .filter { !it.isEditable && it.text?.toString()?.trim().equals(label, true) }
+        .mapNotNull { clickableParent(it, packageName) }.distinct().singleOrNull()
+
+    private fun switchIn(node: AccessibilityNodeInfo?): AccessibilityNodeInfo? {
+        if (node == null) return null
+        if (node.isCheckable) return node
+        for (i in 0 until node.childCount) switchIn(node.getChild(i))?.let { return it }
+        return null
+    }
+
     private fun clickableParent(node: AccessibilityNodeInfo, packageName: String): AccessibilityNodeInfo? {
         var current: AccessibilityNodeInfo? = node
         repeat(12) {
