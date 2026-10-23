@@ -22,6 +22,7 @@ fun dataTools(
     reminders: ReminderDao,
     scheduler: ReminderScheduler,
     memory: MemoryDao,
+    noteApp: NoteApp? = null,
     selectedFactId: () -> Long? = { null },
 ): List<Tool> {
     fun whenText(ms: Long): String {
@@ -32,8 +33,13 @@ fun dataTools(
     return listOf(
         SimpleTool("create_note", "Save a note", listOf(arg("text", "note text"))) { c, _ ->
             val t = c.arg("text") ?: return@SimpleTool ToolResult.fail("What should I note?")
-            notes.insert(Note(timeMs = System.currentTimeMillis(), text = t))
-            ToolResult.ok("Noted.")
+            notes.insert(Note(timeMs = System.currentTimeMillis(), text = t))   // kept for "read my notes"
+            val app = noteApp?.save(t)
+            when {
+                app != null -> ToolResult.ok("Saved in $app.")
+                noteApp?.target() == null -> ToolResult.ok("Noted.")
+                else -> ToolResult.ok("I couldn't open your notes app, so I saved it in Jimi.")
+            }
         },
         SimpleTool("read_notes", "Read the last notes") { _, _ ->
             val list = notes.last(5)
