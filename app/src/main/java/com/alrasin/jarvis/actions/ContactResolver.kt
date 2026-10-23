@@ -97,14 +97,36 @@ object ContactResolver {
         .replace(Regex("\\p{InCombiningDiacriticalMarks}+"), "")
         .lowercase(Locale.ROOT).replace(Regex("[^\\p{L}\\p{M}\\p{N}]+"), " ").trim()
 
-    private fun queryName(text: String) = clean(text).removePrefix("my ").removePrefix("amar ")
+    private fun queryName(text: String) = spoken(
+        clean(text).replace(Regex("^(?:no |not that )?(?:i said |i mean |i meant |i told you )?(?:to )?"), "")
+            .removePrefix("my ").removePrefix("amar "),
+    )
+
+    /**
+     * Speech fixes for names: spelled letters ("m o t h e r" → "mother") and a trailing spoken letter after a name
+     * ("mother ji" → "mother g"), because contacts are often saved as "Name X".
+     */
+    internal fun spoken(q: String): String {
+        val joined = q.replace(Regex("\\b(?:\\p{L} ){2,}\\p{L}\\b")) { it.value.replace(" ", "") }
+        val words = joined.split(' ').filter(String::isNotEmpty)
+        if (words.size < 2) return joined
+        val letter = LETTERS[words.last()] ?: return joined
+        return (words.dropLast(1) + letter).joinToString(" ")
+    }
+
+    private val LETTERS = mapOf(
+        "ji" to "g", "jee" to "g", "gee" to "g", "bee" to "b", "be" to "b", "bi" to "b", "tee" to "t", "ti" to "t",
+        "ef" to "f", "eff" to "f", "dee" to "d", "di" to "d", "pee" to "p", "pi" to "p", "kay" to "k", "jay" to "j",
+        "em" to "m", "en" to "n", "es" to "s", "ess" to "s", "vee" to "v", "ay" to "a", "eh" to "a", "el" to "l",
+        "ar" to "r", "are" to "r", "see" to "c", "si" to "c", "zed" to "z", "zee" to "z", "ex" to "x", "why" to "y",
+    )
 
     private fun contactNames(contact: Contacts.Contact) = (listOf(contact.name) + contact.aliases)
         .map(::clean).filter(String::isNotEmpty)
 
     private val relations = listOf(
-        listOf("mother", "mom", "mum", "mummy", "mommy", "mama", "amma", "ammu", "ammum", "ammi", "maa", "ma", "মা", "আম্মু", "আম্মা"),
-        listOf("father", "dad", "daddy", "papa", "baba", "abba", "abbu", "বাবা", "আব্বু", "আব্বা"),
+        listOf("mother", "mom", "mum", "mummy", "mommy", "mama", "amma", "ammu", "ammum", "ammi", "maa", "ma", "madar", "mader", "modar", "moder", "muther", "mather", "মা", "আম্মু", "আম্মা"),
+        listOf("father", "dad", "daddy", "papa", "baba", "abba", "abbu", "fader", "fadar", "farther", "বাবা", "আব্বু", "আব্বা"),
         listOf("sister", "sis", "apu", "apa", "bon", "বোন", "আপু"),
         listOf("brother", "bro", "bhai", "vai", "ভাই"),
         listOf("grandmother", "grandma", "granny", "nani", "nanu", "dadi", "dida", "নানি", "দাদি"),
@@ -136,5 +158,5 @@ object ContactResolver {
 
     private fun matches(query: String, name: String): Boolean =
         name == query || name.startsWith("$query ") || name.endsWith(" $query") ||
-            name.contains(" $query ") || (query !in relations && name.split(' ').any { it.startsWith(query) })
+            name.contains(" $query ") || (query.length >= 3 && query !in relations && name.split(' ').any { it.startsWith(query) })
 }

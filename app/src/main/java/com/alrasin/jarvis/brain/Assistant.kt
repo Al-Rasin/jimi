@@ -72,6 +72,7 @@ class Assistant @Inject constructor(
     private val lock = Mutex()
     private var pending: Pair<ToolCall, Long>? = null
     private var contactChoice = PendingContactChoice()
+    private val draft = MessageDraft()
     private var conversation = ConversationContext()
     private val contacts = Contacts(context)
     private var smokePending: Pair<ToolCall, Long>? = null
@@ -173,6 +174,17 @@ class Assistant @Inject constructor(
             screenAgent.stop()
             if (Persona.isNo(text)) return Reply("Okay, cancelled.", tool = "screen_agent")
         }
+        if (smoke == null) {
+            when (val d = draft.answer(text, monotonicMillis(), newCommand = rule != null && rule.tool !in MESSAGE_TOOLS)) {
+                is MessageDraft.Answer.Ready -> return runTool(d.call, input, "draft")
+                is MessageDraft.Answer.Ask -> return Reply(d.question, expectAnswer = true)
+                MessageDraft.Answer.Cancelled -> {
+                    clearConversation()
+                    return Reply("Okay, cancelled.", endConversation = true)
+                }
+                MessageDraft.Answer.None -> Unit
+            }
+        }
         trace("smalltalk")
         val smallTalk = Persona.smallTalk(text, LocalDateTime.now().hour)
         if (smallTalk?.startsWith("Bye") == true) return Reply(smallTalk, endConversation = true)
@@ -198,6 +210,10 @@ class Assistant @Inject constructor(
             }
             pending = null
             if (monotonicMillis() - at in 0 until PENDING_MS) {
+                // "No, I said Mother G" fixes a misheard contact instead of cancelling.
+                MessageDraft.correctedContact(text)?.takeIf { call.arg("contact") != null }?.let { who ->
+                    return runTool(call.copy(args = call.args - "contact_name" + ("contact" to who)), input, "correction")
+                }
                 if (Persona.isYes(text)) return runTool(call, input, "confirm", confirmed = true)
                 if (Persona.isNo(text)) {
                     trace("confirm", call)
@@ -228,6 +244,7 @@ class Assistant @Inject constructor(
             JarvisLog.i("route ${intent.route} ${intent.confidence}: ${intent.reason}")
             webRouteCall(text, rule, intent)?.let { return runTool(it, input, "router") }
             ruleRouteCall(text, rule, intent)?.let {
+                if (smoke == null) draft.start(it, monotonicMillis())?.let { q -> return Reply(q, expectAnswer = true) }
                 JarvisLog.i("route rule ${it.tool} in ${(System.nanoTime() - routingStarted) / 1_000_000} ms; llm=false")
                 return runTool(it, input, "rule")
             }
@@ -261,6 +278,7 @@ class Assistant @Inject constructor(
 
     private fun clearConversation() {
         pending = null
+        draft.clear()
         contactChoice.clear()
         conversation.clear()
     }
@@ -418,6 +436,7 @@ class Assistant @Inject constructor(
 
     companion object {
         private const val PENDING_MS = 30_000L
+        private val MESSAGE_TOOLS = setOf("send_sms", "send_whatsapp")
         private val WEB_TOOLS = setOf("web_search", "weather", "news", "wiki_lookup", "read_page", "open_url")
 
         internal fun ruleRouteCall(text: String, rule: ToolCall?, intent: IntentRouter.Decision): ToolCall? {

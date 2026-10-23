@@ -19,6 +19,12 @@ class AppActionsRuleMatcherTest(private val input: String, private val expected:
             mapOf("contact" to contact, "text" to text) + if (app == "messenger") mapOf("app" to app) else emptyMap(),
         )
 
+        /** Message with no text yet: the Assistant asks "What should I say?" (MessageDraft). */
+        private fun draft(contact: String, app: String? = null) = ToolCall(
+            if (app == "whatsapp") "send_whatsapp" else "send_sms",
+            mapOf("contact" to contact) + if (app == "messenger") mapOf("app" to app) else emptyMap(),
+        )
+
         private fun media(query: String, app: String? = null) = ToolCall("play_media",
             mapOf("query" to query) + if (app == null) emptyMap() else mapOf("app" to app))
 
@@ -77,14 +83,14 @@ class AppActionsRuleMatcherTest(private val input: String, private val expected:
             "send sms to mom saying hello" to message("mom", "hello"),
             "message mom on sms saying hello" to message("mom", "hello"),
             "please message mom on messenger saying please be here now" to message("mom", "please be here now", "messenger"),
-            "send whatsapp to mom" to null,
-            "message mom on messenger" to null,
-            "message mom on messenger saying" to null,
-            "send whatsapp to mom saying" to null,
-            "send whatsapp to Rahim Khan saying" to null,
-            "send whatsapp to Rahim Khan that says" to null,
-            "send whatsapp to Rahim Khan:" to null,
-            "message Rahim Khan saying" to null,
+            "send whatsapp to mom" to draft("mom", "whatsapp"),
+            "message mom on messenger" to draft("mom", "messenger"),
+            "message mom on messenger saying" to draft("mom", "messenger"),
+            "send whatsapp to mom saying" to draft("mom", "whatsapp"),
+            "send whatsapp to Rahim Khan saying" to draft("rahim khan", "whatsapp"),
+            "send whatsapp to Rahim Khan that says" to draft("rahim khan", "whatsapp"),
+            "send whatsapp to Rahim Khan:" to draft("rahim khan", "whatsapp"),
+            "message Rahim Khan saying" to draft("rahim khan"),
             "open YouTube and play perfect" to media("perfect", "youtube"),
             "open YouTube app and play perfect" to media("perfect", "youtube"),
             "launch YouTube and search for lofi" to media("lofi", "youtube"),

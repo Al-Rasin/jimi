@@ -176,11 +176,16 @@ object RuleMatcher {
             return call("call", "contact" to it.groupValues[2], "app" to it.groupValues[3].takeUnless { app -> app.isEmpty() || app == "speaker" }?.let(::commsApp),
                 "video" to it.groupValues[1].takeIf { mode -> mode.isNotEmpty() }?.let { mode -> (mode == "video").toString() })
         }
-        Regex("^(?:(?:send|write) (?:a |an )?)?(whats ?app|messenger)(?: message| text)?(?: to)? (.+)$").find(t)?.let {
-            return message(it.groupValues[2], commsApp(it.groupValues[1]))
+        Regex("^(?:(?:send|write) (?:a |an )?)?(whats ?app|messenger)(?: message| text)?( to)? (.+)$").find(t)?.let {
+            return message(it.groupValues[3], commsApp(it.groupValues[1]), addressed = it.groupValues[2].isNotEmpty())
         }
-        Regex("^(?:(?:send|write) (?:a |an )?)?(?:message|text|sms|msg)(?: to)? (.+)$").find(t)?.let {
-            return message(it.groupValues[1])
+        Regex("^(?:(?:send|write) (?:a |an )?)?(?:message|text|sms|msg)(?: (?:on|via|using|in) (whats ?app|messenger|sms))?( to)? (.+)$").find(t)?.let {
+            return message(it.groupValues[3], it.groupValues[1].takeIf(String::isNotEmpty)?.let(::commsApp), addressed = it.groupValues[2].isNotEmpty())
+        }
+        // "send a message", "send a whatsapp message", "message on messenger" → ask who and what.
+        Regex("^(?:(?:send|write) )?(?:a |an )?(?:(whats ?app|messenger) )?(?:message|text|msg)(?: (?:on|via|using|in) (whats ?app|messenger))?$").find(t)?.let {
+            val app = (it.groupValues[1].ifEmpty { it.groupValues[2] }).takeIf(String::isNotEmpty)?.let(::commsApp)
+            return call(if (app == "whatsapp") "send_whatsapp" else "send_sms", "app" to app?.takeIf { a -> a == "messenger" })
         }
         if (normalize(t).matches(re("(?:read|check|show|any|do i have any)(?: me)?(?: my)?(?: new| unread| latest| last)? (?:messages|texts|sms)|(?:read|show) (?:the )?last (?:message|text|sms)"))) return call("read_messages")
         Regex("^(?:send|write|compose) (?:an |a )?(?:email|mail|e mail)(?: to ([a-z0-9 ]+?))?(?: about (.+))?$").find(t)
@@ -189,8 +194,22 @@ object RuleMatcher {
     }
 
     private fun commsApp(app: String) = app.replace(" ", "")
+    private val SPOKEN_LETTER = Regex("[a-z]|ji|jee|gee|bee|tee|dee|pee|ef|eff|kay|jay|em|en|es|vee|zed|zee")
 
-    private fun message(rest: String, requestedApp: String? = null): ToolCall? {
+    /**
+     * [addressed]: the words came after "to", so with no "saying …" the whole rest is the contact.
+     * Missing contact or text is returned empty; the Assistant then asks for it (MessageDraft).
+     */
+    private fun message(raw: String, requestedApp: String? = null, addressed: Boolean = false): ToolCall? {
+        var rest = raw
+        var to = addressed
+        // "my whatsapp" / "to my messenger" → app only, ask who.
+        Regex("^(?:to )?my (whats ?app|messenger)$").find(rest)?.let {
+            val app = commsApp(it.groupValues[1])
+            if (requestedApp != null && requestedApp != app) return null
+            return call(if (app == "whatsapp") "send_whatsapp" else "send_sms", "app" to app.takeIf { a -> a == "messenger" })
+        }
+        if (rest.startsWith("to ")) { rest = rest.removePrefix("to "); to = true }
         val delimiter = Regex("\\s+(?:saying|that says|say|that)(?:\\s+|$)|\\s*:\\s*").find(rest)
         var app = requestedApp
         val recipient: String
@@ -213,14 +232,20 @@ object RuleMatcher {
                 text = routed.groupValues[3]
             } else {
                 val split = rest.indexOf(' ')
-                if (split < 1) return null
-                recipient = rest.substring(0, split)
-                text = rest.substring(split + 1)
+                val tail = if (split > 0) rest.substring(split + 1) else ""
+                // "to madar ji": a trailing spoken letter is part of the name (contacts saved as "Name G").
+                if (split < 1 || (to && SPOKEN_LETTER.matches(tail))) {
+                    recipient = rest
+                    text = ""
+                } else {
+                    recipient = rest.substring(0, split)
+                    text = tail
+                }
             }
         }
-        if (recipient.isBlank() || text.isBlank() || text in setOf("saying", "that says", "say", "that")) return null
+        if (recipient.isBlank() || text in setOf("saying", "that says", "say", "that")) return null
         return call(if (app == "whatsapp") "send_whatsapp" else "send_sms", "contact" to recipient,
-            "text" to text, "app" to app?.takeIf { it == "messenger" })
+            "text" to text.ifBlank { null }, "app" to app?.takeIf { it == "messenger" })
     }
 
     private fun media(t: String): ToolCall? {
