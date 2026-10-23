@@ -11,14 +11,10 @@ import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
-import androidx.compose.foundation.Image
-import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.ui.graphics.FilterQuality
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.ui.layout.ContentScale
 import androidx.compose.foundation.background
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.text.font.FontWeight
@@ -58,10 +54,23 @@ import com.alrasin.jarvis.service.JarvisCoreService
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.delay
 import java.lang.ref.WeakReference
+import androidx.compose.foundation.border
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.onSizeChanged
+import androidx.compose.ui.layout.positionInWindow
+import androidx.compose.ui.platform.LocalDensity
+import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.unit.IntSize
+import kotlin.math.roundToInt
 
 /**
- * The assistant panel (replaces the Google Assistant / Gemini sheet, D-036): full-screen see-through glass over a blurred
- * picture of the screen, with Jimi's living Möbius strip (D-050). Opens on the wake word, also on the lock screen.
+ * The assistant panel (replaces the Google Assistant / Gemini sheet, D-036): a floating glass card that shows a blurred
+ * picture of the screen behind it, with Jimi's living Möbius strip (D-050, D-051). Opens on the wake word, also on the lock screen.
  * Shows live text and the answer, and lets the user fix wrong text without a pop-up. Closes itself
  * [IDLE_MS] after the conversation ends and nothing was touched.
  */
@@ -123,7 +132,7 @@ private fun Panel(vm: PanelViewModel, onClose: () -> Unit) {
     val replyShown = rememberTypewriter(reply)
     val talking = past.isNotEmpty() || live
     val fade by animateFloatAsState(if (shown) 1f else 0f, tween(if (motion) 250 else 0), label = "panel fade")
-    val stripSize by animateDpAsState(if (talking) 120.dp else 200.dp, tween(if (motion) 450 else 0), label = "strip size")
+    val stripSize by animateDpAsState(if (talking) 72.dp else 140.dp, tween(if (motion) 450 else 0), label = "strip size")
 
     fun close() { shown = false; closing = true }
     fun touch() { touched = System.currentTimeMillis() }
@@ -143,57 +152,71 @@ private fun Panel(vm: PanelViewModel, onClose: () -> Unit) {
         }
     }
 
-    // see-through glass (D-050): blurred screen behind + dark tint; a tap on empty glass closes
+    // floating glass card (D-050, D-051): the app stays visible around it; a tap outside closes
+    val density = LocalDensity.current
+    var screen by remember { mutableStateOf(IntSize.Zero) }
+    var cardAt by remember { mutableStateOf(Offset.Zero) }
+    val image = remember(backdrop) { backdrop?.asImageBitmap() }
+    val shape = RoundedCornerShape(32.dp)
     Box(
-        Modifier.fillMaxSize().graphicsLayer { alpha = fade }
-            .clickable(remember { MutableInteractionSource() }, null, onClick = ::close),
+        Modifier.fillMaxSize().onSizeChanged { screen = it }
+            .background(Color.Black.copy(alpha = 0.12f * fade))
+            .clickable(remember { MutableInteractionSource() }, null, onClick = ::close)
+            .navigationBarsPadding().imePadding().padding(12.dp),
+        contentAlignment = Alignment.BottomCenter,
     ) {
-        backdrop?.let {
-            Image(it.asImageBitmap(), null, Modifier.fillMaxSize(), contentScale = ContentScale.Crop, filterQuality = FilterQuality.High)
-        }
-        Box(
-            Modifier.fillMaxSize().background(
-                Brush.verticalGradient(
-                    0f to Hud.SheetBottom.copy(alpha = if (backdrop != null) 0.25f else 0.72f),
-                    1f to Hud.SheetBottom.copy(alpha = if (backdrop != null) 0.6f else 0.9f),
-                ),
-            ),
-        )
         Column(
-            Modifier.fillMaxSize().statusBarsPadding().navigationBarsPadding().imePadding()
-                .padding(start = 20.dp, end = 20.dp, top = 8.dp, bottom = 16.dp)
+            Modifier.fillMaxWidth().heightIn(max = with(density) { (screen.height * 0.72f).toDp() })
+                .graphicsLayer { alpha = fade; translationY = (1f - fade) * 48.dp.toPx() }
+                .onGloballyPositioned { cardAt = it.positionInWindow() }
+                .clip(shape)
+                // the blurred screen, placed so the card shows exactly what is behind it
+                .drawBehind {
+                    image?.let {
+                        drawImage(
+                            it, dstOffset = IntOffset(-cardAt.x.roundToInt(), -cardAt.y.roundToInt()),
+                            dstSize = screen, filterQuality = FilterQuality.High,
+                        )
+                    }
+                }
+                .background(Hud.SheetBottom.copy(alpha = if (image != null) 0.55f else 0.92f))
+                .border(1.dp, Hud.edgeBrush, shape)
+                .clickable(remember { MutableInteractionSource() }, null) { touch() }
+                .padding(start = 18.dp, end = 18.dp, top = 6.dp, bottom = 14.dp)
                 .animateContentSize(tween(if (motion) 200 else 0)),
-            verticalArrangement = Arrangement.spacedBy(12.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp),
         ) {
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
-                if (phase == JarvisCoreService.PHASE_SPEAKING) {
-                    TextButton(onClick = { touch(); vm.shutUp() }) { Text("STOP", color = PanelColors.Cyan, letterSpacing = 2.sp) }
+            Box(Modifier.fillMaxWidth()) {
+                Row(Modifier.align(Alignment.TopEnd)) {
+                    if (phase == JarvisCoreService.PHASE_SPEAKING) {
+                        TextButton(onClick = { touch(); vm.shutUp() }) { Text("STOP", color = PanelColors.Cyan, letterSpacing = 2.sp) }
+                    }
+                    TextButton(onClick = ::close) { Text("✕", color = PanelColors.Dim, fontSize = 18.sp) }
                 }
-                TextButton(onClick = ::close) { Text("✕", color = PanelColors.Dim, fontSize = 18.sp) }
-            }
-            Column(
-                Modifier.fillMaxWidth().then(if (talking) Modifier else Modifier.weight(1f)),
-                horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.spacedBy(10.dp, Alignment.CenterVertically),
-            ) {
-                MobiusStrip(mood, level, size = stripSize, modifier = Modifier.clickable(remember { MutableInteractionSource() }, null) { touch(); vm.listen() })
-                AnimatedContent(if (idle) "Jimi" else phase, label = "phase") { p -> HudLabel(p, active = !idle) }
-                if (!talking && heard != AssistantActivity.NOTHING_HEARD) {
-                    Text(
-                        "How can I help, Boss?",
-                        style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Light),
-                        color = PanelColors.Text, textAlign = TextAlign.Center,
-                    )
-                }
-                if (heard == AssistantActivity.NOTHING_HEARD) {
-                    Text("I didn't catch that, Boss.", color = PanelColors.Dim)
+                Column(
+                    Modifier.fillMaxWidth().padding(top = 8.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(6.dp),
+                ) {
+                    MobiusStrip(mood, level, size = stripSize, modifier = Modifier.clickable(remember { MutableInteractionSource() }, null) { touch(); vm.listen() })
+                    AnimatedContent(if (idle) "Jimi" else phase, label = "phase") { p -> HudLabel(p, active = !idle) }
+                    if (!talking && heard != AssistantActivity.NOTHING_HEARD) {
+                        Text(
+                            "How can I help, Boss?",
+                            style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Light),
+                            color = PanelColors.Text, textAlign = TextAlign.Center,
+                        )
+                    }
+                    if (heard == AssistantActivity.NOTHING_HEARD) {
+                        Text("I didn't catch that, Boss.", color = PanelColors.Dim)
+                    }
                 }
             }
             if (talking) {
                 val scroll = rememberScrollState()
                 LaunchedEffect(replyShown, heard, past.size) { scroll.animateScrollTo(scroll.maxValue) }
                 Column(
-                    Modifier.fillMaxWidth().weight(1f).verticalScroll(scroll)
+                    Modifier.fillMaxWidth().weight(1f, fill = false).verticalScroll(scroll)
                         .clickable(remember { MutableInteractionSource() }, null) { touch() },
                     verticalArrangement = Arrangement.spacedBy(14.dp, Alignment.Bottom),
                 ) {
