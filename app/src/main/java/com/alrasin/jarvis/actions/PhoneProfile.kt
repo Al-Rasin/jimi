@@ -74,7 +74,7 @@ class PhoneProfile(private val context: Context, private val apps: AppList) {
     }
 
     /**
-     * What each app can do, asked from Android (D-056, QUALITY-PLAN G.1), so it works on any phone:
+     * What each app can do, asked from Android (D-056, ROADMAP §G.1), so it works on any phone:
      * apps that handle a standard intent, plus the app category the developer set.
      */
     private fun abilities(installed: List<AppList.App>): Map<String, List<String>> {

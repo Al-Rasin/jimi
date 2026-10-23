@@ -9,7 +9,7 @@ import com.alrasin.jarvis.core.ToolResult
 import kotlinx.coroutines.delay
 
 /**
- * Any setting on any phone (D-056, QUALITY-PLAN G.2). Pages come from Android's own list of public settings screens
+ * Any setting on any phone (D-056, ROADMAP §G.2). Pages come from Android's own list of public settings screens
  * (`Settings.ACTION_*_SETTINGS` that open on this phone); anything else is typed into the Settings app's search box.
  * For on/off, the switch in the row with that name is flipped through accessibility and read back.
  */
