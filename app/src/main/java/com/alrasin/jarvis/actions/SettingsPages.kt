@@ -34,6 +34,7 @@ class SettingsPages(private val context: Context) {
     suspend fun run(name: String, state: String?): ToolResult {
         direct(name, state)?.let { return it }
         if (context.getSystemService(KeyguardManager::class.java).isKeyguardLocked) return ToolResult.fail("Unlock the phone first, Boss.")
+        if (state == "on" || state == "off") stored(name, state == "on")?.let { return it }
         val service = JarvisAccessibilityService.instance
         val page = best(name, pages)
         val flip = state == "on" || state == "off"
@@ -48,8 +49,8 @@ class SettingsPages(private val context: Context) {
         val on = state == "on"
         // The row may not be on screen at once; wait for it, then flip and read back.
         repeat(12) {
-            val label = match(name, service.texts(settingsPkg))
-            if (label != null && service.switchState(settingsPkg, label) != null) {
+            val label = match(name, service.texts(settingsPkg).filter { service.switchState(settingsPkg, it) != null })
+            if (label != null) {
                 service.setSwitch(settingsPkg, label, on)
                 delay(500)
                 return if (service.switchState(settingsPkg, label) == on) ToolResult.ok("$label is ${state} now.")
@@ -67,16 +68,39 @@ class SettingsPages(private val context: Context) {
         return if (ok) ToolResult.ok("Dark mode is $state now.") else null
     }
 
+    /**
+     * On/off switches Android keeps as 0/1 keys (`settings list system|secure|global`): "haptic feedback" →
+     * system haptic_feedback_enabled. Set with root and read back; null = no such key (then the Settings app is used).
+     */
+    private suspend fun stored(name: String, on: Boolean): ToolResult? {
+        val entries = NAMESPACES.flatMap { ns ->
+            RootShell.run("settings list $ns", log = false).out.lines().mapNotNull { line ->
+                line.split('=', limit = 2).takeIf { it.size == 2 }?.let { (k, v) -> Triple(ns, k.trim(), v.trim()) }
+            }
+        }
+        val (ns, key, _) = key(name, entries) ?: return null
+        val v = if (on) "1" else "0"
+        val done = RootShell.run("settings put $ns $key $v", "settings get $ns $key").out.trim().lines().lastOrNull() == v
+        JarvisLog.i("setting key $ns/$key → $v ${if (done) "ok" else "failed"}")
+        return if (done) ToolResult.ok("${name.replaceFirstChar { it.uppercase() }} is ${if (on) "on" else "off"} now.") else null
+    }
+
     /** Settings app → search box → type [name] (then simpler words if nothing is found) → tap the closest result. */
     private suspend fun search(service: JarvisAccessibilityService, name: String): Boolean {
         if (!context.launch(Intent(Settings.ACTION_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_CLEAR_TASK))) return false
         if (!waitFor { service.clickExact(settingsPkg, labels = SEARCH_LABELS) }) return false
-        for (query in queries(name)) {
-            if (!type(service, query)) return false
-            delay(800)
+        var typed = ""
+        // A cold search index takes ~20 s to load on a slow phone and says "no results" until then, so keep cycling.
+        val end = System.currentTimeMillis() + SEARCH_MS
+        while (System.currentTimeMillis() < end) for (query in queries(name)) {
+            if (!type(service, typed, query)) return false
+            typed = query
             var hit: String? = null
-            // MIUI fills results slowly; the box itself still shows the query, so it is skipped.
-            if (!waitFor(32) { match(name, service.texts(settingsPkg).filter { !it.equals(query, true) }).also { hit = it } != null }) continue
+            // Slow polling: reading the screen too often keeps a slow Settings app from showing its results.
+            if (!waitFor(8, pause = 1000) { match(name, service.texts(settingsPkg).filter { !it.equals(query, true) }).also { hit = it } != null }) {
+                JarvisLog.i("setting search \"$query\": no match in ${service.texts(settingsPkg).take(6)}")
+                if (System.currentTimeMillis() >= end) break else continue
+            }
             JarvisLog.i("setting search \"$query\" → \"$hit\"")
             return waitFor { service.clickUniqueText(settingsPkg, hit!!) }
         }
@@ -85,19 +109,18 @@ class SettingsPages(private val context: Context) {
 
     /**
      * MIUI search runs only on real key presses and ignores some set-text changes, so the box is cleared with
-     * Delete presses and the query typed as keys (root); set-text is only the fallback without root.
+     * Delete presses (one per letter typed before) and the query typed as keys (root); set-text is only the fallback without root.
      */
-    private suspend fun type(service: JarvisAccessibilityService, query: String): Boolean {
-        val old = service.editableText(settingsPkg).orEmpty()
+    private suspend fun type(service: JarvisAccessibilityService, old: String, query: String): Boolean {
         val clear = if (old.isEmpty()) "" else "input keyevent 123 ${"67 ".repeat(old.length)}; "
         val safe = query.filter { it.isLetterOrDigit() || it == ' ' || it == '-' }.replace(" ", "%s")
         return RootShell.run("${clear}input text $safe").ok || service.replaceText(settingsPkg, query)
     }
 
-    private suspend fun waitFor(tries: Int = 16, check: () -> Boolean): Boolean {
+    private suspend fun waitFor(tries: Int = 16, pause: Long = 250, check: () -> Boolean): Boolean {
         repeat(tries) {
             if (check()) return true
-            delay(250)
+            delay(pause)
         }
         return false
     }
@@ -111,6 +134,25 @@ class SettingsPages(private val context: Context) {
             val words = name.lowercase().split(' ').filter { it.length > 2 }
             val spelled = words.joinToString(" ") { SPELLING[it] ?: it }
             return (listOf(name.lowercase(), spelled) + words.map { SPELLING[it] ?: it }.sortedByDescending { it.length }).distinct()
+        }
+
+        private const val SEARCH_MS = 30_000L
+        private val NAMESPACES = listOf("system", "secure", "global")
+        private val FILLER = setOf("enabled", "enable", "mode", "on", "is", "setting", "settings")
+        /** Keys never flipped by voice: debugging, security, accessibility and install checks. */
+        private val DENY = Regex("adb|develop|accessibility|verifier|install|password|lock|usb|secure|admin|boot|airplane")
+
+        /** Best 0/1 key holding every spoken word (fewest extra words); null when none fits. */
+        internal fun key(name: String, entries: List<Triple<String, String, String>>): Triple<String, String, String>? {
+            val words = name.lowercase().split(Regex("[^a-z0-9]+")).filter { it.length > 2 && it !in FILLER }
+                .map { SPELLING[it] ?: it }.map { it.replace("-", "").trimEnd('s') }
+            if (words.isEmpty()) return null
+            return entries.filter { (_, k, v) -> (v == "0" || v == "1") && !DENY.containsMatchIn(k) }
+                .mapNotNull { e ->
+                    val parts = e.second.lowercase().split('_', '.').filter { it.isNotEmpty() }
+                    if (!words.all { w -> parts.any { it.startsWith(w) } }) null
+                    else e to parts.count { p -> p !in FILLER && words.none { p.startsWith(it) } }
+                }.minByOrNull { it.second }?.first
         }
 
         private val SEARCH_LABELS = listOf("Search settings", "Search", "Search Settings")

@@ -37,4 +37,17 @@ class SettingsPagesTest {
         assertEquals("Wi-Fi calling", SettingsPages.match("wifi calling", listOf("Wi-Fi", "Wi-Fi calling")))
         assertNull(SettingsPages.match("nfc", screen))
     }
+
+    @Test fun spokenNameFindsStoredKey() {
+        val e = listOf(
+            Triple("system", "haptic_feedback_enabled", "0"), Triple("system", "haptic_feedback_intensity", "2"),
+            Triple("system", "dtmf_tone", "1"), Triple("global", "adb_enabled", "1"),
+            Triple("secure", "charging_sounds_enabled", "0"), Triple("system", "lockscreen_sounds_enabled", "1"),
+        )
+        assertEquals("haptic_feedback_enabled", SettingsPages.key("haptic feedback", e)?.second)
+        assertEquals("charging_sounds_enabled", SettingsPages.key("charging sounds", e)?.second)
+        assertNull(SettingsPages.key("adb", e))
+        assertNull(SettingsPages.key("lockscreen sounds", e))
+        assertNull(SettingsPages.key("reading mode", e))
+    }
 }
