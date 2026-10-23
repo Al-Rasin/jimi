@@ -92,6 +92,32 @@ internal class AppCommunications(private val context: Context, private val conta
         return ToolResult.ok("Boss, I tapped send for ${person.name} in $label. Delivery isn't confirmed.")
     }
 
+    /** "Message yourself" on WhatsApp, or the owner's own Messenger thread. */
+    suspend fun messageSelf(app: String, text: String): ToolResult {
+        val label = if (app == "whatsapp") "WhatsApp" else "Messenger"
+        val pkg = packageFor(app) ?: return ToolResult.fail("$label is not installed.")
+        val service = JarvisAccessibilityService.instance
+            ?: return ToolResult.fail("Enable Jimi accessibility in Android settings so I can send the $label message.")
+        val uri = if (app == "whatsapp") {
+            val number = SelfAccount.whatsappNumber()?.let(CommsAddress::international)
+                ?: return ToolResult.fail("I couldn't find your own WhatsApp number.")
+            Uri.parse("https://wa.me/$number").buildUpon().appendQueryParameter("text", text).build()
+        } else {
+            Uri.parse("fb-messenger://user/" + (SelfAccount.messengerId() ?: return ToolResult.fail("I couldn't find your Messenger account.")))
+        }
+        if (!context.launch(Intent(Intent.ACTION_VIEW, uri).setPackage(pkg))) return ToolResult.fail("I couldn't open $label.")
+        // Messenger has no "you" mark in the thread; the deep link to the owner's own id is the check there.
+        val opened = waitFor { service.editableText(pkg) != null && (app != "whatsapp" || service.isSelfChat(pkg)) }
+        if (!opened) return ToolResult.fail("I couldn't open your own $label chat. Nothing was sent. Unlock the phone and try again.")
+        if (!service.replaceText(pkg, text) || service.editableText(pkg) != text)
+            return ToolResult.fail("I couldn't enter the exact message in your $label chat. Nothing was sent.")
+        if (app == "whatsapp" && !service.isSelfChat(pkg)) return ToolResult.fail("The WhatsApp chat changed. Nothing was sent.")
+        val ids = if (app == "whatsapp") listOf("$pkg:id/send") else emptyList()
+        if (!service.clickExact(pkg, labels = listOf("Send", "Send message"), ids = ids))
+            return ToolResult.fail("The message is ready in $label, but I couldn't identify Send. Nothing was sent.")
+        return ToolResult.ok("Boss, I sent it to your own $label chat.")
+    }
+
     private suspend fun openConversation(person: Contacts.Contact, app: String, pkg: String, service: JarvisAccessibilityService, text: String = ""): String? {
         val label = if (app == "whatsapp") "WhatsApp" else "Messenger"
         if (app == "whatsapp") {

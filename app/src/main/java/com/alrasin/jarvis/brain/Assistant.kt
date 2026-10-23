@@ -5,6 +5,7 @@ import com.alrasin.jarvis.actions.ContactResolver
 import com.alrasin.jarvis.actions.Contacts
 import com.alrasin.jarvis.actions.JarvisAccessibilityService
 import com.alrasin.jarvis.actions.Outcome
+import com.alrasin.jarvis.actions.SelfAccount
 import com.alrasin.jarvis.actions.ToolExecutor
 import com.alrasin.jarvis.agent.AgentResult
 import com.alrasin.jarvis.agent.AgentRouting
@@ -326,7 +327,8 @@ class Assistant @Inject constructor(
             "run_routine" -> return runRoutine(call.arg("name") ?: "", input)
             "panic" -> return panic(input)
         }
-        if (!confirmed && call.tool in setOf("call", "send_sms", "send_whatsapp")) {
+        val toSelf = call.tool in setOf("send_sms", "send_whatsapp") && SelfAccount.isSelf(call.arg("contact"))
+        if (!confirmed && !toSelf && call.tool in setOf("call", "send_sms", "send_whatsapp")) {
             val who = call.arg("contact") ?: run {
                 smoke?.ok = false
                 return Reply("Who should I contact?", expectAnswer = true)
@@ -353,7 +355,7 @@ class Assistant @Inject constructor(
         return when (val o = executor.execute(call, ctx, confirmed, input.voiceOk)) {
             is Outcome.NeedConfirm -> {
                 pending = call to monotonicMillis()
-                val recipient = call.arg("contact_name")?.let { "$it (${call.arg("contact")})" }
+                val recipient = if (toSelf) "yourself" else call.arg("contact_name")?.let { "$it (${call.arg("contact")})" }
                 val question = when {
                     recipient == null -> o.question
                     call.tool == "call" -> "Call $recipient?"

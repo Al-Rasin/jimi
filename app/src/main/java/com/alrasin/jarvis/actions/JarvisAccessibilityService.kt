@@ -40,9 +40,25 @@ class JarvisAccessibilityService : AccessibilityService() {
 
     fun appPackage(): String? = rootInActiveWindow?.packageName?.toString()
 
+    /** Active window of [packageName], else its top on-screen window (Messenger chat heads are not the active window). */
+    private fun rootFor(packageName: String): AccessibilityNodeInfo? {
+        rootInActiveWindow?.takeIf { it.packageName?.toString() == packageName }?.let { return it }
+        return runCatching { windows }.getOrDefault(emptyList()).sortedByDescending { it.layer }
+            .firstNotNullOfOrNull { w -> w.root?.takeIf { it.packageName?.toString() == packageName } }
+    }
+
+    fun hasWindow(packageName: String): Boolean = rootFor(packageName) != null
+
+    /** WhatsApp "Message yourself" chat: title "<name> (You)" or the "Message yourself" subtitle. */
+    fun isSelfChat(packageName: String): Boolean = visibleNodes(packageName).any { n ->
+        val id = n.viewIdResourceName.orEmpty().substringAfter(":id/")
+        val t = n.text?.toString()?.trim().orEmpty()
+        (id == "conversation_contact_status" && t.equals("Message yourself", true)) ||
+            (id == "conversation_contact_name" && t.endsWith("(You)"))
+    }
+
     private fun visibleNodes(packageName: String): List<AccessibilityNodeInfo> {
-        val root = rootInActiveWindow ?: return emptyList()
-        if (root.packageName?.toString() != packageName) return emptyList()
+        val root = rootFor(packageName) ?: return emptyList()
         val nodes = ArrayList<AccessibilityNodeInfo>()
         fun walk(node: AccessibilityNodeInfo, depth: Int) {
             if (depth > 40 || nodes.size >= 1500 || !node.isVisibleToUser ||

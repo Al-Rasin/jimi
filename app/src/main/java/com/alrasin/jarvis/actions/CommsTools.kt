@@ -91,6 +91,8 @@ fun commsTools(context: Context, contacts: Contacts): List<Tool> = listOf(
         val text = c.arg("text") ?: return@SimpleTool ToolResult.fail("What should I say?")
         val app = c.arg("app")?.lowercase() ?: "sms"
         if (app !in listOf("sms", "messenger")) return@SimpleTool ToolResult.fail("Choose SMS or Messenger for this message.")
+        if (SelfAccount.isSelf(who)) return@SimpleTool if (app == "messenger") AppCommunications(context, contacts).messageSelf(app, text)
+            else ToolResult.fail("I can message you yourself on WhatsApp or Messenger, not SMS.")
         val p = when (val match = contacts.resolve(who)) {
             is ContactResolver.Resolution.Found -> match.contact
             is ContactResolver.Resolution.Ambiguous -> return@SimpleTool ToolResult.fail(match.question)
@@ -105,6 +107,7 @@ fun commsTools(context: Context, contacts: Contacts): List<Tool> = listOf(
     SimpleTool("send_whatsapp", "Open the contact's WhatsApp conversation and send the exact message using accessibility", listOf(arg("contact", "name, nickname, relation or number"), arg("text", "message")), Risk.CONFIRM) { c, _ ->
         val who = c.arg("contact") ?: return@SimpleTool ToolResult.fail("To who?")
         val text = c.arg("text") ?: return@SimpleTool ToolResult.fail("What should I say?")
+        if (SelfAccount.isSelf(who)) return@SimpleTool AppCommunications(context, contacts).messageSelf("whatsapp", text)
         val p = when (val match = contacts.resolve(who)) {
             is ContactResolver.Resolution.Found -> match.contact
             is ContactResolver.Resolution.Ambiguous -> return@SimpleTool ToolResult.fail(match.question)

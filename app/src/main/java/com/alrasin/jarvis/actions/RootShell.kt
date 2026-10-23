@@ -17,10 +17,11 @@ object RootShell {
 
     val available: Boolean get() = runCatching { Shell.getShell().isRoot }.getOrDefault(false)
 
-    suspend fun run(vararg cmds: String, timeoutMs: Long = 8_000): Result = withContext(Dispatchers.IO) {
+    /** [log] false: command output holds private data; only ok/fail is logged. */
+    suspend fun run(vararg cmds: String, timeoutMs: Long = 8_000, log: Boolean = true): Result = withContext(Dispatchers.IO) {
         val r = withTimeoutOrNull(timeoutMs) { Shell.cmd(*cmds).exec() }
         val res = if (r == null) Result(false, "timeout") else Result(r.isSuccess, (r.out + r.err).joinToString("\n"))
-        JarvisLog.i("root: ${cmds.joinToString("; ").take(120)} → ${if (res.ok) "ok" else "fail ${res.out.take(80)}"}")
+        JarvisLog.i("root: ${cmds.joinToString("; ").take(120)} → ${if (res.ok) "ok" else if (log) "fail ${res.out.take(80)}" else "fail"}")
         res
     }
 
