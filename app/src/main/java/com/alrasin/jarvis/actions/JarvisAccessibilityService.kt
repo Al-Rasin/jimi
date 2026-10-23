@@ -1,12 +1,16 @@
 package com.alrasin.jarvis.actions
 
 import android.accessibilityservice.AccessibilityService
+import android.graphics.Bitmap
 import android.graphics.Rect
 import android.os.Bundle
+import android.view.Display
 import android.view.accessibility.AccessibilityEvent
 import android.view.accessibility.AccessibilityNodeInfo
 import android.view.accessibility.AccessibilityWindowInfo
 import com.alrasin.jarvis.core.JarvisLog
+import kotlinx.coroutines.suspendCancellableCoroutine
+import kotlin.coroutines.resume
 
 /** Screen reading and tapping (PLAN 4.5). Enabled by root at setup (Settings.Secure). */
 class JarvisAccessibilityService : AccessibilityService() {
@@ -226,6 +230,26 @@ class JarvisAccessibilityService : AccessibilityService() {
         }
         val s = find(root) ?: return false
         return s.performAction(if (forward) AccessibilityNodeInfo.ACTION_SCROLL_FORWARD else AccessibilityNodeInfo.ACTION_SCROLL_BACKWARD)
+    }
+
+    /** What is on screen now, as a software bitmap, for the panel's blurred backdrop (D-050). Never saved. */
+    suspend fun screenshot(): Bitmap? = suspendCancellableCoroutine { cont ->
+        takeScreenshot(
+            Display.DEFAULT_DISPLAY, mainExecutor,
+            object : TakeScreenshotCallback {
+                override fun onSuccess(result: ScreenshotResult) {
+                    val bmp = result.hardwareBuffer.use { buf ->
+                        Bitmap.wrapHardwareBuffer(buf, result.colorSpace)?.let { hw -> hw.copy(Bitmap.Config.ARGB_8888, false).also { hw.recycle() } }
+                    }
+                    cont.resume(bmp)
+                }
+
+                override fun onFailure(errorCode: Int) {
+                    JarvisLog.i("screenshot failed ($errorCode)")
+                    cont.resume(null)
+                }
+            },
+        )
     }
 
     fun global(action: Int) = performGlobalAction(action)

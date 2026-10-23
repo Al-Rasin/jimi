@@ -27,6 +27,7 @@ import com.alrasin.jarvis.data.Settings
 import com.alrasin.jarvis.data.WakeEvent
 import com.alrasin.jarvis.data.WakeEventDao
 import com.alrasin.jarvis.ui.AssistantActivity
+import com.alrasin.jarvis.ui.Backdrop
 import com.alrasin.jarvis.voice.AudioRing
 import com.alrasin.jarvis.voice.BargeIn
 import com.alrasin.jarvis.voice.SpeakerVerifier
@@ -573,12 +574,16 @@ class JarvisCoreService : LifecycleService() {
 
     private fun showPanel() {
         if (!showPanel || screenAgent.running) return
-        runCatching {
-            startActivity(
-                Intent(this, AssistantActivity::class.java)
-                    .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP),
-            )
-        }.onFailure { JarvisLog.e("panel not shown (allow 'display over other apps')", it) }
+        lifecycleScope.launch {
+            // the blurred screen must be taken before the panel covers it
+            if (!AssistantActivity.isOpen) Backdrop.capture()
+            runCatching {
+                startActivity(
+                    Intent(this@JarvisCoreService, AssistantActivity::class.java)
+                        .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_SINGLE_TOP),
+                )
+            }.onFailure { JarvisLog.e("panel not shown (allow 'display over other apps')", it) }
+        }
     }
 
     private fun startListening() {
