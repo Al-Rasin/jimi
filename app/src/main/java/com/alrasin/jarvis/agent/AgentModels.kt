@@ -2,8 +2,8 @@ package com.alrasin.jarvis.agent
 
 import android.content.Context
 import com.alrasin.jarvis.brain.CloudBrain
+import com.alrasin.jarvis.brain.CloudProvider
 import com.alrasin.jarvis.brain.ModelBrain
-import com.alrasin.jarvis.core.Secrets
 import com.alrasin.jarvis.llm.ChatFormat
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CoroutineScope
@@ -24,16 +24,15 @@ import javax.inject.Singleton
 class AgentModels @Inject constructor(
     @ApplicationContext private val context: Context,
     private val cloud: CloudBrain,
-    private val secrets: Secrets,
     private val models: ModelBrain,
 ) {
     private val cloudScope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val cloudLock = Mutex()
 
     suspend fun create(): AgentModel {
-        val key = if (cloud.enabled()) secrets.get(Secrets.CLOUD_KEY) else null
-        return if (key != null) object : AgentModel {
-            private val provider = CloudBrain.providerFor(key)
+        val cloudModel = if (cloud.enabled()) cloud.provider() else null
+        return if (cloudModel != null) object : AgentModel {
+            private val provider: CloudProvider = cloudModel
             override val description = "Using cloud screen assistance: screen text is sent to the cloud AI. Small local models are less reliable."
             override suspend fun next(task: String, snapshot: ScreenSnapshot, history: List<String>): AgentAction {
                 check(cloud.enabled()) { "Cloud assistance was disabled." }

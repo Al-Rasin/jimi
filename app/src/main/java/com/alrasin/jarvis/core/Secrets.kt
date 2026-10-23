@@ -51,5 +51,6 @@ class Secrets @Inject constructor(@ApplicationContext context: Context) {
         private const val MODE = "AES/GCM/NoPadding"
         const val PIN = "pin"
         const val CLOUD_KEY = "cloud_api_key"
+        const val KIMI_KEY = "kimi_api_key"
     }
 }

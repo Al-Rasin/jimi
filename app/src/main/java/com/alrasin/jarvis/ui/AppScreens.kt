@@ -383,6 +383,8 @@ private fun SettingsTab(vm: AppViewModel, onSetup: () -> Unit, onDeviceCheck: ()
     val cloudFacts by vm.cloudSendFacts.collectAsStateWithLifecycle()
     val cloudKeySet by vm.cloudKeySet.collectAsStateWithLifecycle()
     var cloudKey by remember { mutableStateOf("") }
+    val kimiKeySet by vm.kimiKeySet.collectAsStateWithLifecycle()
+    var kimiKey by remember { mutableStateOf("") }
     val models by vm.modelStatus.collectAsStateWithLifecycle()
     val chatModel by vm.chatModel.collectAsStateWithLifecycle()
     LaunchedEffect(chatModel) { vm.refreshModels() }
@@ -445,7 +447,8 @@ private fun SettingsTab(vm: AppViewModel, onSetup: () -> Unit, onDeviceCheck: ()
         }
         GlassCard(title = "Cloud AI (optional, off by default)") {
             Text(
-                "Uses Gemini (Google key, starts with AIza) or Claude (Anthropic key); needs internet. Phone actions " +
+                "Uses Gemini (Google key, starts with AIza) or Claude (Anthropic key); Kimi is the backup when it fails. " +
+                    "Needs internet. Phone actions " +
                     "always run on the phone; only your words go out. With \"send all chat\" on, the cloud also picks " +
                     "actions fast and answers web questions. Say \"think hard …\" to ask the cloud once.",
                 style = MaterialTheme.typography.bodySmall,
@@ -460,6 +463,14 @@ private fun SettingsTab(vm: AppViewModel, onSetup: () -> Unit, onDeviceCheck: ()
                     visualTransformation = PasswordVisualTransformation(),
                 )
                 OutlinedButton(onClick = { vm.setCloudKey(cloudKey); cloudKey = "" }) { Text("Save") }
+            }
+            Text(if (kimiKeySet) "Kimi key is saved, encrypted." else "No Kimi key saved.", style = MaterialTheme.typography.bodySmall)
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                OutlinedTextField(
+                    kimiKey, { kimiKey = it.trim() }, Modifier.weight(1f), label = { Text("Kimi key (backup, empty = remove)") }, singleLine = true,
+                    visualTransformation = PasswordVisualTransformation(),
+                )
+                OutlinedButton(onClick = { vm.setKimiKey(kimiKey); kimiKey = "" }) { Text("Save") }
             }
         }
         GlassCard(title = "Local AI models") {

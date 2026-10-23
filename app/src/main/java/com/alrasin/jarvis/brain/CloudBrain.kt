@@ -160,6 +160,112 @@ class GeminiProvider(private val apiKey: String, private val model: String = MOD
     }
 }
 
+/** Kimi (Moonshot) over its OpenAI-style REST API (D-055). Thinking off for fast spoken answers. Key never logged. */
+class KimiProvider(private val apiKey: String, private val model: String = MODEL) : CloudProvider {
+    override val name = "Kimi"
+
+    override suspend fun chat(system: String, history: List<Exchange>, text: String): String = quick(system, history, text, 1024)
+
+    override suspend fun quick(system: String, history: List<Exchange>, text: String, maxTokens: Int): String = withContext(Dispatchers.IO) {
+        client.newCall(post(request(system, history, text, maxTokens, stream = false))).execute().use { r ->
+            val body = r.body?.string().orEmpty()
+            check(r.isSuccessful) { "Kimi HTTP ${r.code}" }
+            parse(body)
+        }
+    }
+
+    override suspend fun stream(system: String, history: List<Exchange>, text: String, maxTokens: Int, onText: (String) -> Unit): String =
+        withContext(Dispatchers.IO) {
+            client.newCall(post(request(system, history, text, maxTokens, stream = true))).execute().use { r ->
+                check(r.isSuccessful) { "Kimi HTTP ${r.code}" }
+                val source = r.body?.source() ?: error("Kimi: empty stream")
+                val all = StringBuilder()
+                while (true) {
+                    val line = source.readUtf8Line() ?: break
+                    sseText(line)?.let { all.append(it); onText(it) }
+                }
+                all.toString().trim()
+            }
+        }
+
+    private fun post(json: String) = Request.Builder().url(URL).header("Authorization", "Bearer $apiKey")
+        .post(json.toRequestBody("application/json".toMediaType())).build()
+
+    companion object {
+        const val MODEL = "kimi-k2.6"
+        private const val URL = "https://api.moonshot.ai/v1/chat/completions"
+        private val client by lazy {
+            OkHttpClient.Builder().connectTimeout(5, TimeUnit.SECONDS).callTimeout(20, TimeUnit.SECONDS)
+                .connectionPool(ConnectionPool(1, 5, TimeUnit.MINUTES)).build()
+        }
+
+        fun request(system: String, history: List<Exchange>, text: String, maxTokens: Int, stream: Boolean): String {
+            val messages = listOf(msg("system", system)) +
+                history.flatMap { listOf(msg("user", it.user), msg("assistant", it.reply)) } + msg("user", text)
+            return Json.write(
+                mapOf(
+                    "model" to MODEL, "messages" to messages, "max_tokens" to maxTokens, "stream" to stream,
+                    "thinking" to mapOf("type" to "disabled"),
+                ),
+            )
+        }
+
+        fun parse(body: String): String {
+            val root = Json.parse(body) as? Map<*, *> ?: error("Kimi: bad JSON")
+            val first = (root["choices"] as? List<*>)?.firstOrNull() as? Map<*, *> ?: error("Kimi: no answer")
+            return ((first["message"] as? Map<*, *>)?.get("content") as? String).orEmpty().trim()
+        }
+
+        /** Text of one SSE line ("data: {choices:[{delta:{content}}]}"), or null for blank / [DONE] / no-text lines. */
+        fun sseText(line: String): String? {
+            if (!line.startsWith("data:")) return null
+            val data = line.removePrefix("data:").trim()
+            if (data == "[DONE]") return null
+            return runCatching {
+                val first = ((Json.parse(data) as Map<*, *>)["choices"] as List<*>).first() as Map<*, *>
+                (first["delta"] as? Map<*, *>)?.get("content") as? String
+            }.getOrNull()?.ifEmpty { null }
+        }
+
+        private fun msg(role: String, content: String) = mapOf("role" to role, "content" to content)
+    }
+}
+
+/**
+ * Main cloud model first; on an error (limit, network) the backup answers (D-055: Gemini, then Kimi).
+ * A stream that already gave text is not retried, so nothing is spoken twice.
+ */
+class FallbackProvider(private val main: CloudProvider, private val backup: CloudProvider) : CloudProvider {
+    override val name = "${main.name}+${backup.name}"
+
+    override suspend fun chat(system: String, history: List<Exchange>, text: String) =
+        either { it.chat(system, history, text) }
+
+    override suspend fun quick(system: String, history: List<Exchange>, text: String, maxTokens: Int) =
+        either { it.quick(system, history, text, maxTokens) }
+
+    override suspend fun stream(system: String, history: List<Exchange>, text: String, maxTokens: Int, onText: (String) -> Unit): String {
+        var gave = false
+        return try {
+            main.stream(system, history, text, maxTokens) { gave = true; onText(it) }
+        } catch (e: Exception) {
+            if (e is kotlinx.coroutines.CancellationException || gave) throw e
+            JarvisLog.e("cloud ${main.name} failed, trying ${backup.name}", e)
+            backup.stream(system, history, text, maxTokens, onText)
+        }
+    }
+
+    private suspend fun either(call: suspend (CloudProvider) -> String): String = try {
+        call(main)
+    } catch (e: Exception) {
+        if (e is kotlinx.coroutines.CancellationException) throw e
+        JarvisLog.e("cloud ${main.name} failed, trying ${backup.name}", e)
+        call(backup)
+    }
+
+    fun warmMain() = (main as? GeminiProvider)?.warm()
+}
+
 /**
  * Optional cloud (PLAN 14, D-005): used only when the setting is on AND a key is saved. Then it answers chat
  * ("think hard …" / "ask Claude …" always, other talk when [Settings.cloudForChat] is on). Any error → null,
@@ -177,7 +283,7 @@ class CloudBrain @Inject constructor(
 
     /** Off without a validated network too, so offline commands skip the 4 s connect timeout. */
     suspend fun enabled(): Boolean = coroutineContext[OfflineKey] == null && settings.cloudEnabled.first() &&
-        secrets.has(Secrets.CLOUD_KEY) && online()
+        (secrets.has(Secrets.CLOUD_KEY) || secrets.has(Secrets.KIMI_KEY)) && online()
 
     private fun online(): Boolean {
         val cm = context.getSystemService(ConnectivityManager::class.java) ?: return false
@@ -225,7 +331,11 @@ class CloudBrain @Inject constructor(
     /** Opens the cloud connection early (wake word heard) so the first answer is faster. */
     suspend fun warm() {
         if (!enabled() || !settings.cloudForChat.first()) return
-        (provider() as? GeminiProvider)?.let { withContext(Dispatchers.IO) { it.warm() } }
+        when (val p = provider()) {
+            is GeminiProvider -> withContext(Dispatchers.IO) { p.warm() }
+            is FallbackProvider -> withContext(Dispatchers.IO) { p.warmMain() }
+            else -> Unit
+        }
     }
 
     /**
@@ -261,9 +371,12 @@ class CloudBrain @Inject constructor(
             .getOrNull()?.let(ChatFormat::clean)?.takeIf { it.isNotBlank() }
     }
 
-    private fun provider(): CloudProvider? {
-        val key = secrets.get(Secrets.CLOUD_KEY) ?: return null
-        if (key != providerKey) { provider = providerFor(key); providerKey = key }
+    /** The saved cloud model(s), or null when no key is saved. */
+    fun provider(): CloudProvider? {
+        val main = secrets.get(Secrets.CLOUD_KEY)
+        val kimi = secrets.get(Secrets.KIMI_KEY)
+        val key = "$main|$kimi"
+        if (key != providerKey) { provider = combine(main, kimi); providerKey = key }
         return provider
     }
 
@@ -275,6 +388,13 @@ class CloudBrain @Inject constructor(
 
         /** Google keys start with "AIza"; anything else is treated as an Anthropic key. */
         fun providerFor(key: String): CloudProvider = if (key.startsWith("AIza")) GeminiProvider(key) else ClaudeProvider(key)
+
+        /** Main key (Gemini/Claude) first, Kimi as backup; either alone works too. */
+        fun combine(mainKey: String?, kimiKey: String?): CloudProvider? {
+            val main = mainKey?.let(::providerFor)
+            val kimi = kimiKey?.let { KimiProvider(it) }
+            return if (main != null && kimi != null) FallbackProvider(main, kimi) else main ?: kimi
+        }
 
         fun toolPrompt(tools: List<Tool>): String = buildString {
             append("You turn one voice command for an Android phone into a tool call. Reply with JSON only, no other text: ")

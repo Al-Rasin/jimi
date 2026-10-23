@@ -91,6 +91,7 @@ class AppViewModel @Inject constructor(
     val cloudForChat = settings.cloudForChat.state(true)
     val cloudSendFacts = settings.cloudSendFacts.state(false)
     val cloudKeySet = MutableStateFlow(false)
+    val kimiKeySet = MutableStateFlow(false)
     val homeCity = settings.homeCity.state("Dhaka")
     val voice = settings.voice.state("piper-amy")
     val voiceSpeed = settings.voiceSpeed.state(1.10f)
@@ -168,6 +169,7 @@ class AppViewModel @Inject constructor(
         viewModelScope.launch(Dispatchers.IO) {
             voiceSamples.value = speaker.samples
             cloudKeySet.value = secrets.has(Secrets.CLOUD_KEY)
+            kimiKeySet.value = secrets.has(Secrets.KIMI_KEY)
             pinSet.value = secrets.has(Secrets.PIN)
         }
         refreshDeviceCheck()
@@ -266,6 +268,12 @@ class AppViewModel @Inject constructor(
         secrets.put(Secrets.CLOUD_KEY, key.trim().ifEmpty { null })
         cloudKeySet.value = secrets.has(Secrets.CLOUD_KEY)
         _message.value = if (cloudKeySet.value) "API key saved (encrypted)." else "API key removed."
+    }
+
+    fun setKimiKey(key: String) = viewModelScope.launch(Dispatchers.IO) {
+        secrets.put(Secrets.KIMI_KEY, key.trim().ifEmpty { null })
+        kimiKeySet.value = secrets.has(Secrets.KIMI_KEY)
+        _message.value = if (kimiKeySet.value) "Kimi key saved (encrypted)." else "Kimi key removed."
     }
 
     fun enrollVoice() = viewModelScope.launch(Dispatchers.IO) { JarvisCoreService.enroll(app) }
