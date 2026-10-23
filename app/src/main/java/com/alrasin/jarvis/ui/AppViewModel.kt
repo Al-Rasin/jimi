@@ -15,6 +15,8 @@ import com.alrasin.jarvis.core.Json
 import com.alrasin.jarvis.core.Secrets
 import com.alrasin.jarvis.core.ToolCall
 import com.alrasin.jarvis.core.ToolContext
+import com.alrasin.jarvis.core.WrongAnswers
+import com.alrasin.jarvis.data.ConversationTurn
 import com.alrasin.jarvis.data.AppRule
 import com.alrasin.jarvis.data.Backup
 import com.alrasin.jarvis.data.MemoryDao
@@ -176,6 +178,11 @@ class AppViewModel @Inject constructor(
     fun listen() = viewModelScope.launch(Dispatchers.IO) { JarvisCoreService.listen(app) }
 
     fun rate(id: Long, ok: Boolean) = viewModelScope.launch { turns.rate(id, ok, null) }
+
+    /** ✗ on an answer in History: saved with the question for later diagnosis (WrongAnswers). */
+    fun wrongAnswer(t: ConversationTurn) = viewModelScope.launch(Dispatchers.IO) {
+        WrongAnswers.save(app, t.id, t.heard, t.reply, t.tool, "")
+    }
 
     fun fix(id: Long, text: String) = viewModelScope.launch {
         turns.rate(id, false, text)

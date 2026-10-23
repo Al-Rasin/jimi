@@ -38,6 +38,8 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -57,7 +59,6 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -96,7 +97,7 @@ fun AppShell(vm: AppViewModel, home: HomeViewModel) {
         DeviceCheckScreen(vm) { deviceCheckOpen = false }
         return
     }
-    var tab by rememberSaveable { mutableIntStateOf(0) }
+    val pager = rememberPagerState { TABS.size }
     val running by home.running.collectAsStateWithLifecycle()
     val phase by home.phase.collectAsStateWithLifecycle()
     Scaffold(
@@ -106,7 +107,7 @@ fun AppShell(vm: AppViewModel, home: HomeViewModel) {
                 Modifier.fillMaxWidth().statusBarsPadding().padding(horizontal = 20.dp, vertical = 12.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                Orb(if (running) moodOf(phase) else OrbMood.IDLE, 0f, size = 40.dp)
+                MobiusStrip(if (running) moodOf(phase) else OrbMood.IDLE, size = 44.dp)
                 Column(Modifier.weight(1f).padding(start = 10.dp)) {
                     GradientTitle("Jimi", 22)
                     Text(
@@ -127,17 +128,20 @@ fun AppShell(vm: AppViewModel, home: HomeViewModel) {
             }
         },
         bottomBar = {
-            ArcDial(items = TABS, selectedIndex = tab, onSelected = { tab = it })
+            MobiusNav(TABS, pager)
         },
     ) { pad ->
-        Box(Modifier.padding(pad).fillMaxSize()) {
-            when (tab) {
-                0 -> ChatTab(vm)
-                1 -> HistoryTab(vm)
-                2 -> AlertsTab(vm)
-                3 -> NotesTab(vm)
-                4 -> SettingsTab(vm, { setupOpen = true }, { deviceCheckOpen = true })
-                else -> HomeScreen(home)
+        // swipe between pages; the Möbius bar rolls along (D-050)
+        HorizontalPager(pager, Modifier.padding(pad).fillMaxSize(), key = { TABS[it].first }) { page ->
+            Box(Modifier.fillMaxSize()) {
+                when (page) {
+                    0 -> ChatTab(vm)
+                    1 -> HistoryTab(vm)
+                    2 -> AlertsTab(vm)
+                    3 -> NotesTab(vm)
+                    4 -> SettingsTab(vm, { setupOpen = true }, { deviceCheckOpen = true })
+                    else -> HomeScreen(home)
+                }
             }
         }
     }
@@ -158,7 +162,7 @@ private fun ChatTab(vm: AppViewModel) {
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.Center,
             ) {
-                Orb(OrbMood.IDLE, 0f, size = 160.dp)
+                MobiusStrip(OrbMood.IDLE, size = 180.dp)
                 GradientTitle("Hi Boss", 34, Modifier.padding(top = 8.dp))
                 Text("Say \"Hey Jimi\" or type below.", color = MaterialTheme.colorScheme.onSurfaceVariant)
                 FlowRow(
@@ -191,7 +195,7 @@ private fun ChatTab(vm: AppViewModel) {
 fun Bubble(text: String, mine: Boolean) {
     if (text.isBlank()) return
     Row(Modifier.fillMaxWidth(), horizontalArrangement = if (mine) Arrangement.End else Arrangement.Start, verticalAlignment = Alignment.Top) {
-        if (!mine) Orb(OrbMood.IDLE, 0f, size = 28.dp, modifier = Modifier.padding(end = 6.dp, top = 2.dp))
+        if (!mine) MobiusStrip(OrbMood.IDLE, size = 28.dp, modifier = Modifier.padding(end = 6.dp, top = 2.dp), still = true)
         Text(
             text,
             style = MaterialTheme.typography.bodyLarge,
@@ -251,7 +255,7 @@ fun Pill(text: String, selected: Boolean = false, onClick: () -> Unit) {
 private fun HistoryTab(vm: AppViewModel) {
     val turns by vm.turnList.collectAsStateWithLifecycle()
     LazyColumn(Modifier.fillMaxSize().padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        item { Text("Fix wrong text here. Fixes are saved for training.", style = MaterialTheme.typography.bodySmall) }
+        item { Text("✗ Wrong saves the answer for checking. ✎ fixes misheard text (saved for training).", style = MaterialTheme.typography.bodySmall) }
         items(turns, key = { it.id }) { TurnCard(it, vm) }
     }
 }
@@ -260,6 +264,7 @@ private fun HistoryTab(vm: AppViewModel) {
 private fun TurnCard(t: ConversationTurn, vm: AppViewModel) {
     var fixing by remember { mutableStateOf(false) }
     var fix by remember { mutableStateOf(t.heard) }
+    var wrong by remember { mutableStateOf(false) }
     GlassCard {
         Column {
             Text("${time(t.timeMs)} · ${t.source}${t.tool?.let { " · $it" } ?: ""}", style = MaterialTheme.typography.labelSmall.copy(fontFamily = JimiMono))
@@ -273,8 +278,9 @@ private fun TurnCard(t: ConversationTurn, vm: AppViewModel) {
             }
             Row {
                 t.audioPath?.let { p -> TextButton(onClick = { vm.play(p) }) { Text("▶ Play") } }
-                TextButton(onClick = { vm.rate(t.id, true) }) { Text("✓") }
-                TextButton(onClick = { fixing = !fixing }) { Text("✗ Fix") }
+                TextButton(onClick = { vm.rate(t.id, true) }) { Text("✓ Right") }
+                TextButton(onClick = { wrong = true; vm.wrongAnswer(t) }, enabled = !wrong) { Text(if (wrong) "✗ Saved" else "✗ Wrong") }
+                TextButton(onClick = { fixing = !fixing }) { Text("✎ Wrong text") }
             }
             if (fixing) {
                 OutlinedTextField(fix, { fix = it }, Modifier.fillMaxWidth(), label = { Text("What you said") })
