@@ -234,7 +234,10 @@ class Assistant @Inject constructor(
             if (!intent.isConfident || intent.route != IntentRouter.Route.CHAT) {
                 if (!AgentRouting.needsMultiStep(text)) {
                     JarvisLog.i("route llm fallback: rule=${rule?.tool ?: "none"}, reason=${intent.reason}")
-                    models.toolCall(text, contextLine())?.let { return runTool(it, input, "llm") }
+                    // Cloud picks in ~1 s when allowed (D-045); NONE means plain talk, null means ask the local model.
+                    val picked = if (smoke == null) cloud.toolCall(text) else null
+                    if (picked != null && picked != CloudBrain.NONE) return runTool(picked, input, "cloud")
+                    if (picked == null) models.toolCall(text, contextLine())?.let { return runTool(it, input, "llm") }
                 }
                 if (AgentRouting.needsScreen(text)) {
                     if (smoke != null) {
@@ -340,8 +343,10 @@ class Assistant @Inject constructor(
                 log(input.heard, call, source, o.result)
                 if (o.result.ok) conversation.remember(input.heard, call, o.result.say)
                 if (o.result.ok && call.tool in setOf("web_search", "read_page") && o.result.data.isNotBlank()) {
+                    val question = call.arg("query") ?: input.heard
                     val answer = try {
-                        models.chat(call.arg("query") ?: input.heard, emptyList(), emptyList(), {}, evidence = o.result.data)
+                        cloud.webAnswer(question, o.result.data)?.let { ModelBrain.ChatOut(it, streamed = false) }
+                            ?: models.chat(question, emptyList(), emptyList(), {}, evidence = o.result.data)
                     } catch (e: CancellationException) {
                         throw e
                     } catch (e: Exception) {

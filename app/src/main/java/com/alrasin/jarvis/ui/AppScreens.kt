@@ -439,8 +439,9 @@ private fun SettingsTab(vm: AppViewModel, onSetup: () -> Unit, onDeviceCheck: ()
         }
         GlassCard(title = "Cloud AI (optional, off by default)") {
             Text(
-                "Uses Claude (needs internet + an Anthropic API key). Phone actions always stay on the phone; " +
-                    "only your words go out. Say \"think hard …\" to ask the cloud once.",
+                "Uses Gemini (Google key, starts with AIza) or Claude (Anthropic key); needs internet. Phone actions " +
+                    "always run on the phone; only your words go out. With \"send all chat\" on, the cloud also picks " +
+                    "actions fast and answers web questions. Say \"think hard …\" to ask the cloud once.",
                 style = MaterialTheme.typography.bodySmall,
             )
             Toggle("Use cloud AI", cloudOn, vm::setCloudEnabled)

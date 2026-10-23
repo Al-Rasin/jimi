@@ -1,7 +1,6 @@
 package com.alrasin.jarvis.agent
 
 import android.content.Context
-import com.alrasin.jarvis.brain.ClaudeProvider
 import com.alrasin.jarvis.brain.CloudBrain
 import com.alrasin.jarvis.brain.ModelBrain
 import com.alrasin.jarvis.core.Secrets
@@ -34,8 +33,8 @@ class AgentModels @Inject constructor(
     suspend fun create(): AgentModel {
         val key = if (cloud.enabled()) secrets.get(Secrets.CLOUD_KEY) else null
         return if (key != null) object : AgentModel {
-            private val provider = ClaudeProvider(key)
-            override val description = "Using cloud screen assistance: screen text is sent to Claude. Small local models are less reliable."
+            private val provider = CloudBrain.providerFor(key)
+            override val description = "Using cloud screen assistance: screen text is sent to the cloud AI. Small local models are less reliable."
             override suspend fun next(task: String, snapshot: ScreenSnapshot, history: List<String>): AgentAction {
                 check(cloud.enabled()) { "Cloud assistance was disabled." }
                 // CloudBrain's spoken-chat cleanup removes JSON underscores and message punctuation.
