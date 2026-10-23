@@ -1,0 +1,13 @@
+{
+  "id": "REPLACE_USERNAME/jimi-stt-public-subsets",
+  "title": "Jimi STT public subsets",
+  "code_file": "public_subset.py",
+  "language": "python",
+  "kernel_type": "script",
+  "is_private": true,
+  "enable_gpu": false,
+  "enable_internet": true,
+  "dataset_sources": ["mozillaorg/common-voice", "kushal1506/svarah"],
+  "competition_sources": [],
+  "kernel_sources": []
+}
