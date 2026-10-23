@@ -59,13 +59,18 @@ val JimiMono = FontFamily(Font(R.font.jetbrains_mono_regular, FontWeight.Normal)
 private val displayStyle = TextStyle(fontFamily = JimiDisplay, fontWeight = FontWeight.Medium, fontSize = 34.sp, lineHeight = 40.sp)
 private val titleStyle = TextStyle(fontFamily = JimiDisplay, fontWeight = FontWeight.SemiBold, fontSize = 22.sp, lineHeight = 28.sp)
 private val bodyStyle = TextStyle(fontFamily = JimiBody, fontWeight = FontWeight.Normal, fontSize = 16.sp, lineHeight = 24.sp)
+private val bodyMediumStyle = bodyStyle.copy(fontSize = 15.sp, lineHeight = 22.sp)
+// small text is always helper text, so it is always the quiet colour
+private val bodySmallStyle = bodyStyle.copy(fontSize = 13.sp, lineHeight = 19.sp, color = JimiColors.SecondaryText)
 private val labelStyle = TextStyle(fontFamily = JimiBody, fontWeight = FontWeight.Medium, fontSize = 13.sp, lineHeight = 20.sp, letterSpacing = 0.2.sp)
+private val labelSmallStyle = labelStyle.copy(fontSize = 12.sp, lineHeight = 16.sp)
+private val cardTitleStyle = titleStyle.copy(fontSize = 17.sp, lineHeight = 24.sp)
 private val jimiTypography = Typography(
     displayLarge = displayStyle, displayMedium = displayStyle, displaySmall = displayStyle,
     headlineLarge = displayStyle, headlineMedium = titleStyle, headlineSmall = titleStyle,
-    titleLarge = titleStyle, titleMedium = titleStyle, titleSmall = titleStyle,
-    bodyLarge = bodyStyle, bodyMedium = bodyStyle, bodySmall = bodyStyle,
-    labelLarge = labelStyle, labelMedium = labelStyle, labelSmall = labelStyle,
+    titleLarge = titleStyle, titleMedium = titleStyle, titleSmall = cardTitleStyle,
+    bodyLarge = bodyStyle, bodyMedium = bodyMediumStyle, bodySmall = bodySmallStyle,
+    labelLarge = labelStyle, labelMedium = labelStyle, labelSmall = labelSmallStyle,
 )
 
 @Composable
@@ -140,7 +145,7 @@ fun GlassCard(modifier: Modifier = Modifier, title: String? = null, content: @Co
             .padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        if (title != null) GradientTitle(title)
+        if (title != null) Text(title, style = cardTitleStyle, color = JimiColors.Text)
         CompositionLocalProvider(LocalContentColor provides JimiColors.Text) { content() }
     }
 }

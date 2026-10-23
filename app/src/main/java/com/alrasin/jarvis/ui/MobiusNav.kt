@@ -123,7 +123,7 @@ fun MobiusNav(items: List<Pair<String, ImageVector>>, pager: PagerState, modifie
             Modifier.fillMaxWidth()
                 .background(Brush.verticalGradient(listOf(Color.Transparent, JimiColors.Background.copy(alpha = 0.95f))))
                 .navigationBarsPadding()
-                .height(124.dp)
+                .height(148.dp)
                 .clearAndSetSemantics {
                     contentDescription = "Tabs, ${items[front].first} open"
                     customActions = items.mapIndexed { i, (label, _) ->
@@ -133,8 +133,8 @@ fun MobiusNav(items: List<Pair<String, ImageVector>>, pager: PagerState, modifie
         ) {
             val w = constraints.maxWidth.toFloat()
             val h = constraints.maxHeight.toFloat()
-            // the loop is drawn wide and flat so it fits inside the bar with room for the icons
-            val sx = w / 2 / 1.32f
+            // the loop takes ~70 % of the width (not edge to edge) and more height, so it reads as a ring
+            val sx = w * 0.35f / 1.32f
             val sy = (h - with(density) { 52.dp.toPx() }) / 1.2f
             val cy = h / 2 - with(density) { 6.dp.toPx() }
             val pose by remember { derivedStateOf { MobiusMath.Pose(spin = MobiusMath.tabSpin(turn.value, n), tilt = 1.2f, halfWidth = 0.2f) } }

@@ -22,9 +22,11 @@ import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material3.Icon
+import androidx.compose.material3.FilledTonalButton
+import androidx.compose.ui.res.painterResource
+import com.alrasin.jarvis.R
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.SolidColor
-import androidx.compose.ui.unit.sp
 import com.alrasin.jarvis.voice.Engine
 import com.alrasin.jarvis.voice.Voice
 import com.alrasin.jarvis.voice.VoicePack
@@ -44,10 +46,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.Button
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Scaffold
@@ -55,7 +54,6 @@ import androidx.compose.material3.Switch
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -106,27 +104,27 @@ fun AppShell(vm: AppViewModel, home: HomeViewModel) {
         containerColor = MaterialTheme.colorScheme.background,
         topBar = {
             Row(
-                Modifier.fillMaxWidth().statusBarsPadding().padding(horizontal = 20.dp, vertical = 12.dp),
+                Modifier.fillMaxWidth().statusBarsPadding().padding(start = 16.dp, end = 20.dp, top = 8.dp, bottom = 8.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                MobiusStrip(if (running) moodOf(phase) else OrbMood.IDLE, size = 44.dp)
+                MobiusStrip(if (running) moodOf(phase) else OrbMood.IDLE, size = 40.dp)
                 Column(Modifier.weight(1f).padding(start = 10.dp)) {
-                    GradientTitle("Jimi", 22)
-                    Text(
-                        if (running) (if (phase == JarvisCoreService.PHASE_WAKE) "Listening for \"Hey Jimi\"" else phase) else "Asleep",
-                        style = MaterialTheme.typography.labelMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
+                    GradientTitle("Jimi", 20)
+                    Meta(if (running) (if (phase == JarvisCoreService.PHASE_WAKE) "Listening for \"Hey Jimi\"" else phase) else "Asleep")
                 }
-                Text(
-                    if (running) "On" else "Off",
-                    color = if (running) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant,
-                    style = MaterialTheme.typography.labelLarge,
-                    modifier = Modifier.clip(RoundedCornerShape(50))
-                        .background(if (running) PanelColors.Cyan else MaterialTheme.colorScheme.surfaceVariant)
+                // one tap turns listening on or off
+                Row(
+                    Modifier.clip(RoundedCornerShape(50))
+                        .background(JimiColors.Surface2)
+                        .border(1.dp, if (running) JimiColors.Cyan.copy(alpha = 0.5f) else JimiColors.Outline, RoundedCornerShape(50))
                         .clickable { if (running) home.stop() else home.start() }
-                        .padding(horizontal = 18.dp, vertical = 8.dp),
-                )
+                        .padding(horizontal = 14.dp, vertical = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                ) {
+                    StatusDot(running)
+                    Text(if (running) "On" else "Off", style = MaterialTheme.typography.labelLarge, color = if (running) JimiColors.Text else JimiColors.SecondaryText)
+                }
             }
         },
         bottomBar = {
@@ -152,6 +150,15 @@ fun AppShell(vm: AppViewModel, home: HomeViewModel) {
 private val timeFmt = SimpleDateFormat("d MMM HH:mm", Locale.US)
 private fun time(ms: Long) = timeFmt.format(Date(ms))
 
+/** Same list frame on every tab: 20 dp sides, 12 dp between cards, room at the bottom. */
+@Composable
+private fun TabList(content: androidx.compose.foundation.lazy.LazyListScope.() -> Unit) = LazyColumn(
+    Modifier.fillMaxSize(),
+    contentPadding = PaddingValues(start = 20.dp, end = 20.dp, top = 8.dp, bottom = 24.dp),
+    verticalArrangement = Arrangement.spacedBy(12.dp),
+    content = content,
+)
+
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun ChatTab(vm: AppViewModel) {
@@ -164,11 +171,11 @@ private fun ChatTab(vm: AppViewModel) {
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.Center,
             ) {
-                MobiusStrip(OrbMood.IDLE, size = 180.dp)
-                GradientTitle("Hi Boss", 34, Modifier.padding(top = 8.dp))
-                Text("Say \"Hey Jimi\" or type below.", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                MobiusStrip(OrbMood.IDLE, size = 160.dp)
+                GradientTitle("Hi Boss", 30, Modifier.padding(top = 12.dp))
+                Hint("Say \"Hey Jimi\" or type below.", Modifier.padding(top = 4.dp))
                 FlowRow(
-                    Modifier.padding(top = 20.dp),
+                    Modifier.padding(top = 24.dp),
                     horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.CenterHorizontally),
                     verticalArrangement = Arrangement.spacedBy(8.dp),
                 ) { SUGGESTIONS.forEach { s -> Pill(s) { vm.ask(s) } } }
@@ -176,39 +183,38 @@ private fun ChatTab(vm: AppViewModel) {
         } else {
             LazyColumn(
                 Modifier.weight(1f), reverseLayout = true,
-                verticalArrangement = Arrangement.spacedBy(12.dp), contentPadding = PaddingValues(vertical = 12.dp),
+                verticalArrangement = Arrangement.spacedBy(10.dp), contentPadding = PaddingValues(vertical = 12.dp),
             ) {
                 items(turns.take(60), key = { it.id }) { t ->
-                    Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(10.dp)) {
                         Bubble(t.heard, mine = true)
                         Bubble(t.reply, mine = false)
                     }
                 }
             }
         }
-        InputPill(text, { text = it }, Modifier.padding(bottom = 10.dp)) {
+        InputPill(text, { text = it }, Modifier.padding(top = 4.dp, bottom = 8.dp)) {
             if (text.isBlank()) vm.listen() else { vm.ask(text.trim()); text = "" }
         }
     }
 }
 
-/** User messages align right; assistant messages align left. */
+/** User messages align right with a soft cyan tint; Jimi's align left on a dark card. */
 @Composable
 fun Bubble(text: String, mine: Boolean) {
     if (text.isBlank()) return
-    Row(Modifier.fillMaxWidth(), horizontalArrangement = if (mine) Arrangement.End else Arrangement.Start, verticalAlignment = Alignment.Top) {
-        if (!mine) MobiusStrip(OrbMood.IDLE, size = 28.dp, modifier = Modifier.padding(end = 6.dp, top = 2.dp), still = true)
+    val shape = RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp, bottomStart = if (mine) 20.dp else 6.dp, bottomEnd = if (mine) 6.dp else 20.dp)
+    Row(Modifier.fillMaxWidth(), horizontalArrangement = if (mine) Arrangement.End else Arrangement.Start, verticalAlignment = Alignment.Bottom) {
+        if (!mine) MobiusStrip(OrbMood.IDLE, size = 26.dp, modifier = Modifier.padding(end = 8.dp, bottom = 4.dp), still = true)
         Text(
             text,
             style = MaterialTheme.typography.bodyLarge,
             color = PanelColors.Text,
-            modifier = Modifier.widthIn(max = 300.dp)
-                .clip(RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp, bottomStart = if (mine) 20.dp else 6.dp, bottomEnd = if (mine) 6.dp else 20.dp))
-                .then(
-                    if (mine) Modifier.background(MaterialTheme.colorScheme.surfaceContainerHigh)
-                    else Modifier.background(MaterialTheme.colorScheme.surfaceContainerLow),
-                )
-                .padding(16.dp),
+            modifier = Modifier.widthIn(max = 290.dp)
+                .clip(shape)
+                .background(if (mine) JimiColors.Cyan.copy(alpha = 0.12f) else JimiColors.Surface1)
+                .border(1.dp, if (mine) JimiColors.Cyan.copy(alpha = 0.18f) else JimiColors.Outline.copy(alpha = 0.6f), shape)
+                .padding(horizontal = 16.dp, vertical = 12.dp),
         )
     }
 }
@@ -217,7 +223,10 @@ fun Bubble(text: String, mine: Boolean) {
 @Composable
 fun InputPill(text: String, onText: (String) -> Unit, modifier: Modifier = Modifier, onGo: () -> Unit) {
     Row(
-        modifier.fillMaxWidth().background(PanelColors.Field, RoundedCornerShape(28.dp)).padding(start = 18.dp, end = 6.dp),
+        modifier.fillMaxWidth()
+            .background(JimiColors.Surface1, RoundedCornerShape(28.dp))
+            .border(1.dp, JimiColors.Outline, RoundedCornerShape(28.dp))
+            .padding(start = 20.dp, end = 6.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         BasicTextField(
@@ -226,38 +235,29 @@ fun InputPill(text: String, onText: (String) -> Unit, modifier: Modifier = Modif
             cursorBrush = SolidColor(PanelColors.Cyan),
             modifier = Modifier.weight(1f).padding(vertical = 16.dp),
             decorationBox = { inner ->
-                if (text.isEmpty()) Text("Type to Jimi", color = PanelColors.Dim)
+                if (text.isEmpty()) Text("Type to Jimi", color = JimiColors.TertiaryText)
                 inner()
             },
         )
         Box(
-            Modifier.size(48.dp).clip(CircleShape).background(PanelColors.Cyan).clickable(onClick = onGo),
+            Modifier.size(44.dp).clip(CircleShape).background(PanelColors.Cyan).clickable(onClick = onGo),
             contentAlignment = Alignment.Center,
         ) {
-            if (text.isBlank()) Text("🎤", fontSize = 18.sp)
-            else Icon(Icons.AutoMirrored.Filled.Send, contentDescription = "Send", tint = MaterialTheme.colorScheme.onPrimary)
+            if (text.isBlank()) Icon(painterResource(R.drawable.ic_mic), contentDescription = "Speak", tint = JimiColors.OnCyan, modifier = Modifier.size(22.dp))
+            else Icon(Icons.AutoMirrored.Filled.Send, contentDescription = "Send", tint = JimiColors.OnCyan, modifier = Modifier.size(20.dp))
         }
     }
 }
 
 @Composable
-fun Pill(text: String, selected: Boolean = false, onClick: () -> Unit) {
-    Text(
-        text,
-        color = if (selected) PanelColors.Cyan else PanelColors.Text,
-        style = MaterialTheme.typography.labelLarge,
-        modifier = Modifier.clip(RoundedCornerShape(12.dp))
-            .border(1.dp, if (selected) PanelColors.Cyan else MaterialTheme.colorScheme.outline, RoundedCornerShape(12.dp))
-            .clickable(onClick = onClick)
-            .padding(horizontal = 14.dp, vertical = 8.dp),
-    )
-}
+fun Pill(text: String, selected: Boolean = false, onClick: () -> Unit) = Chip(text, selected, onClick = onClick)
 
 @Composable
 private fun HistoryTab(vm: AppViewModel) {
     val turns by vm.turnList.collectAsStateWithLifecycle()
-    LazyColumn(Modifier.fillMaxSize().padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        item { Text("✗ Wrong saves the answer for checking. ✎ fixes misheard text (saved for training).", style = MaterialTheme.typography.bodySmall) }
+    TabList {
+        item { PageTitle("History", "Wrong saves the answer for checking. Fix text corrects what Jimi heard (saved for training).") }
+        if (turns.isEmpty()) item { EmptyState("No talks yet", "Say \"Hey Jimi\" to start.") }
         items(turns, key = { it.id }) { TurnCard(it, vm) }
     }
 }
@@ -268,24 +268,24 @@ private fun TurnCard(t: ConversationTurn, vm: AppViewModel) {
     var fix by remember { mutableStateOf(t.heard) }
     var wrong by remember { mutableStateOf(false) }
     GlassCard {
-        Column {
-            Text("${time(t.timeMs)} · ${t.source}${t.tool?.let { " · $it" } ?: ""}", style = MaterialTheme.typography.labelSmall.copy(fontFamily = JimiMono))
-            Text("“${t.heard}”", color = PanelColors.Cyan)
-            if (t.rawText.isNotBlank() && t.rawText != t.heard) Text("raw: ${t.rawText}", style = MaterialTheme.typography.bodySmall)
-            Text(t.reply)
+        Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            Meta("${time(t.timeMs)} · ${t.source}${t.tool?.let { " · $it" } ?: ""}")
+            Text("“${t.heard}”", color = PanelColors.Cyan, style = MaterialTheme.typography.bodyMedium)
+            if (t.rawText.isNotBlank() && t.rawText != t.heard) Hint("Heard: ${t.rawText}")
+            Text(t.reply, style = MaterialTheme.typography.bodyMedium)
             when (t.textOk) {
-                true -> Text("✓ text right", style = MaterialTheme.typography.labelSmall)
-                false -> Text("✗ fixed to: ${t.correction ?: ""}", style = MaterialTheme.typography.labelSmall)
+                true -> Hint("✓ Text was right")
+                false -> Hint("Fixed to: ${t.correction ?: ""}")
                 null -> {}
             }
-            Row {
-                t.audioPath?.let { p -> TextButton(onClick = { vm.play(p) }) { Text("▶ Play") } }
-                TextButton(onClick = { vm.rate(t.id, true) }) { Text("✓ Right") }
-                TextButton(onClick = { wrong = true; vm.wrongAnswer(t) }, enabled = !wrong) { Text(if (wrong) "✗ Saved" else "✗ Wrong") }
-                TextButton(onClick = { fixing = !fixing }) { Text("✎ Wrong text") }
+            ChipRow {
+                t.audioPath?.let { p -> Chip("▶ Play") { vm.play(p) } }
+                Chip("✓ Right", selected = t.textOk == true) { vm.rate(t.id, true) }
+                Chip(if (wrong) "Saved" else "✗ Wrong", enabled = !wrong) { wrong = true; vm.wrongAnswer(t) }
+                Chip("✎ Fix text", selected = fixing) { fixing = !fixing }
             }
             if (fixing) {
-                OutlinedTextField(fix, { fix = it }, Modifier.fillMaxWidth(), label = { Text("What you said") })
+                OutlinedTextField(fix, { fix = it }, Modifier.fillMaxWidth().padding(top = 4.dp), label = { Text("What you said") })
                 Button(onClick = { fixing = false; vm.fix(t.id, fix.trim()) }, enabled = fix.isNotBlank()) { Text("Fix and run") }
             }
         }
@@ -297,34 +297,31 @@ private fun AlertsTab(vm: AppViewModel) {
     val list by vm.notificationList.collectAsStateWithLifecycle()
     val rules by vm.rules.collectAsStateWithLifecycle()
     val ruleOf = rules.associate { it.pkg to it.mode }
-    LazyColumn(Modifier.fillMaxSize().padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        item { Text("Tap Important / Noise to teach Jimi. Rules apply to the whole app.", style = MaterialTheme.typography.bodySmall) }
+    TabList {
+        item { PageTitle("Alerts", "Tap Important or Noise to teach Jimi. Keep app / Clear app sets a rule for the whole app.") }
+        if (list.isEmpty()) item { EmptyState("No alerts yet", "New notifications show up here.") }
         items(list, key = { it.id }) { NotificationCard(it, ruleOf[it.pkg], vm) }
     }
 }
 
-@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun NotificationCard(n: NotificationLog, rule: String?, vm: AppViewModel) {
     val important = n.label?.let { it == "important" } ?: n.important
-    Card(
-        Modifier.fillMaxWidth(),
-        shape = RoundedCornerShape(20.dp),
-        colors = CardDefaults.cardColors(containerColor = if (important) MaterialTheme.colorScheme.surfaceContainer else MaterialTheme.colorScheme.surfaceContainerLow),
-    ) {
-        Column(Modifier.padding(16.dp)) {
-            Text("${time(n.timeMs)} · ${n.appName} · ${n.status} · ${n.reason}", style = MaterialTheme.typography.labelSmall.copy(fontFamily = JimiMono))
-            Text(n.title, maxLines = 1, overflow = TextOverflow.Ellipsis)
-            Text(n.text, maxLines = 2, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.bodySmall)
-            FlowRow(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
-                TextButton(onClick = { vm.label(n.id, true) }) { Text(if (important) "• Important" else "Important") }
-                TextButton(onClick = { vm.label(n.id, false) }) { Text(if (!important) "• Noise" else "Noise") }
-                TextButton(onClick = { vm.setRule(n.pkg, if (rule == "keep") null else "keep") }) {
-                    Text(if (rule == "keep") "App: always keep ✓" else "Always keep app")
-                }
-                TextButton(onClick = { vm.setRule(n.pkg, if (rule == "clear") null else "clear") }) {
-                    Text(if (rule == "clear") "App: always clear ✓" else "Always clear")
-                }
+    GlassCard {
+        Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                StatusDot(important)
+                Text(n.appName, Modifier.weight(1f), style = MaterialTheme.typography.labelLarge, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Meta(time(n.timeMs))
+            }
+            Text(n.title, maxLines = 1, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Medium)
+            if (n.text.isNotBlank()) Text(n.text, maxLines = 2, overflow = TextOverflow.Ellipsis, style = MaterialTheme.typography.bodySmall)
+            Meta("${n.status} · ${n.reason}")
+            ChipRow {
+                Chip("Important", selected = important) { vm.label(n.id, true) }
+                Chip("Noise", selected = !important) { vm.label(n.id, false) }
+                Chip("Keep app", selected = rule == "keep") { vm.setRule(n.pkg, if (rule == "keep") null else "keep") }
+                Chip("Clear app", selected = rule == "clear") { vm.setRule(n.pkg, if (rule == "clear") null else "clear") }
             }
         }
     }
@@ -335,36 +332,42 @@ private fun NotesTab(vm: AppViewModel) {
     val notes by vm.noteList.collectAsStateWithLifecycle()
     val reminders by vm.reminderList.collectAsStateWithLifecycle()
     val facts by vm.facts.collectAsStateWithLifecycle()
-    LazyColumn(Modifier.fillMaxSize().padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        item { Header("Reminders") }
-        items(reminders, key = { "r${it.id}" }) { r ->
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(
-                    "${time(r.dueMs)}${if (r.repeat != "none") " (${r.repeat})" else ""} · ${r.text}${if (r.done) " ✓" else ""}",
-                    Modifier.weight(1f),
-                )
-                TextButton(onClick = { vm.deleteReminder(r.id) }) { Text("Delete") }
+    TabList {
+        item { PageTitle("Notes", "Reminders, notes and what Jimi remembers about you.") }
+        item {
+            ListCard("Reminders", reminders, "No reminders. Say \"remind me…\"") { r ->
+                ItemRow(
+                    r.text + if (r.done) " ✓" else "",
+                    time(r.dueMs) + if (r.repeat != "none") " · ${r.repeat}" else "",
+                ) { Chip("Delete") { vm.deleteReminder(r.id) } }
             }
         }
-        item { Header("Notes") }
-        items(notes, key = { "n${it.id}" }) { n ->
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text("${time(n.timeMs)} · ${n.text}", Modifier.weight(1f))
-                TextButton(onClick = { vm.deleteNote(n.id) }) { Text("Delete") }
+        item {
+            ListCard("Notes", notes, "No notes. Say \"note that…\"") { n ->
+                ItemRow(n.text, time(n.timeMs)) { Chip("Delete") { vm.deleteNote(n.id) } }
             }
         }
-        item { Header("What Jimi remembers") }
-        items(facts, key = { "f${it.id}" }) { f ->
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Text(f.text, Modifier.weight(1f))
-                TextButton(onClick = { vm.forget(f.id) }) { Text("Forget") }
+        item {
+            ListCard("What Jimi remembers", facts, "Nothing yet. Say \"remember that…\"") { f ->
+                ItemRow(f.text) { Chip("Forget") { vm.forget(f.id) } }
             }
         }
     }
 }
 
+/** One card holding a short list, with thin lines between rows. */
 @Composable
-private fun Header(t: String) = GradientTitle(t, 22, Modifier.padding(top = 12.dp))
+private fun <T> ListCard(title: String, rows: List<T>, empty: String, row: @Composable (T) -> Unit) {
+    GlassCard(title = title) {
+        Column {
+            if (rows.isEmpty()) Hint(empty)
+            rows.forEachIndexed { i, r ->
+                if (i > 0) RowDivider()
+                row(r)
+            }
+        }
+    }
+}
 
 @Composable
 private fun SettingsTab(vm: AppViewModel, onSetup: () -> Unit, onDeviceCheck: () -> Unit) {
@@ -392,93 +395,95 @@ private fun SettingsTab(vm: AppViewModel, onSetup: () -> Unit, onDeviceCheck: ()
     var tool by remember { mutableStateOf("device_status") }
     var args by remember { mutableStateOf("{\"what\":\"battery\"}") }
 
-    Column(Modifier.fillMaxSize().padding(20.dp).verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        GlassCard(title = "Setup") {
-            Button(onClick = onSetup) { Text("Run setup wizard") }
-            OutlinedButton(onClick = onDeviceCheck) { Text("Device check") }
-            Text("Root is optional. Extra permissions and background settings depend on this phone.", style = MaterialTheme.typography.bodySmall)
-            Button(onClick = vm::rootSetup) { Text("Set up with root") }
-            if (message.isNotBlank()) Text(message, style = MaterialTheme.typography.bodySmall)
-        }
-        AssistantModeCard(vm)
+    Column(
+        Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(start = 20.dp, end = 20.dp, top = 8.dp, bottom = 24.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        PageTitle("Settings")
         GlassCard(title = "Conversation") {
             SpeechEngineSetting()
+            RowDivider()
             SecondPassSetting()
-            Toggle("Spoken wake acknowledgement (off for beep)", spokenWake, vm::setSpokenWake)
-            Toggle("Keep listening after an answer (no \"Hey Jimi\" needed)", followUp, vm::setFollowUp)
-            Toggle("Show panel on wake (also on lock screen)", panel, vm::setShowPanel)
-            Toggle("Auto-clear unimportant notifications", autoClear, vm::setAutoClear)
+            RowDivider()
+            ToggleRow("Spoken wake reply", spokenWake, "Off = a short beep") { vm.setSpokenWake(it) }
+            ToggleRow("Keep listening after an answer", followUp, "No \"Hey Jimi\" needed for the next question") { vm.setFollowUp(it) }
+            ToggleRow("Show panel on wake", panel, "Also on the lock screen") { vm.setShowPanel(it) }
+            ToggleRow("Auto-clear unimportant alerts", autoClear) { vm.setAutoClear(it) }
+            RowDivider()
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 OutlinedTextField(cityText, { cityText = it }, Modifier.weight(1f), label = { Text("Home city (weather)") }, singleLine = true)
-                OutlinedButton(onClick = { vm.setHomeCity(cityText) }) { Text("Save") }
+                FilledTonalButton(onClick = { vm.setHomeCity(cityText) }) { Text("Save") }
             }
         }
         VoiceCard(vm)
         GlassCard(title = "Voice ID") {
-            Text(
+            Hint(
                 "When on and the phone is locked, calls, messages and unlock only work for your voice. " +
                     "Record 3–5 times, in a normal voice, in different places. Say \"panic\" or \"code red\" to lock everything.",
-                style = MaterialTheme.typography.bodySmall,
             )
-            Toggle("Voice ID for risky actions when locked", voiceId, vm::setVoiceId)
+            ToggleRow("Voice ID for risky actions when locked", voiceId) { vm.setVoiceId(it) }
             LaunchedEffect(enrollStatus) { vm.refreshVoice() }
-            Text(
-                "$voiceSamples recording(s) saved." + if (enrollStatus.isNotBlank()) " $enrollStatus" else "",
-                style = MaterialTheme.typography.bodySmall,
-            )
+            Hint("$voiceSamples recording(s) saved." + if (enrollStatus.isNotBlank()) " $enrollStatus" else "")
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 Button(onClick = vm::enrollVoice) { Text("Record my voice (8 s)") }
-                OutlinedButton(onClick = vm::resetVoice) { Text("Delete") }
+                FilledTonalButton(onClick = vm::resetVoice) { Text("Delete") }
             }
-            Text(
+            Hint(
                 "Match needed: ${"%.2f".format(speakerThreshold)}" +
                     (lastVoiceScore?.let { "   (last locked command: ${"%.2f".format(it)})" } ?: ""),
-                style = MaterialTheme.typography.bodySmall,
             )
             Slider(speakerThreshold, vm::setSpeakerThreshold, valueRange = 0.2f..0.8f, steps = 11)
         }
-        GlassCard(title = "Phone PIN (for \"unlock my phone\")") {
-            Text(if (pinSet) "PIN is saved, encrypted in Android Keystore." else "No PIN saved.", style = MaterialTheme.typography.bodySmall)
+        GlassCard(title = "Phone PIN") {
+            Hint(if (pinSet) "Saved, encrypted in Android Keystore. Used for \"unlock my phone\"." else "No PIN saved. Needed for \"unlock my phone\".")
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 OutlinedTextField(pin, { pin = it.filter(Char::isDigit) }, Modifier.weight(1f), label = { Text("PIN (empty = remove)") }, singleLine = true)
-                OutlinedButton(onClick = { vm.setPin(pin); pin = "" }) { Text("Save") }
+                FilledTonalButton(onClick = { vm.setPin(pin); pin = "" }) { Text("Save") }
             }
         }
-        GlassCard(title = "Cloud AI (optional, off by default)") {
-            Text(
-                "Free keys work: Groq, Gemini (Google key, starts with AIza), OpenRouter, Cloudflare. Jimi tries them " +
+        GlassCard(title = "Cloud AI") {
+            Hint(
+                "Optional, off by default. Free keys work: Groq, Gemini (Google key, starts with AIza), OpenRouter, Cloudflare. Jimi tries them " +
                     "in this order and uses the next one when a free limit is reached. Claude keys go in the Gemini box. " +
                     "Needs internet. Phone actions always run on the phone; only your words go out. With \"send all " +
                     "chat\" on, the cloud also picks actions fast and answers web questions. Say \"think hard …\" to " +
                     "ask the cloud once.",
-                style = MaterialTheme.typography.bodySmall,
             )
-            Toggle("Use cloud AI", cloudOn, vm::setCloudEnabled)
-            Toggle("Send all chat to the cloud (not only \"think hard\")", cloudChat, vm::setCloudForChat)
-            Toggle("Also send what Jimi remembers about me", cloudFacts, vm::setCloudSendFacts)
+            ToggleRow("Use cloud AI", cloudOn) { vm.setCloudEnabled(it) }
+            ToggleRow("Send all chat to the cloud", cloudChat, "Not only \"think hard\"") { vm.setCloudForChat(it) }
+            ToggleRow("Also send what Jimi remembers about me", cloudFacts) { vm.setCloudSendFacts(it) }
             CLOUD_KEY_ROWS.forEach { row ->
+                RowDivider()
                 KeyRow(row, row.secret in savedKeys, onSave = { vm.setKey(row.secret, row.label, it) }, onTest = { vm.testKey(row.secret) })
             }
-            if (message.isNotEmpty()) Text(message, style = MaterialTheme.typography.bodySmall)
+            if (message.isNotEmpty()) Hint(message)
         }
-        GlassCard(title = "Local AI models") {
+        GlassCard(title = "Local AI model") {
             listOf(ChatModels.DEFAULT to "Default (Qwen3 / Gemma)", ChatModels.LFM to "LFM2.5 1.2B Instruct").forEach { (id, label) ->
-                Row(verticalAlignment = Alignment.CenterVertically) {
+                Row(Modifier.fillMaxWidth().clip(RoundedCornerShape(12.dp)).clickable { vm.setChatModel(id) }, verticalAlignment = Alignment.CenterVertically) {
                     RadioButton(selected = chatModel == id, onClick = { vm.setChatModel(id) })
-                    Text(label, Modifier.clickable { vm.setChatModel(id) })
+                    Text(label, style = MaterialTheme.typography.bodyMedium)
                 }
             }
-            Text(models, style = MaterialTheme.typography.bodySmall)
-            TextButton(onClick = vm::refreshModels) { Text("Check again") }
+            Hint(models)
+            ChipRow { Chip("Check again", onClick = vm::refreshModels) }
         }
-        GlassCard(title = "Data") {
-            Button(onClick = vm::export) { Text("Export all data (JSON)") }
+        AssistantModeCard(vm)
+        GlassCard(title = "Setup") {
+            Hint("Root is optional. Extra permissions and background settings depend on this phone.")
+            ChipRow {
+                Chip("Run setup wizard", onClick = onSetup)
+                Chip("Device check", onClick = onDeviceCheck)
+                Chip("Set up with root", onClick = vm::rootSetup)
+                Chip("Export all data (JSON)", onClick = vm::export)
+            }
+            if (message.isNotBlank()) Hint(message)
         }
         GlassCard(title = "Debug: run a tool") {
-            Text(vm.toolNames.joinToString(", "), style = MaterialTheme.typography.bodySmall)
+            Hint(vm.toolNames.joinToString(", "))
             OutlinedTextField(tool, { tool = it.trim() }, Modifier.fillMaxWidth(), label = { Text("Tool") }, singleLine = true)
             OutlinedTextField(args, { args = it }, Modifier.fillMaxWidth(), label = { Text("Args JSON") })
-            Button(onClick = { vm.runTool(tool, args) }) { Text("Run") }
+            FilledTonalButton(onClick = { vm.runTool(tool, args) }) { Text("Run") }
         }
     }
 }
@@ -499,15 +504,15 @@ internal fun VoiceCard(vm: AppViewModel) {
         when {
             p != null -> LinearProgressIndicator({ p }, Modifier.fillMaxWidth())
             pack.id == Voices.BUILT_IN -> {}
-            pack.id in installed -> TextButton(onClick = { vm.deleteVoice(pack) }) { Text("Delete (${pack.sizeMb} MB)") }
-            else -> OutlinedButton(onClick = { vm.downloadVoice(pack) }) { Text("Download (${pack.sizeMb} MB)") }
+            pack.id in installed -> ChipRow { Chip("Delete (${pack.sizeMb} MB)") { vm.deleteVoice(pack) } }
+            else -> ChipRow { Chip("Download (${pack.sizeMb} MB)") { vm.downloadVoice(pack) } }
         }
     }
 
     @Composable
     fun VoiceRow(v: Voice) {
         val ready = v.pack.engine == Engine.ANDROID || v.pack.id in installed
-        Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+        Row(Modifier.padding(vertical = 2.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(6.dp)) {
             Text(
                 (if (v.id == current) "● " else "") + v.label,
                 Modifier.weight(1f),
@@ -515,34 +520,25 @@ internal fun VoiceCard(vm: AppViewModel) {
                 fontWeight = if (v.id == current) FontWeight.Bold else null,
             )
             if (ready) {
-                TextButton(onClick = { vm.tryVoice(v) }, enabled = trying == null) { Text(if (trying == v.id) "…" else "Try") }
-                if (v.id != current) TextButton(onClick = { vm.setVoice(v.id) }) { Text("Use") }
+                Chip(if (trying == v.id) "…" else "Try", enabled = trying == null) { vm.tryVoice(v) }
+                if (v.id != current) Chip("Use", selected = true) { vm.setVoice(v.id) }
             }
         }
     }
 
     GlassCard(title = "Voice") {
-        Text("Now: ${Voices.byId(current).label}", style = MaterialTheme.typography.bodySmall)
-        Text("Speed ${"%.2f".format(speed)}x", style = MaterialTheme.typography.bodySmall)
+        ItemRow(Voices.byId(current).label, "Speed ${"%.2f".format(speed)}x") {
+            Chip(if (open) "Hide voices" else "Change", selected = open) { open = !open }
+        }
         Slider(speed, vm::setVoiceSpeed, valueRange = 0.8f..1.3f, steps = 9)
-        TextButton(onClick = { open = !open }) { Text(if (open) "Hide voices" else "Change voice") }
         if (open) {
             Voices.PHONE.forEach { VoiceRow(it) }
-            Text("Backup (if Google speech is missing)", style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(top = 8.dp))
+            Meta("Backup (if Google speech is missing)", Modifier.padding(top = 8.dp))
             Voices.ALL.filter { it.pack.engine == Engine.PIPER }.forEach { v ->
                 VoiceRow(v)
                 PackBar(v.pack)
             }
         }
-    }
-}
-
-@Composable
-private fun Toggle(label: String, value: Boolean, set: (Boolean) -> Unit) {
-    var checked by remember(value) { mutableStateOf(value) }
-    Row(verticalAlignment = Alignment.CenterVertically) {
-        Text(label, Modifier.weight(1f))
-        Switch(checked = checked, onCheckedChange = { checked = it; set(it) })
     }
 }
 
@@ -560,13 +556,13 @@ private val CLOUD_KEY_ROWS = listOf(
 @Composable
 private fun KeyRow(spec: KeyRowSpec, saved: Boolean, onSave: (String) -> Unit, onTest: () -> Unit) {
     var value by remember { mutableStateOf("") }
-    Text("${spec.label}: " + if (saved) "saved, encrypted." else "not saved.", style = MaterialTheme.typography.bodySmall)
+    ItemRow(spec.label, if (saved) "Saved, encrypted" else "Not saved")
     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
         OutlinedTextField(
             value, { value = it.trim() }, Modifier.weight(1f), label = { Text("${spec.hint} (empty = remove)") }, singleLine = true,
             visualTransformation = if (spec.hidden) PasswordVisualTransformation() else VisualTransformation.None,
         )
-        OutlinedButton(onClick = { onSave(value); value = "" }) { Text("Save") }
-        if (spec.testable && saved) OutlinedButton(onClick = onTest) { Text("Test") }
+        FilledTonalButton(onClick = { onSave(value); value = "" }) { Text("Save") }
+        if (spec.testable && saved) Chip("Test", onClick = onTest)
     }
 }
