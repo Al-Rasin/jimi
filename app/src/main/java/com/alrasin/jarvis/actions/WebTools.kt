@@ -31,7 +31,7 @@ class Web {
     }
 }
 
-fun webTools(web: Web, homeCity: suspend () -> String): List<Tool> {
+fun webTools(web: Web, weather: FastWeather = FastWeather(), homeCity: suspend () -> String): List<Tool> {
     val offline = ToolResult.fail("I can't reach the internet right now.")
 
     fun normalizeUrl(raw: String): String? {
@@ -71,35 +71,9 @@ fun webTools(web: Web, homeCity: suspend () -> String): List<Tool> {
         }.filter { !it.third.contains("duckduckgo.com/y.js") }
     }
 
-    fun weatherWord(code: Int) = when (code) {
-        0 -> "clear sky"; 1, 2 -> "partly cloudy"; 3 -> "cloudy"; 45, 48 -> "foggy"
-        in 51..57 -> "drizzle"; in 61..67 -> "rain"; in 71..77 -> "snow"; in 80..82 -> "rain showers"
-        in 95..99 -> "thunderstorms"; else -> "mixed weather"
-    }
-
     return listOf(
         SimpleTool("weather", "Weather now or tomorrow", listOf(arg("place", "city", false), arg("day", "today or tomorrow", false, listOf("today", "tomorrow")))) { c, _ ->
-            runCatching {
-                val place = c.arg("place") ?: homeCity()
-                val geo = Json.parse(web.get("https://geocoding-api.open-meteo.com/v1/search?count=1&name=${Web.enc(place)}")) as Map<*, *>
-                val g = (geo["results"] as? List<*>)?.firstOrNull() as? Map<*, *> ?: return@SimpleTool ToolResult.fail("I don't know the place $place.")
-                val w = Json.parse(
-                    web.get(
-                        "https://api.open-meteo.com/v1/forecast?latitude=${g["latitude"]}&longitude=${g["longitude"]}" +
-                            "&current=temperature_2m,weather_code&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max&timezone=auto&forecast_days=2",
-                    ),
-                ) as Map<*, *>
-                val d = w["daily"] as Map<*, *>
-                fun dv(k: String, i: Int) = ((d[k] as List<*>)[i] as Number).toDouble()
-                val name = g["name"]
-                if (c.arg("day") == "tomorrow") {
-                    "Tomorrow in $name: ${weatherWord(dv("weather_code", 1).toInt())}, ${dv("temperature_2m_min", 1).toInt()} to ${dv("temperature_2m_max", 1).toInt()} degrees, ${dv("precipitation_probability_max", 1).toInt()} percent chance of rain."
-                } else {
-                    val cur = w["current"] as Map<*, *>
-                    "In $name it's ${(cur["temperature_2m"] as Number).toInt()} degrees and ${weatherWord((cur["weather_code"] as Number).toInt())}. " +
-                        "High ${dv("temperature_2m_max", 0).toInt()}, ${dv("precipitation_probability_max", 0).toInt()} percent chance of rain."
-                }
-            }.fold({ ToolResult.ok(it) }, { offline })
+            weather.get(c.arg("place") ?: homeCity(), c.arg("day") == "tomorrow")
         },
         SimpleTool("news", "Top news headlines", listOf(arg("topic", "topic", false))) { c, _ ->
             runCatching {

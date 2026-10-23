@@ -107,6 +107,7 @@ class JarvisCoreService : LifecycleService() {
     @Volatile private var cachedAudio: Map<String, PhraseCache.Audio> = emptyMap()
     @Volatile private var commandStartedAt = 0L
     @Volatile private var timedCommandEpoch = -1
+    @Volatile private var firstReplyReadyAt = 0L
     private var firstAudioEpoch = -1
     private var fillerIndex = 0
     @Volatile private var followUp = true
@@ -225,8 +226,12 @@ class JarvisCoreService : LifecycleService() {
                         playbackActive = true
                         TextToSpeech.playPcm(a.samples, a.sampleRate, onStarted = {
                             synchronized(speechState) {
-                                if (epoch == speechEpoch && epoch == timedCommandEpoch && firstAudioEpoch != epoch) {
+                                if (epoch == speechEpoch && epoch == timedCommandEpoch && text !in FILLERS) {
+                                    _reply.value = (_reply.value + " " + text).trim()
+                                }
+                                if (epoch == speechEpoch && epoch == timedCommandEpoch && firstAudioEpoch != epoch && text !in FILLERS) {
                                     firstAudioEpoch = epoch
+                                    JarvisLog.i("latency: audio after reply ${SystemClock.elapsedRealtime() - firstReplyReadyAt} ms")
                                     JarvisLog.i("latency: first audio ${SystemClock.elapsedRealtime() - commandStartedAt} ms after command")
                                 }
                             }
@@ -273,14 +278,12 @@ class JarvisCoreService : LifecycleService() {
             cachedAudio = emptyMap()
             // Teardown must be able to await and release a native voice even if loading is cancelled.
             lifecycleScope.async(Dispatchers.IO + NonCancellable) {
-                backgroundWork {
                 val v = Voices.byId(id).takeIf { Voices.installed(this@JarvisCoreService, it.pack) } ?: Voices.byId(Voices.BUILT_IN)
                 runCatching { TextToSpeech(this@JarvisCoreService, v, speed = voiceSpeed) }
                     .recoverCatching { if (v.id == Voices.BUILT_IN) throw it else TextToSpeech(this@JarvisCoreService, speed = voiceSpeed) }
                     .onSuccess { JarvisLog.i("voice: ${it.voice.id}") }
                     .onFailure { JarvisLog.e("voice not loaded (run tools/fetch_speech.sh)", it) }
                     .getOrNull()
-                }
             }.also { tts = it }
         }
         try {
@@ -319,28 +322,46 @@ class JarvisCoreService : LifecycleService() {
         return audio
     }
 
-    /** Makes the common replies in the background, one at a time, only while Jimi is not speaking. */
+    /** Warm only feedback on a disposable, single-thread engine; replies never share its lock. */
     private fun warmPhrases(v: TextToSpeech) {
         phraseWarm?.cancel()
         val speed = v.speed
+        val voice = v.voice
+        val cache = PhraseCache(File(cacheDir, "phrases"), voice.id, speed, v.sampleRate)
+        phrases = cache
         phraseWarm = lifecycleScope.launch(Dispatchers.IO) {
+            fun idle() = !speaking && speechLeft.get() == 0 && listenRequest == null &&
+                _phase.value == PHASE_WAKE && readyVoice() === v && v.speed == speed
             for (text in PhraseCache.COMMON) {
-                while (isActive) {
-                    if (text !in FEEDBACK_PHRASES) delay(500)
-                    val done = ttsLock.withLock {
-                        if (readyVoice() !== v || v.speed != speed) return@launch
-                        if (speaking || speechLeft.get() > 0 || listenRequest != null ||
-                            _phase.value == PHASE_HEARING || _phase.value == PHASE_FOLLOW_UP ||
-                            _phase.value == PHASE_PREPARING) false
-                        else {
-                            runCatching { backgroundWork { audioFor(v, text) } }
-                                .onFailure { JarvisLog.e("phrase warm failed", it) }
-                                .getOrNull() ?: return@launch
-                            true
-                        }
+                ensureActive()
+                val key = SpeechText.normalize(text)
+                cache.get(key)?.let { audio ->
+                    ttsLock.withLock {
+                        if (readyVoice() === v && v.speed == speed) cachedAudio = cachedAudio + (key to audio)
                     }
-                    if (done) break
-                    delay(100)
+                }
+            }
+            val missing = FEEDBACK_PHRASES.filter { cache.get(SpeechText.normalize(it)) == null }
+            if (missing.isEmpty()) return@launch
+            while (isActive && !idle()) delay(200)
+            ensureActive()
+            backgroundWork {
+                TextToSpeech(this@JarvisCoreService, voice, threads = 1, speed = speed).use { warmer ->
+                    for (text in missing) {
+                        if (!isActive || !idle()) break
+                        val made = warmer.generate(text)
+                        if (!isActive || !idle()) break
+                        cache.put(SpeechText.normalize(text), made.samples, made.sampleRate)
+                    }
+                }
+            }
+            for (text in missing) {
+                ensureActive()
+                cache.get(SpeechText.normalize(text))?.let { audio ->
+                    ttsLock.withLock {
+                        if (readyVoice() === v && v.speed == speed)
+                            cachedAudio = cachedAudio + (SpeechText.normalize(text) to audio)
+                    }
                 }
             }
         }
@@ -359,8 +380,9 @@ class JarvisCoreService : LifecycleService() {
     }
 
     private fun say(text: String, epoch: Int = speechEpoch) {
-        val chunks = if (readyVoice()?.voice?.pack?.engine != Engine.PIPER) SpeechText.chunks(text)
-            else listOf(SpeechText.normalize(text)).filter { it.isNotBlank() }
+        val chunks = if (cachedAudio.containsKey(SpeechText.normalize(text))) listOf(SpeechText.normalize(text))
+            else SpeechText.chunks(text, maxWords = 5,
+                firstWords = if (epoch == timedCommandEpoch && firstAudioEpoch != epoch && speechLeft.get() == 0) 2 else 5)
         synchronized(speechState) {
             if (epoch != speechEpoch) return
             for (chunk in chunks) {
@@ -432,6 +454,7 @@ class JarvisCoreService : LifecycleService() {
 
     /** Runs one command through the assistant and speaks the answer. Then maybe listens for a follow-up. */
     private fun ask(text: String, raw: String, source: String, wakeId: Long?, audioPath: String?, audio: ShortArray?, refine: (suspend () -> String)? = null) = synchronized(speechState) {
+        phraseWarm?.cancel()
         shutUp()
         var epoch = speechEpoch
         agentInterrupt.set(null)
@@ -443,6 +466,7 @@ class JarvisCoreService : LifecycleService() {
         val asked = SystemClock.elapsedRealtime()
         commandStartedAt = asked
         timedCommandEpoch = epoch
+        firstReplyReadyAt = 0L
         replyJob = lifecycleScope.launch(Dispatchers.Default) {
             var next: String? = null
             try {
@@ -461,6 +485,7 @@ class JarvisCoreService : LifecycleService() {
                         synchronized(speechState) {
                             if (epoch != speechEpoch) throw CancellationException("Speech interrupted")
                             thinkingCue.finish(epoch)
+                            if (firstReplyReadyAt == 0L) firstReplyReadyAt = SystemClock.elapsedRealtime()
                             _phase.value = PHASE_SPEAKING
                             say(sentence, epoch)
                         }
@@ -482,9 +507,9 @@ class JarvisCoreService : LifecycleService() {
                 if (r.tool == "screen_agent" || interrupted != null) showPanel()
                 synchronized(speechState) {
                     if (epoch != speechEpoch) return@launch
-                    _reply.value = r.text
+                    if (speechLeft.get() == 0 && r.spokenAlready) _reply.value = r.text
                     _turnId.value = r.turnId
-                    _lastTurn.value = Turn(r.turnId, text, r.text, r.tool)
+                    if (firstReplyReadyAt == 0L) firstReplyReadyAt = SystemClock.elapsedRealtime()
                     _phase.value = PHASE_SPEAKING
                 }
                 JarvisLog.i("reply (${r.tool ?: "talk"}): ${r.text.length} characters, ${SystemClock.elapsedRealtime() - asked} ms after command")
@@ -497,6 +522,12 @@ class JarvisCoreService : LifecycleService() {
                 }
                 if (!r.spokenAlready && r.tool == "panic") say(r.text, epoch)
                 awaitSpeech()
+                synchronized(speechState) {
+                    if (epoch == speechEpoch) {
+                        _reply.value = r.text
+                        _lastTurn.value = Turn(r.turnId, text, r.text, r.tool)
+                    }
+                }
                 if (r.expectAnswer || (followUp && !r.endConversation && source != "typed")) next = "follow_up"
             } catch (cancelled: CancellationException) {
                 throw cancelled

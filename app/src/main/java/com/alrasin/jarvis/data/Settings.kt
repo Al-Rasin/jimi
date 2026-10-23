@@ -40,7 +40,14 @@ class Settings @Inject constructor(@ApplicationContext private val context: Cont
     val setupComplete: Flow<Boolean> = context.dataStore.data.map { it[setupCompleteKey] ?: false }
 
     suspend fun setAssistantMode(mode: AssistantMode) = context.dataStore.edit { it[assistantModeKey] = mode.name }
-    suspend fun setSetupComplete(complete: Boolean) = context.dataStore.edit { it[setupCompleteKey] = complete }
+    suspend fun setSetupComplete(complete: Boolean) = context.dataStore.edit {
+        if (complete && it[setupCompleteKey] != true) {
+            val speed = VoiceDefaults.speed(it[voiceSpeedKey], it[voiceKey], false)
+            it[voiceKey] = VoiceDefaults.voice(it[voiceKey], false)
+            it[voiceSpeedKey] = speed
+        }
+        it[setupCompleteKey] = complete
+    }
     private val chatModelKey = stringPreferencesKey("chat_model")
 
     val wakeThreshold: Flow<Float> = context.dataStore.data.map { it[thresholdKey] ?: DEFAULT_THRESHOLD }
@@ -69,9 +76,9 @@ class Settings @Inject constructor(@ApplicationContext private val context: Cont
     val cloudSendFacts: Flow<Boolean> = context.dataStore.data.map { it[cloudFactsKey] ?: false }
 
     /** Jimi's voice id (see Voices, D-038). */
-    val voice: Flow<String> = context.dataStore.data.map { Voices.byId(it[voiceKey]).id }
+    val voice: Flow<String> = context.dataStore.data.map { Voices.byId(VoiceDefaults.voice(it[voiceKey], it[setupCompleteKey] == true)).id }
     /** Speaking speed, 1.0 = normal. */
-    val voiceSpeed: Flow<Float> = context.dataStore.data.map { it[voiceSpeedKey] ?: 1.0f }
+    val voiceSpeed: Flow<Float> = context.dataStore.data.map { VoiceDefaults.speed(it[voiceSpeedKey], it[voiceKey], it[setupCompleteKey] == true) }
     val chatModel: Flow<String> = context.dataStore.data.map {
         if (it[chatModelKey] == ChatModels.LFM) ChatModels.LFM else ChatModels.DEFAULT
     }

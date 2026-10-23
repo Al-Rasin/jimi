@@ -58,6 +58,8 @@ class TextToSpeech(
         generate("Hi.")   // first run is ~4x slower; pay it now, not on the first answer
     }
 
+    val sampleRate: Int get() = tts.sampleRate()
+
     fun generate(text: String): GeneratedAudio {
         val spoken = SpeechText.normalize(text)
         if (spoken.isBlank()) return GeneratedAudio(FloatArray(0), 24_000)

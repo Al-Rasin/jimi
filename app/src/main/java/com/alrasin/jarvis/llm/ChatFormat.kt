@@ -59,7 +59,14 @@ object ChatFormat {
                 start = boundary.range.last + 1
             }
         }
-        return out to pending.substring(start)
+        val remainder = pending.substring(start)
+        val words = Regex("\\S+\\s+").findAll(remainder).take(5).toList()
+        if (words.size == 5) {
+            val end = words.last().range.last + 1
+            out.add(remainder.substring(0, end).trim())
+            return out to remainder.substring(end)
+        }
+        return out to remainder
     }
 
     fun clean(text: String) = text.replace(Regex("<think>.*?(?:</think>|$)", RegexOption.DOT_MATCHES_ALL), "")
