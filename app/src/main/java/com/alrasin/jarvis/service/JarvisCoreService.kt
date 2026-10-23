@@ -43,8 +43,6 @@ import com.alrasin.jarvis.voice.WakePhrase
 import com.alrasin.jarvis.data.SpeechEngineSettings
 import com.alrasin.jarvis.voice.ScreenAgentInterrupt
 import com.alrasin.jarvis.voice.Chimes
-import com.alrasin.jarvis.voice.CloudSpeech
-import com.alrasin.jarvis.voice.GeminiVoice
 import com.alrasin.jarvis.voice.PhraseCache
 import com.alrasin.jarvis.voice.SpeechText
 import com.alrasin.jarvis.voice.Engine
@@ -115,10 +113,8 @@ class JarvisCoreService : LifecycleService() {
     @Volatile private var cachedAudio: Map<String, PhraseCache.Audio> = emptyMap()
     /** Optional recorded wake reply pushed by hand to `files/sounds/wake_ack.wav`; used instead of the spoken "Uh-huh." */
     @Volatile private var wakeClip: PhraseCache.Audio? = null
-    @Volatile private var cloudVoiceOn = false
-    @Volatile private var cloudVoiceName = GeminiVoice.DEFAULT_VOICE
-    /** Reply whose cloud voice failed: the rest of it stays in the phone voice, so the voice does not flip. */
-    @Volatile private var cloudVoiceFailedEpoch = -1
+    /** Google phone voice loaded: it is fast enough to speak whole phrases, which sounds more natural (D-054). */
+    @Volatile private var phoneEngineVoice = false
     @Volatile private var commandStartedAt = 0L
     @Volatile private var timedCommandEpoch = -1
     @Volatile private var firstReplyReadyAt = 0L
@@ -206,8 +202,6 @@ class JarvisCoreService : LifecycleService() {
         if (voiceJob != null) return
         lifecycleScope.launch { settings.spokenWake.collect { spokenWake = it } }
         lifecycleScope.launch(Dispatchers.IO) { wakeClip = loadWakeClip() }
-        lifecycleScope.launch { settings.cloudVoice.collect { cloudVoiceOn = it } }
-        lifecycleScope.launch { settings.cloudVoiceName.collect { cloudVoiceName = it } }
         voiceJob = lifecycleScope.launch(Dispatchers.IO) {
             settings.voice.distinctUntilChanged().collect { id -> switchVoice(id) }
         }
@@ -227,7 +221,7 @@ class JarvisCoreService : LifecycleService() {
         lifecycleScope.launch(Dispatchers.IO) {
             for ((epoch, s) in speech) {
                 val made = try {
-                    cachedAudio[SpeechText.normalize(s)] ?: cloudAudio(epoch, s) ?: ttsLock.withLock {
+                    cachedAudio[SpeechText.normalize(s)] ?: ttsLock.withLock {
                         if (epoch == speechEpoch) tts?.await()?.let { v -> audioFor(v, s) } else null
                     }
                 } catch (t: Throwable) {
@@ -283,8 +277,19 @@ class JarvisCoreService : LifecycleService() {
         val path = "/proc/${android.os.Process.myPid()}/oom_score_adj"
         while (currentCoroutineContext().isActive) {
             RootShell.run("[ \$(cat $path) -gt $OOM_ADJ ] && echo $OOM_ADJ > $path || true")
+            keepOverlayAllowed()
             delay(30_000)
         }
+    }
+
+    /**
+     * MIUI sometimes turns "display over other apps" off (seen 2026-10-23); then Android blocks the
+     * wake panel from opening in the background. Root turns it back on.
+     */
+    private suspend fun keepOverlayAllowed() {
+        if (android.provider.Settings.canDrawOverlays(this)) return
+        JarvisLog.i("overlay permission lost; granting again")
+        RootShell.run("appops set $packageName SYSTEM_ALERT_WINDOW allow", "appops set --uid $packageName SYSTEM_ALERT_WINDOW allow")
     }
 
     /** Loads voice [id] (falls back to the built-in voice if it is not downloaded or fails), then frees the old one. */
@@ -301,7 +306,7 @@ class JarvisCoreService : LifecycleService() {
                 val v = Voices.byId(id).takeIf { Voices.installed(this@JarvisCoreService, it.pack) } ?: Voices.byId(Voices.BUILT_IN)
                 runCatching { TextToSpeech(this@JarvisCoreService, v, speed = voiceSpeed) }
                     .recoverCatching { if (v.id == Voices.BUILT_IN) throw it else TextToSpeech(this@JarvisCoreService, speed = voiceSpeed) }
-                    .onSuccess { JarvisLog.i("voice: ${it.voice.id}") }
+                    .onSuccess { JarvisLog.i("voice: ${it.voice.id}"); phoneEngineVoice = it.voice.pack.engine == Engine.ANDROID }
                     .onFailure { JarvisLog.e("voice not loaded (run tools/fetch_speech.sh)", it) }
                     .getOrNull()
             }.also { tts = it }
@@ -401,15 +406,6 @@ class JarvisCoreService : LifecycleService() {
         }
     }
 
-    /** Gemini voice for text Gemini wrote (D-053); null = use the phone voice. */
-    private suspend fun cloudAudio(epoch: Int, text: String): PhraseCache.Audio? {
-        if (!cloudVoiceOn || epoch == cloudVoiceFailedEpoch || text in FILLERS || !CloudSpeech.fromCloud(text)) return null
-        val key = cloud.voiceKey() ?: return null
-        val made = GeminiVoice(key).generate(text, cloudVoiceName)
-        if (made == null) cloudVoiceFailedEpoch = epoch
-        return made?.let { PhraseCache.Audio(it.samples, it.sampleRate) }
-    }
-
     private fun loadWakeClip(): PhraseCache.Audio? = runCatching {
         val file = File(getExternalFilesDir(null) ?: filesDir, "sounds/wake_ack.wav")
         if (!file.isFile) return null
@@ -419,9 +415,7 @@ class JarvisCoreService : LifecycleService() {
 
     private fun say(text: String, epoch: Int = speechEpoch) {
         val chunks = if (cachedAudio.containsKey(SpeechText.normalize(text))) listOf(SpeechText.normalize(text))
-            // cloud voice: whole sentences, fewer requests and smoother speech
-            else if (cloudVoiceOn && epoch != cloudVoiceFailedEpoch && CloudSpeech.fromCloud(text)) SpeechText.chunks(text, maxWords = 30)
-            else SpeechText.chunks(text, maxWords = 5,
+            else SpeechText.chunks(text, maxWords = if (phoneEngineVoice) PHONE_VOICE_WORDS else 5,
                 firstWords = if (epoch == timedCommandEpoch && firstAudioEpoch != epoch && speechLeft.get() == 0) 2 else 5)
         synchronized(speechState) {
             if (epoch != speechEpoch) return
@@ -1128,6 +1122,8 @@ class JarvisCoreService : LifecycleService() {
         private const val WAKE_COOLDOWN_MS = 2_000L
         private const val NEAR_MIN = 0.2f
         private const val NEAR_COOLDOWN_MS = 30_000L
+        /** Words per spoken piece for the Google voice (~0.6 s to make); Piper needs 5 to start fast. */
+        private const val PHONE_VOICE_WORDS = 14
         private const val PRE_ROLL_SAMPLES = 16_000   // 1 s before the wake: "…jimi turn" → "turn" is kept
         private const val ENROLL_SECONDS = 8
         private const val ENROLL_CHUNKS = ENROLL_SECONDS * WakeWordDetector.SAMPLE_RATE / WakeWordDetector.CHUNK

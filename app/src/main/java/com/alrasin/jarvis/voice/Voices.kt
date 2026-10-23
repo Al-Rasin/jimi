@@ -56,34 +56,31 @@ object Voices {
     private val ALAN = VoicePack(BUILT_IN, Engine.PIPER, 80, "", listOf("en_GB-alan-medium.onnx", "tokens.txt"))
     private val fallback = Voice(BUILT_IN, "Alan", true, "UK", ALAN)
 
-    private fun piper(name: String, lang: String) =
-        VoicePack("piper-$name", Engine.PIPER, 63, "vits-piper-$lang-$name-medium", listOf("$lang-$name-medium.onnx", "tokens.txt"))
-
-    /** Speaker numbers come from the model metadata (id2speaker). */
-    val ALL: List<Voice> = listOf(
-        // fix8: Supertonic is too slow on G88; saved selections fall back to Alan.
-        fallback,
-        Voice("piper-amy", "Amy", false, "US", piper("amy", "en_US")),
-        Voice("piper-ryan", "Ryan", true, "US", piper("ryan", "en_US")),
-    )
-
     /** Voices of the phone's speech engine are saved as "google:<engine voice name>" (D-053). */
     const val ANDROID_PREFIX = "google:"
     val ANDROID_PACK = VoicePack("android", Engine.ANDROID, 0, "", listOf(""))
 
-    fun byId(id: String?): Voice =
-        if (id != null && id.startsWith(ANDROID_PREFIX)) android(id.removePrefix(ANDROID_PREFIX))
-        else ALL.firstOrNull { it.id == id } ?: fallback
+    /**
+     * The Google voices kept after scoring all 14 installed ones on the phone (D-054): highest naturalness
+     * (UTMOS 4.43–4.47 vs Piper Alan 4.02), ~6x faster than Piper. Gender checked by measured pitch.
+     */
+    val PHONE: List<Voice> = listOf(
+        Voice(ANDROID_PREFIX + "en-us-x-iob-local", "Iris (Siri-like)", false, "US", ANDROID_PACK),   // closest to Siri US Voice 2
+        Voice(ANDROID_PREFIX + "en-us-x-tpf-local", "Tara", false, "US", ANDROID_PACK),
+        Voice(ANDROID_PREFIX + "en-us-x-iom-local", "Max", true, "US", ANDROID_PACK),
+        Voice(ANDROID_PREFIX + "en-gb-x-rjs-local", "Rhys", true, "UK", ANDROID_PACK),
+    )
+    val DEFAULT: String = PHONE.first().id
 
-    /** e.g. "en-us-x-iol-local" → "Google iol", Male, US. Gender comes from a known-name table (unknown = female). */
-    fun android(engineName: String): Voice {
-        val parts = engineName.lowercase().split('-')
-        val accent = parts.getOrNull(1)?.uppercase()?.let { if (it == "GB") "UK" else it } ?: "EN"
-        val code = parts.getOrNull(3) ?: engineName
-        return Voice(ANDROID_PREFIX + engineName, "Google $code", code in GOOGLE_MALE, accent, ANDROID_PACK)
-    }
+    /** The picker: the Google voices, plus built-in Alan for phones without Google speech services. */
+    val ALL: List<Voice> = PHONE + fallback
 
-    private val GOOGLE_MALE = setOf("iol", "iom", "tpd", "gbb", "gbd", "rjs", "end", "aub", "aud", "cxx")
+    /** Unknown or removed voices (Amy, Ryan, Supertonic, other Google voices) become the default voice. */
+    fun byId(id: String?): Voice = ALL.firstOrNull { it.id == id } ?: PHONE.first()
+
+    /** Any Google voice by engine name, for the voice benchmark only (e.g. "en-us-x-iol-local"). */
+    fun android(engineName: String): Voice =
+        Voice(ANDROID_PREFIX + engineName, engineName, false, "EN", ANDROID_PACK)
 
     fun dir(context: Context, pack: VoicePack) = File(context.getExternalFilesDir(null) ?: context.filesDir, "voices/${pack.id}")
 

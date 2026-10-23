@@ -177,9 +177,10 @@ class HomeViewModel @Inject constructor(
      * `adb shell am start -n com.alrasin.jarvis/.ui.MainActivity --es voice_bench kokoro-heart,kitten-m2`
      */
     fun voiceBench(ids: String) = viewModelScope.launch(Dispatchers.Default) {
-        val text = "You said: turn on the flashlight and set an alarm for seven."
+        val text = "Sure. I've set an alarm for seven tomorrow morning. By the way, it looks like rain later, so you might want an umbrella."
+        val out = java.io.File(app.getExternalFilesDir(null), "voice_bench").apply { mkdirs() }
         val voices = Voices.ALL.filter { (ids == "all" || it.id in ids.split(',')) && Voices.installed(app, it.pack) } +
-            ids.split(',').filter { it.startsWith(Voices.ANDROID_PREFIX) }.map(Voices::byId)
+            ids.split(',').filter { id -> id.startsWith(Voices.ANDROID_PREFIX) && Voices.ALL.none { it.id == id } }.map { Voices.android(it.removePrefix(Voices.ANDROID_PREFIX)) }
         for (voice in voices) {
             for (threads in listOf(2, 4)) runCatching {
                 var t0 = System.nanoTime()
@@ -189,6 +190,10 @@ class HomeViewModel @Inject constructor(
                     val a = tts.generate(text)
                     val ms = (System.nanoTime() - t0) / 1_000_000
                     val audioMs = a.samples.size * 1000L / a.sampleRate
+                    if (threads == 2) com.alrasin.jarvis.voice.Wav.write(
+                        java.io.File(out, voice.id.replace(':', '_') + ".wav"),
+                        ShortArray(a.samples.size) { (a.samples[it].coerceIn(-1f, 1f) * 32767).toInt().toShort() }, a.sampleRate,
+                    )
                     JarvisLog.i("VOICE ${voice.id} t=$threads load=${load}ms gen=${ms}ms audio=${audioMs}ms rtf=${"%.2f".format(ms.toFloat() / audioMs)}")
                 }
             }.onFailure { JarvisLog.e("VOICE ${voice.id} failed", it) }

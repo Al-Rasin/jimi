@@ -1,7 +1,9 @@
 package com.alrasin.jarvis.data
 
+import com.alrasin.jarvis.voice.Voices
+
 internal object VoiceDefaults {
-    fun voice(saved: String?, setupComplete: Boolean) = saved ?: if (setupComplete) "piper-alan" else "piper-amy"
-    fun speed(saved: Float?, savedVoice: String?, setupComplete: Boolean) =
-        saved ?: if (savedVoice != null || setupComplete) 1.0f else 1.10f
+    /** No saved voice: the Siri-like Google voice (D-054). */
+    fun voice(saved: String?) = saved ?: Voices.DEFAULT
+    fun speed(saved: Float?) = saved ?: 1.0f
 }
