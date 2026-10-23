@@ -111,6 +111,8 @@ class JarvisCoreService : LifecycleService() {
     @Volatile private var listenRequest: String? = null
     @Volatile private var spokenWake = true
     @Volatile private var cachedAudio: Map<String, PhraseCache.Audio> = emptyMap()
+    /** Optional recorded wake reply pushed by hand to `files/sounds/wake_ack.wav`; used instead of the spoken "Uh-huh." */
+    @Volatile private var wakeClip: PhraseCache.Audio? = null
     @Volatile private var commandStartedAt = 0L
     @Volatile private var timedCommandEpoch = -1
     @Volatile private var firstReplyReadyAt = 0L
@@ -197,6 +199,7 @@ class JarvisCoreService : LifecycleService() {
     private fun ensureVoice() {
         if (voiceJob != null) return
         lifecycleScope.launch { settings.spokenWake.collect { spokenWake = it } }
+        lifecycleScope.launch(Dispatchers.IO) { wakeClip = loadWakeClip() }
         voiceJob = lifecycleScope.launch(Dispatchers.IO) {
             settings.voice.distinctUntilChanged().collect { id -> switchVoice(id) }
         }
@@ -382,13 +385,20 @@ class JarvisCoreService : LifecycleService() {
     private fun acknowledgeWake(tone: Chimes) {
         // While the user talks: open the cloud connection, or load the local tool model when the cloud is not usable.
         lifecycleScope.launch(Dispatchers.IO) { if (cloud.enabled()) cloud.warm() else models.preloadTools() }
-        val audio = cachedAudio[SpeechText.normalize("Uh-huh.")]
+        val audio = wakeClip ?: cachedAudio[SpeechText.normalize("Uh-huh.")]
         if (!spokenWake || audio == null) { tone.wake(); return }
         val epoch = speechEpoch
         lifecycleScope.launch(Dispatchers.IO) {
             TextToSpeech.playPcm(audio.samples, audio.sampleRate) { epoch != speechEpoch }
         }
     }
+
+    private fun loadWakeClip(): PhraseCache.Audio? = runCatching {
+        val file = File(getExternalFilesDir(null) ?: filesDir, "sounds/wake_ack.wav")
+        if (!file.isFile) return null
+        val pcm = Wav.read(file)
+        if (pcm.isEmpty()) null else PhraseCache.Audio(FloatArray(pcm.size) { pcm[it] / 32768f }, Wav.sampleRate(file))
+    }.onFailure { JarvisLog.e("wake clip failed", it) }.getOrNull()
 
     private fun say(text: String, epoch: Int = speechEpoch) {
         val chunks = if (cachedAudio.containsKey(SpeechText.normalize(text))) listOf(SpeechText.normalize(text))

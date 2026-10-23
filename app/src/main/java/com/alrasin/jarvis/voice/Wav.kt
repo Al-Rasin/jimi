@@ -22,6 +22,19 @@ object Wav {
         file.writeBytes(bytes(samples, sampleRate))
     }
 
+    /** Sample rate from the "fmt " chunk (16 kHz if there is none). */
+    fun sampleRate(file: File): Int {
+        val b = ByteBuffer.wrap(file.readBytes()).order(ByteOrder.LITTLE_ENDIAN)
+        var p = 12
+        while (p + 8 <= b.limit()) {
+            val id = String(ByteArray(4) { b.get(p + it) })
+            val len = b.getInt(p + 4)
+            if (id == "fmt " && p + 16 <= b.limit()) return b.getInt(p + 12)
+            p += 8 + len + (len and 1)
+        }
+        return 16_000
+    }
+
     /** Reads a 16-bit mono WAV written by [write] (or ffmpeg -ac 1 -ar 16000). */
     fun read(file: File): ShortArray {
         val b = ByteBuffer.wrap(file.readBytes()).order(ByteOrder.LITTLE_ENDIAN)
