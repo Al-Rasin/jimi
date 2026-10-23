@@ -2,33 +2,27 @@ package com.alrasin.jarvis.ui
 
 import android.animation.ValueAnimator
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.Crossfade
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
-import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.BoxWithConstraints
-import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
-import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.WindowInsets
-import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.isImeVisible
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.pager.PagerState
-import androidx.compose.foundation.selection.selectable
-import androidx.compose.foundation.selection.selectableGroup
-import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -37,69 +31,86 @@ import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.ColorFilter
 import androidx.compose.ui.graphics.Path
-import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.drawscope.translate
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.graphics.vector.rememberVectorPainter
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.input.pointer.util.VelocityTracker
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.platform.LocalHapticFeedback
-import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.semantics.CustomAccessibilityAction
+import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.semantics.contentDescription
-import androidx.compose.ui.semantics.semantics
+import androidx.compose.ui.semantics.customActions
 import androidx.compose.ui.unit.dp
-import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.distinctUntilChanged
-import kotlinx.coroutines.flow.filterNotNull
 import kotlinx.coroutines.launch
 import kotlin.math.PI
 import kotlin.math.abs
-import kotlin.math.cos
-import kotlin.math.exp
+import kotlin.math.floor
+import kotlin.math.hypot
 import kotlin.math.roundToInt
 
 /**
- * Bottom bar as a twisting Möbius ribbon (D-050). The ribbon makes a half twist per tab; when pages swipe or the
- * bar is dragged, the ribbon rolls with the finger and a glow slides to the tab. Dragging the bar moves the pages too.
+ * Bottom bar as a Möbius loop (D-050, D-051). The tabs sit round the loop; the one at the front (bottom middle) is open.
+ * Drag the loop sideways and it turns, bringing the next tab to the front; tap a tab to turn it to the front.
+ * It is a loop, so after the last tab comes the first. Swiping pages turns the loop too.
  */
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
 fun MobiusNav(items: List<Pair<String, ImageVector>>, pager: PagerState, modifier: Modifier = Modifier) {
     if (items.isEmpty()) return
+    val n = items.size
     val scope = rememberCoroutineScope()
     val haptics = LocalHapticFeedback.current
-    val position by remember { derivedStateOf { pager.currentPage + pager.currentPageOffsetFraction } }
+    val density = LocalDensity.current
     val keyboardOpen = WindowInsets.isImeVisible
     val motion = ValueAnimator.areAnimatorsEnabled()
+    val painters = items.map { rememberVectorPainter(it.second) }
+    val pagePos by remember { derivedStateOf { pager.currentPage + pager.currentPageOffsetFraction } }
 
-    fun go(index: Int) = scope.launch {
-        val i = index.coerceIn(items.indices)
-        if (motion) pager.animateScrollToPage(i) else pager.scrollToPage(i)
-    }
+    // how far the loop has turned, in tabs; not limited to 0..n-1 so it can keep going round
+    val turn = remember { Animatable(pagePos) }
+    var busy by remember { mutableStateOf(false) }
+    fun wrap(x: Int) = ((x % n) + n) % n
+    val front by remember { derivedStateOf { wrap(turn.value.roundToInt()) } }
 
-    // while the bar is dragged, the pages sit exactly where the finger says
-    var dragTo by remember { mutableStateOf<Float?>(null) }
+    // pages swiped by hand: turn the loop the short way to match
     LaunchedEffect(Unit) {
-        snapshotFlow { dragTo }.filterNotNull().collectLatest { p ->
-            val page = p.roundToInt()
-            pager.scrollToPage(page, (p - page).coerceIn(-0.5f, 0.5f))
+        snapshotFlow { pagePos }.collect { p ->
+            if (!busy) turn.snapTo(p + n * ((turn.value - p) / n).roundToInt())
         }
     }
     LaunchedEffect(Unit) {
         var first = true
-        snapshotFlow { position.roundToInt() }.distinctUntilChanged().collect {
+        snapshotFlow { front }.distinctUntilChanged().collect {
             if (!first) haptics.performHapticFeedback(HapticFeedbackType.TextHandleMove)
             first = false
         }
+    }
+
+    // settle on a whole tab; a jump over the loop's seam (last ↔ first) changes the page at once
+    fun settle(target: Int) = scope.launch {
+        busy = true
+        val page = wrap(target)
+        launch {
+            if (motion && abs(page - pager.currentPage) <= 1) pager.animateScrollToPage(page) else pager.scrollToPage(page)
+        }
+        if (motion) turn.animateTo(target.toFloat(), spring(dampingRatio = 0.8f, stiffness = Spring.StiffnessMediumLow))
+        else turn.snapTo(target.toFloat())
+        busy = false
     }
 
     AnimatedVisibility(
@@ -108,98 +119,132 @@ fun MobiusNav(items: List<Pair<String, ImageVector>>, pager: PagerState, modifie
         exit = slideOutVertically(tween(200)) { it },
         modifier = modifier,
     ) {
-        Box(Modifier.fillMaxWidth().navigationBarsPadding().padding(horizontal = 12.dp, vertical = 8.dp)) {
-            val shape = RoundedCornerShape(28.dp)
+        BoxWithConstraints(
+            Modifier.fillMaxWidth()
+                .background(Brush.verticalGradient(listOf(Color.Transparent, JimiColors.Background.copy(alpha = 0.95f))))
+                .navigationBarsPadding()
+                .height(124.dp)
+                .clearAndSetSemantics {
+                    contentDescription = "Tabs, ${items[front].first} open"
+                    customActions = items.mapIndexed { i, (label, _) ->
+                        CustomAccessibilityAction("Open $label") { settle(turn.value.roundToInt() + shortWay(front, i, n)); true }
+                    }
+                },
+        ) {
+            val w = constraints.maxWidth.toFloat()
+            val h = constraints.maxHeight.toFloat()
+            // the loop is drawn wide and flat so it fits inside the bar with room for the icons
+            val sx = w / 2 / 1.32f
+            val sy = (h - with(density) { 52.dp.toPx() }) / 1.2f
+            val cy = h / 2 - with(density) { 6.dp.toPx() }
+            val pose by remember { derivedStateOf { MobiusMath.Pose(spin = MobiusMath.tabSpin(turn.value, n), tilt = 1.2f, halfWidth = 0.2f) } }
+            // one tab of drag = the length of loop between two tabs at the front
+            val slotPx = sx * 2 * PI.toFloat() / n
+            val spots = remember(n) { Array(n) { FloatArray(3) } }
             val velocity = remember { VelocityTracker() }
-            BoxWithConstraints(
-                Modifier.fillMaxWidth().height(76.dp).clip(shape)
-                    .background(JimiColors.Surface1.copy(alpha = 0.85f))
-                    .border(1.dp, Hud.edgeBrush, shape)
-                    // on the parent: the tab row on top would get the touch first and the drag would never start
-                    .pointerInput(items.size) {
-                        val slot = size.width.toFloat() / items.size
+            val path = remember { Path() }
+            Canvas(
+                Modifier.fillMaxSize()
+                    .pointerInput(n, slotPx) {
                         var start = 0f
                         var moved = 0f
                         detectHorizontalDragGestures(
-                            onDragStart = { velocity.resetTracking(); start = position; moved = 0f },
+                            onDragStart = { velocity.resetTracking(); busy = true; start = turn.value; moved = 0f },
                             onDragEnd = {
-                                // the page may lag a frame behind the finger, so end where the finger is
-                                val end = dragTo ?: position
-                                dragTo = null
                                 val v = velocity.calculateVelocity().x
-                                // a flick moves one more tab the way the finger went
-                                go((end + (if (abs(v) > 800f) v / abs(v) * 0.5f else 0f)).roundToInt())
+                                // a flick turns one more tab the way the finger went
+                                val flick = if (abs(v) > 800f) -v / abs(v) * 0.5f else 0f
+                                settle((turn.value + flick).roundToInt())
                             },
-                            onDragCancel = { dragTo = null; go(position.roundToInt()) },
+                            onDragCancel = { settle(turn.value.roundToInt()) },
                         ) { change, dx ->
                             velocity.addPosition(change.uptimeMillis, change.position)
-                            // ribbon follows the finger: one slot of drag = one page
                             moved += dx
-                            dragTo = (start + moved / slot).coerceIn(0f, items.lastIndex.toFloat())
+                            val t = start - moved / slotPx
+                            scope.launch {
+                                turn.snapTo(t)
+                                val near = t.roundToInt()
+                                pager.scrollToPage(wrap(near), (t - near).coerceIn(-0.5f, 0.5f))
+                            }
                             change.consume()
                         }
                     }
-                    .selectableGroup(),
-            ) {
-                val slotPx = constraints.maxWidth.toFloat() / items.size
-                val path = remember { Path() }
-                Canvas(Modifier.fillMaxSize()) {
-                    val mid = size.height * 0.38f
-                    val half = size.height * 0.16f
-                    val steps = 96
-                    val glowX = (position + 0.5f) * slotPx
-                    for (i in 0 until steps) {
-                        val x0 = size.width * i / steps
-                        val x1 = size.width * (i + 1) / steps
-                        // half twist per slot; the twist pattern rolls with the position
-                        fun twist(x: Float) = cos(PI.toFloat() * (x / slotPx - 0.5f - position))
-                        val t0 = twist(x0); val t1 = twist(x1)
-                        val front = (t0 + t1) >= 0f
-                        val xm = (x0 + x1) / 2
-                        val near = exp(-((xm - glowX) / (slotPx * 0.55f)).let { it * it })
-                        val base = MobiusMath.blend(NAV_COLORS, xm / size.width * 0.5f + position * 0.08f)
-                        val color = Color(base).copy(alpha = (if (front) 0.32f else 0.16f) + 0.55f * near)
-                        path.reset()
-                        path.moveTo(x0, mid - half * t0); path.lineTo(x1, mid - half * t1)
-                        path.lineTo(x1, mid + half * t1); path.lineTo(x0, mid + half * t0); path.close()
-                        drawPath(path, color)
-                        drawLine(color.copy(alpha = (color.alpha + 0.2f).coerceAtMost(1f)), Offset(x0, mid - half * t0), Offset(x1, mid - half * t1), 1.dp.toPx())
-                    }
-                    drawCircle(
-                        Brush.radialGradient(listOf(JimiColors.Cyan.copy(alpha = 0.35f), Color.Transparent), Offset(glowX, mid), slotPx * 0.6f),
-                        slotPx * 0.6f, Offset(glowX, mid),
-                    )
-                }
-                Row(Modifier.fillMaxSize(), horizontalArrangement = Arrangement.SpaceEvenly) {
-                    items.forEachIndexed { index, (label, icon) ->
-                        val near = (1f - abs(position - index)).coerceIn(0f, 1f)
-                        val active = position.roundToInt() == index
-                        Column(
-                            Modifier.weight(1f).fillMaxHeight()
-                                .selectable(selected = active, role = Role.Tab, onClick = { go(index) })
-                                .semantics { contentDescription = label },
-                            horizontalAlignment = Alignment.CenterHorizontally,
-                            verticalArrangement = Arrangement.Center,
-                        ) {
-                            Icon(
-                                icon, contentDescription = null,
-                                tint = lerpColor(JimiColors.TertiaryText, JimiColors.Text, near),
-                                modifier = Modifier.size(22.dp).graphicsLayer { scaleX = 0.9f + 0.25f * near; scaleY = scaleX },
-                            )
-                            Text(
-                                label, style = MaterialTheme.typography.labelSmall,
-                                color = JimiColors.Cyan.copy(alpha = near),
-                                modifier = Modifier.padding(top = 6.dp),
-                            )
+                    .pointerInput(n) {
+                        detectTapGestures { at ->
+                            // nearest tab under the finger, front ones first
+                            val hit = (0 until n)
+                                .filter { hypot(spots[it][0] - at.x, spots[it][1] - at.y) < 34.dp.toPx() }
+                                .maxByOrNull { spots[it][2] } ?: return@detectTapGestures
+                            settle(turn.value.roundToInt() + shortWay(front, hit, n))
                         }
+                    },
+            ) {
+                val c = Offset(w / 2, cy)
+                val faces = MobiusMath.faces(pose, segments = 120)
+                val tabs = (0 until n).map { i ->
+                    val p = MobiusMath.project(MobiusMath.point(MobiusMath.tabU(i, n), 0f, pose.halfWidth), pose)
+                    spots[i][0] = c.x + p[0] * sx; spots[i][1] = c.y + p[1] * sy; spots[i][2] = p[2]
+                    i to p[2] + 0.04f
+                }
+                val glowR = 40.dp.toPx()
+                fun drawTab(i: Int) {
+                    val x = spots[i][0]; val y = spots[i][1]
+                    val near = ((spots[i][2] + 1f) / 2f).coerceIn(0f, 1f)
+                    val focus = (1f - abs(wrapDist(turn.value, i.toFloat(), n))).coerceIn(0f, 1f)
+                    if (focus > 0f) {
+                        drawCircle(
+                            Brush.radialGradient(listOf(JimiColors.Cyan.copy(alpha = 0.45f * focus), Color.Transparent), Offset(x, y), glowR),
+                            glowR, Offset(x, y),
+                        )
+                    }
+                    val s = (15 + 13 * near + 4 * focus).dp.toPx()
+                    val tint = lerp(JimiColors.TertiaryText, Color.White, focus)
+                    translate(x - s / 2, y - s / 2) {
+                        with(painters[i]) { draw(Size(s, s), alpha = 0.35f + 0.65f * near, colorFilter = ColorFilter.tint(tint)) }
                     }
                 }
+                // band pieces and tab icons painted far to near, so the loop hides tabs behind it
+                val order = tabs.sortedBy { it.second }
+                var t = 0
+                for (f in faces) {
+                    while (t < order.size && order[t].second <= f.depth) drawTab(order[t++].first)
+                    val base = MobiusMath.blend(MOBIUS_COLORS, f.along)
+                    val depthNear = ((f.depth + 0.6f) / 1.2f).coerceIn(0f, 1f)
+                    val color = shade(base, f.light, 0.35f + 0.5f * depthNear)
+                    path.reset()
+                    path.moveTo(c.x + f.xs[0] * sx, c.y + f.ys[0] * sy)
+                    for (k in 1..3) path.lineTo(c.x + f.xs[k] * sx, c.y + f.ys[k] * sy)
+                    path.close()
+                    drawPath(path, color)
+                    val rim = color.copy(alpha = (color.alpha + 0.2f).coerceAtMost(1f)).lighten(0.35f)
+                    drawLine(rim, Offset(c.x + f.xs[1] * sx, c.y + f.ys[1] * sy), Offset(c.x + f.xs[2] * sx, c.y + f.ys[2] * sy), 1.dp.toPx())
+                    drawLine(rim, Offset(c.x + f.xs[0] * sx, c.y + f.ys[0] * sy), Offset(c.x + f.xs[3] * sx, c.y + f.ys[3] * sy), 1.dp.toPx())
+                }
+                while (t < order.size) drawTab(order[t++].first)
+            }
+            // the open tab's name sits in the hole of the loop
+            Crossfade(
+                items[front].first,
+                Modifier.align(Alignment.TopCenter).padding(top = with(density) { (cy - 9.dp.toPx()).toDp() }),
+                label = "tab name",
+            ) {
+                Text(it, style = MaterialTheme.typography.labelMedium, color = JimiColors.Cyan)
             }
         }
     }
 }
 
-private val NAV_COLORS = intArrayOf(0xFF5BD8E6.toInt(), 0xFF6A8DFF.toInt(), 0xFFA35BFF.toInt(), 0xFF6A8DFF.toInt())
+/** Steps from tab [from] to tab [to] the short way round a loop of [n] (negative = backwards). */
+internal fun shortWay(from: Int, to: Int, n: Int): Int {
+    val d = ((to - from) % n + n) % n
+    return if (d > n / 2) d - n else d
+}
 
-private fun lerpColor(a: Color, b: Color, t: Float) =
+/** Distance from turn [a] to tab [b] round a loop of [n], in tabs (-n/2..n/2). */
+private fun wrapDist(a: Float, b: Float, n: Int): Float {
+    val d = (a - b) / n
+    return (d - floor(d + 0.5f)) * n
+}
+
+private fun lerp(a: Color, b: Color, t: Float) =
     Color(a.red + (b.red - a.red) * t, a.green + (b.green - a.green) * t, a.blue + (b.blue - a.blue) * t, a.alpha + (b.alpha - a.alpha) * t)

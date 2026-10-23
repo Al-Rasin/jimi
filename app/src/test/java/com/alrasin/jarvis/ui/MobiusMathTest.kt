@@ -54,4 +54,27 @@ class MobiusMathTest {
         assertTrue(dot[6] and 0xFF > 0)
         assertEquals(0, dot[0] and 0xFF)
     }
+
+    @Test fun tabAtPositionIsFrontAndMiddle() {
+        val n = 6
+        for (pos in 0 until n) {
+            val pose = MobiusMath.Pose(spin = MobiusMath.tabSpin(pos.toFloat(), n), tilt = 1.25f)
+            val at = (0 until n).map { MobiusMath.project(MobiusMath.point(MobiusMath.tabU(it, n), 0f, 0.3f), pose) }
+            assertEquals(0f, at[pos][0], 1e-4f)
+            assertTrue(at[pos][1] > 0f)
+            assertEquals(pos, at.indices.maxBy { at[it][2] })
+            // the next tab is to the right
+            assertTrue(at[(pos + 1) % n][0] > 0f)
+        }
+    }
+}
+
+class ShortWayTest {
+    @Test fun goesTheShortWayRound() {
+        assertEquals(1, shortWay(0, 1, 6))
+        assertEquals(-1, shortWay(0, 5, 6))
+        assertEquals(1, shortWay(5, 0, 6))
+        assertEquals(3, shortWay(0, 3, 6))
+        assertEquals(0, shortWay(2, 2, 6))
+    }
 }

@@ -48,17 +48,6 @@ object MobiusMath {
     fun faces(pose: Pose, segments: Int = 144, shown: Float = 1f, scale: Float = 1f): List<Face> {
         val count = (segments * shown.coerceIn(0f, 1f)).toInt()
         if (count == 0) return emptyList()
-        val cs = cos(pose.spin); val ss = sin(pose.spin)
-        val ct = cos(pose.tilt); val st = sin(pose.tilt)
-        val cw = cos(pose.sway); val sw = sin(pose.sway)
-        fun project(p: FloatArray): FloatArray {
-            // spin round z, tilt round x, sway round y, then a light perspective
-            val x1 = p[0] * cs - p[1] * ss; val y1 = p[0] * ss + p[1] * cs; val z1 = p[2]
-            val y2 = y1 * ct - z1 * st; val z2 = y1 * st + z1 * ct
-            val x3 = x1 * cw + z2 * sw; val z3 = -x1 * sw + z2 * cw
-            val k = 3.2f / (3.2f - z3)
-            return floatArrayOf(x3 * k * scale, y2 * k * scale, z3)
-        }
         val light = floatArrayOf(-0.35f, -0.55f, 0.76f)
         val ring = Array(count + 1) { i ->
             val u = TWO_PI * i / segments
@@ -67,8 +56,8 @@ object MobiusMath {
         }
         val out = ArrayList<Face>(count)
         for (i in 0 until count) {
-            val a = project(ring[i][0]); val b = project(ring[i][1])
-            val c = project(ring[i + 1][1]); val d = project(ring[i + 1][0])
+            val a = project(ring[i][0], pose, scale); val b = project(ring[i][1], pose, scale)
+            val c = project(ring[i + 1][1], pose, scale); val d = project(ring[i + 1][0], pose, scale)
             val n = unit(cross(sub(c, a), sub(b, d)))
             // the side turned away from the viewer is darker, so the twist shows
             val back = (c[0] - a[0]) * (b[1] - d[1]) - (c[1] - a[1]) * (b[0] - d[0]) < 0
@@ -81,6 +70,25 @@ object MobiusMath {
         out.sortBy { it.depth }
         return out
     }
+
+    /** Where a band point lands for [pose]: screen x, y (y down, times [scale]) and depth z (bigger = nearer). */
+    fun project(p: FloatArray, pose: Pose, scale: Float = 1f): FloatArray {
+        // spin round z, tilt round x, sway round y, then a light perspective
+        val cs = cos(pose.spin); val ss = sin(pose.spin)
+        val ct = cos(pose.tilt); val st = sin(pose.tilt)
+        val cw = cos(pose.sway); val sw = sin(pose.sway)
+        val x1 = p[0] * cs - p[1] * ss; val y1 = p[0] * ss + p[1] * cs; val z1 = p[2]
+        val y2 = y1 * ct - z1 * st; val z2 = y1 * st + z1 * ct
+        val x3 = x1 * cw + z2 * sw; val z3 = -x1 * sw + z2 * cw
+        val k = 3.2f / (3.2f - z3)
+        return floatArrayOf(x3 * k * scale, y2 * k * scale, z3)
+    }
+
+    /** Tabs sit round the middle of the band, the next one to the right; [tabU] is where tab [index] sits. */
+    fun tabU(index: Int, count: Int): Float = -TWO_PI * index / count
+
+    /** Spin that brings the tab at [position] (may be between tabs) to the front, bottom middle. */
+    fun tabSpin(position: Float, count: Int): Float = (PI / 2).toFloat() + TWO_PI * position / count
 
     /** Linear blend of colors given as ARGB ints, [t] wraps round (0..1). */
     fun blend(colors: IntArray, t: Float): Int {

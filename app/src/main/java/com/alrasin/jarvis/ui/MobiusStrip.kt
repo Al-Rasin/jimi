@@ -28,7 +28,7 @@ import androidx.compose.foundation.layout.size
 import kotlin.math.sin
 
 /** Jimi's colors round the band: cyan → blue → violet → pink and back. */
-private val MOBIUS_COLORS = intArrayOf(
+internal val MOBIUS_COLORS = intArrayOf(
     0xFF5BD8E6.toInt(), 0xFF6A8DFF.toInt(), 0xFFA35BFF.toInt(), 0xFFFF5BC8.toInt(), 0xFFA35BFF.toInt(), 0xFF6A8DFF.toInt(),
 )
 
@@ -120,11 +120,11 @@ fun MobiusStrip(
     }
 }
 
-private fun shade(argb: Int, light: Float, alpha: Float): Color {
+internal fun shade(argb: Int, light: Float, alpha: Float): Color {
     val r = ((argb shr 16) and 0xFF) / 255f * light
     val g = ((argb shr 8) and 0xFF) / 255f * light
     val b = (argb and 0xFF) / 255f * light
     return Color(r.coerceIn(0f, 1f), g.coerceIn(0f, 1f), b.coerceIn(0f, 1f), alpha)
 }
 
-private fun Color.lighten(t: Float) = Color(red + (1 - red) * t, green + (1 - green) * t, blue + (1 - blue) * t, alpha)
+internal fun Color.lighten(t: Float) = Color(red + (1 - red) * t, green + (1 - green) * t, blue + (1 - blue) * t, alpha)
