@@ -23,7 +23,7 @@ class FastWeather(private val context: Context? = null) {
                 ?.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET) != true) {
             return@withContext ToolResult.fail("No internet. I can't check the weather right now.")
         }
-        val deadline = System.nanoTime() + TimeUnit.MILLISECONDS.toNanos(1900)
+        val deadline = System.nanoTime() + TimeUnit.MILLISECONDS.toNanos(4000)
         fun fetch(url: String): Map<*, *> {
             val remaining = deadline - System.nanoTime()
             if (remaining <= 0) throw java.net.SocketTimeoutException()
