@@ -90,7 +90,8 @@ class Torch(private val context: Context) {
     }
 }
 
-val TOGGLE_TARGETS = listOf("flashlight", "wifi", "bluetooth", "data", "dnd", "airplane", "location", "hotspot", "battery_saver", "auto_rotate")
+val TOGGLE_TARGETS = listOf("flashlight", "wifi", "bluetooth", "data", "dnd", "airplane", "location", "hotspot", "battery_saver", "auto_rotate",
+    "wireless_debugging", "usb_debugging")
 
 fun systemTools(context: Context, torch: Torch): List<Tool> {
     fun settingsPage(target: String): Boolean {
@@ -104,6 +105,7 @@ fun systemTools(context: Context, torch: Torch): List<Tool> {
             "battery_saver" -> Settings.ACTION_BATTERY_SAVER_SETTINGS
             "auto_rotate", "brightness" -> Settings.ACTION_DISPLAY_SETTINGS
             "hotspot" -> Settings.ACTION_WIRELESS_SETTINGS
+            "wireless_debugging", "usb_debugging" -> Settings.ACTION_APPLICATION_DEVELOPMENT_SETTINGS
             else -> return false
         }
         return context.launch(Intent(action)) || context.launch(Intent(Settings.ACTION_SETTINGS))
@@ -135,6 +137,8 @@ fun systemTools(context: Context, torch: Torch): List<Tool> {
         "location" -> context.getSystemService(LocationManager::class.java).isLocationEnabled
         "battery_saver" -> context.getSystemService(PowerManager::class.java).isPowerSaveMode
         "auto_rotate" -> Settings.System.getInt(context.contentResolver, Settings.System.ACCELEROMETER_ROTATION) == 1
+        "wireless_debugging" -> Settings.Global.getInt(context.contentResolver, "adb_wifi_enabled", 0) == 1
+        "usb_debugging" -> Settings.Global.getInt(context.contentResolver, Settings.Global.ADB_ENABLED, 0) == 1
         else -> null
         } }.getOrNull()
     }
@@ -163,6 +167,15 @@ fun systemTools(context: Context, torch: Torch): List<Tool> {
             }
             "battery_saver" -> RootShell.run("cmd power set-mode ${if (on) 1 else 0}").ok
             "auto_rotate" -> writeSettings(Settings.System.ACCELEROMETER_ROTATION to if (on) 1 else 0)
+            // Wireless debugging needs Wi-Fi and USB debugging (developer options) on first.
+            "wireless_debugging" -> RootShell.run(
+                *(if (on) arrayOf("settings put global development_settings_enabled 1", "settings put global adb_enabled 1", "svc wifi enable") else emptyArray()),
+                "settings put global adb_wifi_enabled ${if (on) 1 else 0}",
+            ).ok
+            "usb_debugging" -> RootShell.run(
+                *(if (on) arrayOf("settings put global development_settings_enabled 1") else emptyArray()),
+                "settings put global adb_enabled ${if (on) 1 else 0}",
+            ).ok
             else -> false
         }
     }
@@ -170,6 +183,7 @@ fun systemTools(context: Context, torch: Torch): List<Tool> {
     fun nice(target: String) = when (target) {
         "dnd" -> "Do not disturb"; "data" -> "Mobile data"; "battery_saver" -> "Battery saver"
         "auto_rotate" -> "Auto rotate"; "wifi" -> "Wi-Fi"; "airplane" -> "Airplane mode"
+        "wireless_debugging" -> "Wireless debugging"; "usb_debugging" -> "USB debugging"
         else -> target.replaceFirstChar { it.uppercase() }
     }
 
@@ -296,8 +310,9 @@ object Keyguard {
 fun unlockTool(context: Context, pin: suspend () -> String?) = SimpleTool("unlock_phone", "Unlock the phone", risk = Risk.VOICE_ID) { _, _ ->
     val p = pin()
     if (!Keyguard.unlock(context, p)) return@SimpleTool ToolResult.fail("Boss, I couldn't request an unlock. Please unlock the phone yourself.")
-    delay(300)
-    if (!context.getSystemService(KeyguardManager::class.java).isKeyguardLocked) ToolResult.ok("Boss, unlocked.")
+    val keyguard = context.getSystemService(KeyguardManager::class.java)
+    repeat(20) { if (keyguard.isKeyguardLocked) delay(100) }   // PIN check can take a moment on MIUI
+    if (!keyguard.isKeyguardLocked) ToolResult.ok("Boss, unlocked.")
     else ToolResult.fail("Boss, the phone is still locked.")
 }
 

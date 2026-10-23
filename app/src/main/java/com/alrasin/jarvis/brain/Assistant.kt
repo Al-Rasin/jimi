@@ -82,6 +82,8 @@ class Assistant @Inject constructor(
     private val smokeConversation = ConversationContext()
     private var lastReply = ""
     private val history = ArrayDeque<Exchange>()
+    /** Cloud answers only: safe to send back to the cloud as context (no tool data, D-035). */
+    private val cloudHistory = ArrayDeque<Exchange>()
 
     fun stopScreenAgent() = screenAgent.stop()
 
@@ -148,6 +150,10 @@ class Assistant @Inject constructor(
             lastReply = r.text
             history.addLast(Exchange(text, r.text))
             while (history.size > 6) history.removeFirst()
+            if (r.tool == "cloud") {
+                cloudHistory.addLast(Exchange(text, r.text))
+                while (cloudHistory.size > 4) cloudHistory.removeFirst()
+            }
         }
         return r.copy(turnId = id)
     }
@@ -252,8 +258,10 @@ class Assistant @Inject constructor(
                 if (!AgentRouting.needsMultiStep(text)) {
                     JarvisLog.i("route llm fallback: rule=${rule?.tool ?: "none"}, reason=${intent.reason}")
                     // Cloud picks in ~1 s when allowed (D-045); NONE means plain talk, null means ask the local model.
-                    val picked = if (smoke == null) cloud.toolCall(text) else null
-                    if (picked != null && picked != CloudBrain.NONE) return runTool(picked, input, "cloud")
+                    val picked = if (smoke == null) cloud.toolCall(text, cloudHistory.toList()) else null
+                    val said = picked?.takeIf { it.tool == CloudBrain.NONE.tool }?.arg("say")
+                    if (said != null && !Persona.isMemoryQuestion(text)) return Reply(said, tool = "cloud", expectAnswer = said.trimEnd().endsWith('?'))
+                    if (picked != null && picked.tool != CloudBrain.NONE.tool) return runTool(picked, input, "cloud")
                     if (picked == null) models.toolCall(text, contextLine())?.let { return runTool(it, input, "llm") }
                 }
                 if (AgentRouting.needsScreen(text)) {
@@ -269,7 +277,9 @@ class Assistant @Inject constructor(
         }
         val facts = memory.all().map { it.text }
         // Local replies can contain private notes, notifications or screen text (D-035).
-        if (smoke == null) cloud.chat(query, emptyList(), facts, forced)?.let { return Reply(it, tool = "cloud", expectAnswer = it.trimEnd().endsWith('?')) }
+        if (smoke == null) cloud.chat(query, cloudHistory.toList(), facts, forced, speak)?.let {
+            return Reply(it.text, tool = "cloud", spokenAlready = it.streamed, expectAnswer = it.text.trimEnd().endsWith('?'))
+        }
         trace("chat", ToolCall("chat"))
         models.chat(query, history.toList(), facts, speak)?.let { return Reply(it.text, tool = "chat", spokenAlready = it.streamed, expectAnswer = it.text.trimEnd().endsWith('?')) }
         trace("fallback", ok = false)
@@ -279,6 +289,7 @@ class Assistant @Inject constructor(
     private fun clearConversation() {
         pending = null
         draft.clear()
+        cloudHistory.clear()
         contactChoice.clear()
         conversation.clear()
     }

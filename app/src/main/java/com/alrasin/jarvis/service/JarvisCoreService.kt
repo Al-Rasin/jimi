@@ -17,6 +17,7 @@ import androidx.lifecycle.lifecycleScope
 import com.alrasin.jarvis.actions.RootShell
 import com.alrasin.jarvis.agent.ScreenAgentSession
 import com.alrasin.jarvis.brain.Assistant
+import com.alrasin.jarvis.brain.CloudBrain
 import com.alrasin.jarvis.brain.ModelBrain
 import com.alrasin.jarvis.brain.Persona
 import com.alrasin.jarvis.core.JarvisLog
@@ -92,6 +93,7 @@ class JarvisCoreService : LifecycleService() {
     @Inject lateinit var dao: WakeEventDao
     @Inject lateinit var assistant: Assistant
     @Inject lateinit var models: ModelBrain
+    @Inject lateinit var cloud: CloudBrain
     @Inject lateinit var speaker: SpeakerVerifier
     @Inject lateinit var screenAgent: ScreenAgentSession
 
@@ -371,6 +373,7 @@ class JarvisCoreService : LifecycleService() {
     private fun readyVoice(): TextToSpeech? = tts?.takeIf { it.isCompleted }?.getCompleted()
 
     private fun acknowledgeWake(tone: Chimes) {
+        lifecycleScope.launch(Dispatchers.IO) { cloud.warm() }   // TLS handshake while the user talks
         val audio = cachedAudio[SpeechText.normalize("Uh-huh.")]
         if (!spokenWake || audio == null) { tone.wake(); return }
         val epoch = speechEpoch

@@ -71,7 +71,7 @@ class Settings @Inject constructor(@ApplicationContext private val context: Cont
     /** Optional cloud (D-005): off by default; also needs an API key in Secrets. */
     val cloudEnabled: Flow<Boolean> = context.dataStore.data.map { it[cloudKey] ?: false }
     /** All chat goes to the cloud when online (else only "think hard …"). */
-    val cloudForChat: Flow<Boolean> = context.dataStore.data.map { it[cloudChatKey] ?: false }
+    val cloudForChat: Flow<Boolean> = context.dataStore.data.map { it[cloudChatKey] ?: true }
     /** Privacy (PLAN 14.3): remembered facts are sent only if this is on. Notes, notifications, screen text never are. */
     val cloudSendFacts: Flow<Boolean> = context.dataStore.data.map { it[cloudFactsKey] ?: false }
 

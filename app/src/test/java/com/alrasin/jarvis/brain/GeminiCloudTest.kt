@@ -73,4 +73,21 @@ class GeminiCloudTest {
         assertTrue(p.contains("- set_alarm: test set_alarm Args: time = alarm time; label (optional) = label"))
         assertTrue(p.contains("one of on|off"))
     }
+
+    @Test fun noneCanCarryASpokenAnswer() {
+        val call = CloudBrain.parseToolCall("{\"tool\":\"none\",\"say\":\"Paris is the capital of France, Boss.\"}", tools)
+        assertEquals(ToolCall("none", mapOf("say" to "Paris is the capital of France, Boss.")), call)
+        assertEquals(CloudBrain.NONE, CloudBrain.parseToolCall("{\"tool\":\"none\",\"say\":\"  \"}", tools))
+    }
+
+    @Test fun toolPromptAsksForSayOnChat() {
+        assertTrue(CloudBrain.toolPrompt(tools).contains("\"say\""))
+    }
+
+    @Test fun sseLinesGiveTextPieces() {
+        assertEquals("Hello ", GeminiProvider.sseText("data: {\"candidates\":[{\"content\":{\"parts\":[{\"text\":\"Hello \"}]}}]}"))
+        assertNull(GeminiProvider.sseText(""))
+        assertNull(GeminiProvider.sseText(": keep-alive"))
+        assertNull(GeminiProvider.sseText("data: {\"usageMetadata\":{}}"))
+    }
 }

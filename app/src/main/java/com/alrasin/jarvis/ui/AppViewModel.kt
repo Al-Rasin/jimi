@@ -86,7 +86,7 @@ class AppViewModel @Inject constructor(
     val lastVoiceScore = JarvisCoreService.lastVoiceScore
     val voiceSamples = MutableStateFlow(0)
     val cloudEnabled = settings.cloudEnabled.state(false)
-    val cloudForChat = settings.cloudForChat.state(false)
+    val cloudForChat = settings.cloudForChat.state(true)
     val cloudSendFacts = settings.cloudSendFacts.state(false)
     val cloudKeySet = MutableStateFlow(false)
     val homeCity = settings.homeCity.state("Dhaka")

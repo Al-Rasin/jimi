@@ -15,7 +15,10 @@ object RuleMatcher {
     private val ISO = DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm")
     private val HM = DateTimeFormatter.ofPattern("HH:mm")
 
+    // Debugging first: "wireless debugging" must not become Wi-Fi.
     private val TOGGLE_TARGETS = linkedMapOf(
+        "wireless_debugging" to listOf("wireless debugging", "wireless debug", "wifi debugging", "wi fi debugging", "wireless adb", "adb wifi", "adb over wifi", "wifi adb"),
+        "usb_debugging" to listOf("usb debugging", "usb debug", "adb debugging", "developer debugging"),
         "flashlight" to listOf("flashlight", "flash light", "torch", "flash"),
         "wifi" to listOf("wifi", "wi fi", "wireless"),
         "bluetooth" to listOf("bluetooth", "blue tooth"),

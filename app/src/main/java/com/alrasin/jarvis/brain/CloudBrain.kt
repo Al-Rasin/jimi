@@ -15,6 +15,7 @@ import com.anthropic.models.messages.OutputConfig
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.withContext
+import okhttp3.ConnectionPool
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
@@ -30,6 +31,10 @@ interface CloudProvider {
 
     /** Short, fast answers (tool picking, spoken chat). Default: same as [chat]. */
     suspend fun quick(system: String, history: List<Exchange>, text: String, maxTokens: Int): String = chat(system, history, text)
+
+    /** Like [quick], but hands out text pieces while the answer is written. Default: one piece at the end. */
+    suspend fun stream(system: String, history: List<Exchange>, text: String, maxTokens: Int, onText: (String) -> Unit): String =
+        quick(system, history, text, maxTokens).also(onText)
 }
 
 /** Claude through the official Anthropic Java SDK. The API key comes from [Secrets] (Keystore), never logged. */
@@ -63,7 +68,7 @@ class GeminiProvider(private val apiKey: String, private val model: String = MOD
 
     override suspend fun quick(system: String, history: List<Exchange>, text: String, maxTokens: Int): String = withContext(Dispatchers.IO) {
         val req = Request.Builder()
-            .url("https://generativelanguage.googleapis.com/v1beta/models/$model:generateContent")
+            .url("$BASE$model:generateContent")
             .header("x-goog-api-key", apiKey)
             .post(request(system, history, text, maxTokens).toRequestBody("application/json".toMediaType()))
             .build()
@@ -74,10 +79,46 @@ class GeminiProvider(private val apiKey: String, private val model: String = MOD
         }
     }
 
+    /** Server-sent events: each `data:` line is a partial answer, so speech can start before the answer ends. */
+    override suspend fun stream(system: String, history: List<Exchange>, text: String, maxTokens: Int, onText: (String) -> Unit): String =
+        withContext(Dispatchers.IO) {
+            val req = Request.Builder()
+                .url("$BASE$model:streamGenerateContent?alt=sse")
+                .header("x-goog-api-key", apiKey)
+                .post(request(system, history, text, maxTokens).toRequestBody("application/json".toMediaType()))
+                .build()
+            client.newCall(req).execute().use { r ->
+                check(r.isSuccessful) { "Gemini HTTP ${r.code}" }
+                val source = r.body?.source() ?: error("Gemini: empty stream")
+                val all = StringBuilder()
+                while (true) {
+                    val line = source.readUtf8Line() ?: break
+                    sseText(line)?.let { all.append(it); onText(it) }
+                }
+                all.toString().trim()
+            }
+        }
+
+    /** Opens the TLS connection early (on wake) so the first real request skips the handshake. Errors ignored. */
+    fun warm() {
+        runCatching {
+            client.newCall(Request.Builder().url("$BASE$model").header("x-goog-api-key", apiKey).build())
+                .execute().close()
+        }
+    }
+
     companion object {
         const val MODEL = "gemini-3.5-flash-lite"
+        private const val BASE = "https://generativelanguage.googleapis.com/v1beta/models/"
         private val client by lazy {
-            OkHttpClient.Builder().connectTimeout(4, TimeUnit.SECONDS).callTimeout(10, TimeUnit.SECONDS).build()
+            OkHttpClient.Builder().connectTimeout(4, TimeUnit.SECONDS).callTimeout(10, TimeUnit.SECONDS)
+                .connectionPool(ConnectionPool(1, 5, TimeUnit.MINUTES)).build()
+        }
+
+        /** Text of one SSE line, or null for blank / non-data / no-text lines. */
+        fun sseText(line: String): String? {
+            if (!line.startsWith("data:")) return null
+            return runCatching { parseRaw(line.removePrefix("data:").trim()) }.getOrNull()?.ifEmpty { null }
         }
 
         fun request(system: String, history: List<Exchange>, text: String, maxTokens: Int): String {
@@ -97,12 +138,14 @@ class GeminiProvider(private val apiKey: String, private val model: String = MOD
         }
 
         /** Joins the text parts of the first candidate; thought parts and signatures are skipped. */
-        fun parse(body: String): String {
+        fun parse(body: String): String = parseRaw(body).trim()
+
+        private fun parseRaw(body: String): String {
             val root = Json.parse(body) as? Map<*, *> ?: error("Gemini: bad JSON")
             val first = (root["candidates"] as? List<*>)?.firstOrNull() as? Map<*, *> ?: error("Gemini: no answer")
             val parts = ((first["content"] as? Map<*, *>)?.get("parts") as? List<*>).orEmpty()
             return parts.mapNotNull { p -> (p as? Map<*, *>)?.takeIf { it["thought"] != true }?.get("text") as? String }
-                .joinToString("").trim()
+                .joinToString("")
         }
 
         private fun turn(role: String, text: String) = mapOf("role" to role, "parts" to listOf(mapOf("text" to text)))
@@ -128,29 +171,54 @@ class CloudBrain @Inject constructor(
     /** True if [text] asks for the cloud by name, e.g. "think hard about …". */
     fun asked(text: String) = ASK.containsMatchIn(text)
 
-    suspend fun chat(text: String, history: List<Exchange>, facts: List<String>, forced: Boolean): String? {
+    /**
+     * Cloud chat. [onSentence] gets whole sentences while the answer streams in, so speech starts early.
+     * [history] must hold plain chat turns only (no tool data, D-035).
+     */
+    suspend fun chat(
+        text: String, history: List<Exchange>, facts: List<String>, forced: Boolean, onSentence: (String) -> Unit = {},
+    ): ModelBrain.ChatOut? {
         if (!enabled() || !(forced || settings.cloudForChat.first())) return null
         val p = provider() ?: return null
         val sendFacts = settings.cloudSendFacts.first()
         val query = ASK.replace(text, "").trim().ifEmpty { text }
         val system = Persona.chatPrompt(query) + if (Persona.isMemoryQuestion(query) && sendFacts && facts.isNotEmpty()) "\nFacts about the user: " + facts.take(8).joinToString("; ") else ""
         val t0 = System.currentTimeMillis()
-        return runCatching { p.quick(system, history, query, CHAT_TOKENS) }
+        var buf = ""
+        var spoke = false
+        var first = true
+        val out = runCatching {
+            p.stream(system, history.takeLast(HISTORY), query, CHAT_TOKENS) { piece ->
+                if (first) { first = false; JarvisLog.i("latency: cloud first text ${System.currentTimeMillis() - t0} ms") }
+                val (done, rest) = ChatFormat.speechChunks(buf + piece)
+                done.forEach { s -> ChatFormat.clean(s).takeIf { it.isNotBlank() }?.let { onSentence(it); spoke = true } }
+                buf = rest
+            }
+        }
             .onSuccess { JarvisLog.i("cloud (${p.name}) answered in ${System.currentTimeMillis() - t0} ms") }
             .onFailure { JarvisLog.e("cloud failed, using local", it) }
-            .getOrNull()?.let(ChatFormat::clean)?.takeIf { it.isNotBlank() }
+            .getOrNull()?.let(ChatFormat::clean)?.takeIf { it.isNotBlank() } ?: return null
+        if (spoke) ChatFormat.clean(buf).takeIf { it.isNotBlank() }?.let(onSentence)
+        return ModelBrain.ChatOut(out, spoke)
+    }
+
+    /** Opens the cloud connection early (wake word heard) so the first answer is faster. */
+    suspend fun warm() {
+        if (!enabled() || !settings.cloudForChat.first()) return
+        (provider() as? GeminiProvider)?.let { withContext(Dispatchers.IO) { it.warm() } }
     }
 
     /**
      * Fast tool picking instead of the slow local tool model (D-045). Only the command text and the tool list are
-     * sent. Returns a valid call, [NONE] for plain talk, or null on error / when off (then local models decide).
+     * sent, plus recent plain chat turns. Returns a valid call, [NONE] for plain talk (with a ready spoken answer in
+     * arg "say" when the model gave one, saving a second round trip), or null on error / when off.
      * The call still goes through the normal security gate.
      */
-    suspend fun toolCall(text: String): ToolCall? {
+    suspend fun toolCall(text: String, history: List<Exchange> = emptyList()): ToolCall? {
         if (!enabled() || !settings.cloudForChat.first()) return null
         val p = provider() ?: return null
         val t0 = System.currentTimeMillis()
-        val out = runCatching { p.quick(toolPrompt(registry.all), emptyList(), text, TOOL_TOKENS) }
+        val out = runCatching { p.quick(toolPrompt(registry.all), history.takeLast(HISTORY), text, TOOL_TOKENS) }
             .onFailure { JarvisLog.e("cloud tool pick failed, using local", it) }
             .getOrNull() ?: return null
         val call = parseToolCall(out, registry.all)
@@ -181,7 +249,8 @@ class CloudBrain @Inject constructor(
     companion object {
         val NONE = ToolCall("none")
         private const val CHAT_TOKENS = 200
-        private const val TOOL_TOKENS = 120
+        private const val TOOL_TOKENS = 200
+        private const val HISTORY = 4
 
         /** Google keys start with "AIza"; anything else is treated as an Anthropic key. */
         fun providerFor(key: String): CloudProvider = if (key.startsWith("AIza")) GeminiProvider(key) else ClaudeProvider(key)
@@ -189,7 +258,9 @@ class CloudBrain @Inject constructor(
         fun toolPrompt(tools: List<Tool>): String = buildString {
             append("You turn one voice command for an Android phone into a tool call. Reply with JSON only, no other text: ")
             append("{\"tool\":\"<name>\",\"args\":{\"<arg>\":\"<value>\"}}. All values are strings. ")
-            append("If the command is a question, chat, or no tool fits, reply {\"tool\":\"none\"}.\nTools:\n")
+            append("If the command is a question, chat, or no tool fits, reply {\"tool\":\"none\",\"say\":\"<answer>\"} where ")
+            append("<answer> is what ${Persona.NAME} says aloud: 1-3 short spoken sentences, no markdown, no lists. ")
+            append("If you need live data you don't have (news, prices, scores), reply {\"tool\":\"none\"} with no say.\nTools:\n")
             tools.forEach { t ->
                 append("- ").append(t.name).append(": ").append(t.description)
                 if (t.args.isNotEmpty()) append(" Args: ").append(
@@ -206,7 +277,10 @@ class CloudBrain @Inject constructor(
         fun parseToolCall(out: String, tools: List<Tool>): ToolCall? {
             val obj = Json.firstObject(out.replace("```json", "").replace("```", "")) ?: return null
             val call = ToolCall.fromJson(Json.write(obj)) ?: return null
-            if (call.tool == NONE.tool) return NONE
+            if (call.tool == NONE.tool) {
+                val say = ((obj as? Map<*, *>)?.get("say") as? String)?.let(ChatFormat::clean)?.takeIf { it.isNotBlank() }
+                return if (say == null) NONE else ToolCall(NONE.tool, mapOf("say" to say))
+            }
             val tool = tools.firstOrNull { it.name == call.tool } ?: return null
             val ok = tool.args.filter { it.required }.all { call.arg(it.name) != null } &&
                 tool.args.all { a -> a.choices == null || call.arg(a.name) == null || call.arg(a.name) in a.choices }
