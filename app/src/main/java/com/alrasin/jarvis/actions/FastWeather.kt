@@ -17,7 +17,11 @@ class FastWeather(private val context: Context? = null) {
     private val http = OkHttpClient.Builder().retryOnConnectionFailure(false).build()
     private val places = java.util.concurrent.ConcurrentHashMap<String, Map<*, *>>()
 
-    suspend fun get(place: String, tomorrow: Boolean): ToolResult = withContext(Dispatchers.IO) {
+    /** Weather at a known position (current location, D-046). */
+    suspend fun at(lat: Double, lon: Double, name: String, tomorrow: Boolean): ToolResult =
+        get(name, tomorrow, mapOf("latitude" to lat, "longitude" to lon, "name" to name))
+
+    suspend fun get(place: String, tomorrow: Boolean, known: Map<*, *>? = null): ToolResult = withContext(Dispatchers.IO) {
         val cm = context?.getSystemService(ConnectivityManager::class.java)
         if (cm != null && cm.getNetworkCapabilities(cm.activeNetwork)
                 ?.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET) != true) {
@@ -36,7 +40,7 @@ class FastWeather(private val context: Context? = null) {
         }
         try {
             val key = place.trim().lowercase(java.util.Locale.ROOT)
-            val geo = places[key] ?: run {
+            val geo = known ?: places[key] ?: run {
                 val results = fetch("https://geocoding-api.open-meteo.com/v1/search?count=1&name=${Web.enc(place)}")
                 val found = (results["results"] as? List<*>)?.firstOrNull() as? Map<*, *>
                     ?: return@withContext ToolResult.fail("I couldn't find $place. Set your weather city in Settings.")

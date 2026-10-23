@@ -31,7 +31,12 @@ class Web {
     }
 }
 
-fun webTools(web: Web, weather: FastWeather = FastWeather(), homeCity: suspend () -> String): List<Tool> {
+fun webTools(
+    web: Web,
+    weather: FastWeather = FastWeather(),
+    here: suspend () -> CurrentLocation.Fix? = { null },
+    homeCity: suspend () -> String,
+): List<Tool> {
     val offline = ToolResult.fail("I can't reach the internet right now.")
 
     fun normalizeUrl(raw: String): String? {
@@ -72,8 +77,12 @@ fun webTools(web: Web, weather: FastWeather = FastWeather(), homeCity: suspend (
     }
 
     return listOf(
-        SimpleTool("weather", "Weather now or tomorrow", listOf(arg("place", "city", false), arg("day", "today or tomorrow", false, listOf("today", "tomorrow")))) { c, _ ->
-            weather.get(c.arg("place") ?: homeCity(), c.arg("day") == "tomorrow")
+        SimpleTool("weather", "Weather now or tomorrow; no place = where the user is now", listOf(arg("place", "city", false), arg("day", "today or tomorrow", false, listOf("today", "tomorrow")))) { c, _ ->
+            val tomorrow = c.arg("day") == "tomorrow"
+            val place = c.arg("place")
+            val fix = if (place == null) here() else null
+            if (fix != null) weather.at(fix.lat, fix.lon, fix.name ?: "your area", tomorrow)
+            else weather.get(place ?: homeCity(), tomorrow)
         },
         SimpleTool("news", "Top news headlines", listOf(arg("topic", "topic", false))) { c, _ ->
             runCatching {
