@@ -27,26 +27,26 @@ import androidx.compose.ui.unit.sp
 import com.alrasin.jarvis.R
 
 /**
- * One hue only (D-067): black + electric blue, like the human-made reference designs. Blue is for "alive / chosen"
- * things only (orb, glow, selected item, send button); everything else is greys.
+ * Warm graphite + amber (D-069): soft dark grey (not pure black), warm off-white text, one amber accent.
+ * Amber is for "alive / chosen" things only (orb, glow, selected item, mic button); everything else is warm greys.
  */
 object JimiColors {
-    val Background = Color(0xFF030407)
-    val Surface1 = Color(0xFF0E1014)
-    val Surface2 = Color(0xFF15181E)
-    val Surface3 = Color(0xFF1D2129)
-    val Outline = Color(0xFF23272F)
-    val OutlineStrong = Color(0xFF2E333D)
-    val Accent = Color(0xFF3A7BFF)
-    val OnAccent = Color(0xFFFFFFFF)
-    val AccentDeep = Color(0xFF1E4FD8)
-    val AccentLight = Color(0xFF8CB2FF)
-    val Text = Color(0xFFF2F4F7)
-    val SecondaryText = Color(0xFF9097A3)
-    val TertiaryText = Color(0xFF626976)
-    val Error = Color(0xFFFF6B7A)
-    val Success = Color(0xFF4ADE9B)
-    val Warning = Color(0xFFF5B84A)
+    val Background = Color(0xFF121212)
+    val Surface1 = Color(0xFF1C1C1E)
+    val Surface2 = Color(0xFF242426)
+    val Surface3 = Color(0xFF2E2D2B)
+    val Outline = Color(0xFF2C2B29)
+    val OutlineStrong = Color(0xFF3B3936)
+    val Accent = Color(0xFFF2A541)
+    val OnAccent = Color(0xFF1E1408)
+    val AccentDeep = Color(0xFFC77A1C)
+    val AccentLight = Color(0xFFFFD08A)
+    val Text = Color(0xFFF2EFEA)
+    val SecondaryText = Color(0xFF8E8A85)
+    val TertiaryText = Color(0xFF64605B)
+    val Error = Color(0xFFFF7A6B)
+    val Success = Color(0xFF7FCF95)
+    val Warning = Color(0xFFE8C468)
 }
 
 val JimiDisplay = FontFamily(

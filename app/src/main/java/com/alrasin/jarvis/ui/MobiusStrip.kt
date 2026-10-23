@@ -27,9 +27,9 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.foundation.layout.size
 import kotlin.math.sin
 
-/** Jimi's colors round the band: one blue, light → deep and back (D-067, no rainbow). */
+/** Jimi's colors round the band: one amber, light → deep and back (D-069, no rainbow). */
 internal val MOBIUS_COLORS = intArrayOf(
-    0xFF9CC0FF.toInt(), 0xFF3A7BFF.toInt(), 0xFF1E4FD8.toInt(), 0xFF2A5FF0.toInt(), 0xFF1E4FD8.toInt(), 0xFF3A7BFF.toInt(),
+    0xFFFFD08A.toInt(), 0xFFF2A541.toInt(), 0xFFC77A1C.toInt(), 0xFFE0902E.toInt(), 0xFFC77A1C.toInt(), 0xFFF2A541.toInt(),
 )
 
 /**
@@ -88,7 +88,7 @@ fun MobiusStrip(
         val c = center
         val pulse = 0.6f + 0.4f * sin(clock * 7f)
         drawCircle(
-            Brush.radialGradient(listOf(Color(0xFF6A8DFF).copy(alpha = glow * (if (talk > 0f) pulse else 1f)), Color.Transparent), c, dim / 2),
+            Brush.radialGradient(listOf(JimiColors.Accent.copy(alpha = glow * (if (talk > 0f) pulse else 1f)), Color.Transparent), c, dim / 2),
             dim / 2, c,
         )
         val s = shown.value

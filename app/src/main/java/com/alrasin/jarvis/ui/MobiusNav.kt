@@ -137,7 +137,7 @@ fun MobiusNav(items: List<Pair<String, ImageVector>>, pager: PagerState, modifie
             val sx = w * 0.35f / 1.32f
             val sy = (h - with(density) { 52.dp.toPx() }) / 1.2f
             val cy = h / 2 - with(density) { 6.dp.toPx() }
-            val pose by remember { derivedStateOf { MobiusMath.Pose(spin = MobiusMath.tabSpin(turn.value, n), tilt = 1.2f, halfWidth = 0.2f) } }
+            val pose by remember { derivedStateOf { MobiusMath.Pose(spin = MobiusMath.tabSpin(turn.value, n), tilt = 1.2f, halfWidth = 0.13f) } }
             // one tab of drag = the length of loop between two tabs at the front
             val slotPx = sx * 2 * PI.toFloat() / n
             val spots = remember(n) { Array(n) { FloatArray(3) } }
@@ -186,21 +186,22 @@ fun MobiusNav(items: List<Pair<String, ImageVector>>, pager: PagerState, modifie
                     spots[i][0] = c.x + p[0] * sx; spots[i][1] = c.y + p[1] * sy; spots[i][2] = p[2]
                     i to p[2] + 0.04f
                 }
-                val glowR = 40.dp.toPx()
+                val glowR = 30.dp.toPx()
                 fun drawTab(i: Int) {
                     val x = spots[i][0]; val y = spots[i][1]
                     val near = ((spots[i][2] + 1f) / 2f).coerceIn(0f, 1f)
                     val focus = (1f - abs(wrapDist(turn.value, i.toFloat(), n))).coerceIn(0f, 1f)
                     if (focus > 0f) {
                         drawCircle(
-                            Brush.radialGradient(listOf(JimiColors.Accent.copy(alpha = 0.45f * focus), Color.Transparent), Offset(x, y), glowR),
+                            Brush.radialGradient(listOf(JimiColors.Accent.copy(alpha = 0.22f * focus), Color.Transparent), Offset(x, y), glowR),
                             glowR, Offset(x, y),
                         )
                     }
-                    val s = (15 + 13 * near + 4 * focus).dp.toPx()
-                    val tint = lerp(JimiColors.TertiaryText, Color.White, focus)
+                    // near-even sizes so the set reads as one row of icons, not random blobs
+                    val s = (18 + 5 * near + 3 * focus).dp.toPx()
+                    val tint = lerp(JimiColors.SecondaryText, JimiColors.Accent, focus)
                     translate(x - s / 2, y - s / 2) {
-                        with(painters[i]) { draw(Size(s, s), alpha = 0.35f + 0.65f * near, colorFilter = ColorFilter.tint(tint)) }
+                        with(painters[i]) { draw(Size(s, s), alpha = 0.3f + 0.7f * near, colorFilter = ColorFilter.tint(tint)) }
                     }
                 }
                 // band pieces and tab icons painted far to near, so the loop hides tabs behind it
@@ -210,13 +211,13 @@ fun MobiusNav(items: List<Pair<String, ImageVector>>, pager: PagerState, modifie
                     while (t < order.size && order[t].second <= f.depth) drawTab(order[t++].first)
                     val base = MobiusMath.blend(MOBIUS_COLORS, f.along)
                     val depthNear = ((f.depth + 0.6f) / 1.2f).coerceIn(0f, 1f)
-                    val color = shade(base, f.light, 0.35f + 0.5f * depthNear)
+                    val color = shade(base, f.light, 0.16f + 0.34f * depthNear)
                     path.reset()
                     path.moveTo(c.x + f.xs[0] * sx, c.y + f.ys[0] * sy)
                     for (k in 1..3) path.lineTo(c.x + f.xs[k] * sx, c.y + f.ys[k] * sy)
                     path.close()
                     drawPath(path, color)
-                    val rim = color.copy(alpha = (color.alpha + 0.2f).coerceAtMost(1f)).lighten(0.35f)
+                    val rim = color.copy(alpha = (color.alpha + 0.25f).coerceAtMost(1f)).lighten(0.3f)
                     drawLine(rim, Offset(c.x + f.xs[1] * sx, c.y + f.ys[1] * sy), Offset(c.x + f.xs[2] * sx, c.y + f.ys[2] * sy), 1.dp.toPx())
                     drawLine(rim, Offset(c.x + f.xs[0] * sx, c.y + f.ys[0] * sy), Offset(c.x + f.xs[3] * sx, c.y + f.ys[3] * sy), 1.dp.toPx())
                 }

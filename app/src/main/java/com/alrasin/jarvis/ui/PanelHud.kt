@@ -51,8 +51,8 @@ import androidx.compose.ui.unit.sp
 
 /** Futuristic but quiet look for the assistant panel: dark glass, hairline light edges, one HUD ring. */
 object Hud {
-    val SheetTop = Color(0xFF111726)
-    val SheetBottom = Color(0xFF07090F)
+    val SheetTop = JimiColors.Surface2
+    val SheetBottom = JimiColors.Background
     val Glass = Color.White.copy(alpha = 0.06f)
     val Hairline = Color.White.copy(alpha = 0.10f)
     val sheetBrush = Brush.verticalGradient(listOf(SheetTop, SheetBottom))
@@ -176,8 +176,8 @@ fun HudInput(text: String, onText: (String) -> Unit, onGo: () -> Unit) {
             Modifier.size(44.dp).clip(CircleShape).background(Hud.accentBrush).clickable(onClick = onGo),
             contentAlignment = Alignment.Center,
         ) {
-            if (text.isBlank()) MicGlyph(Color(0xFF07090F))
-            else Icon(Icons.AutoMirrored.Filled.Send, contentDescription = "Send", tint = Color(0xFF07090F), modifier = Modifier.size(20.dp))
+            if (text.isBlank()) MicGlyph(JimiColors.OnAccent)
+            else Icon(Icons.AutoMirrored.Filled.Send, contentDescription = "Send", tint = JimiColors.OnAccent, modifier = Modifier.size(20.dp))
         }
     }
 }

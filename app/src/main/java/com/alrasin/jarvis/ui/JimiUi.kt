@@ -112,7 +112,7 @@ fun ToggleRow(title: String, value: Boolean, subtitle: String? = null, set: (Boo
         Switch(
             checked = checked, onCheckedChange = { checked = it; set(it) },
             colors = SwitchDefaults.colors(
-                checkedThumbColor = JimiColors.OnAccent, checkedTrackColor = JimiColors.Accent, checkedBorderColor = JimiColors.Accent,
+                checkedThumbColor = JimiColors.Text, checkedTrackColor = JimiColors.Accent, checkedBorderColor = JimiColors.Accent,
                 uncheckedThumbColor = JimiColors.TertiaryText, uncheckedTrackColor = JimiColors.Surface3, uncheckedBorderColor = JimiColors.Surface3,
             ),
         )
@@ -182,16 +182,19 @@ fun NavRow(title: String, value: String? = null, onClick: () -> Unit) {
 fun SubPage(title: String, onBack: () -> Unit, content: @Composable ColumnScope.() -> Unit) {
     BackHandler(onBack = onBack)
     Column(
-        Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(start = 12.dp, end = 20.dp, top = 4.dp, bottom = 24.dp),
+        Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(start = 20.dp, end = 20.dp, top = 4.dp, bottom = 24.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp),
     ) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Box(Modifier.size(44.dp).clip(CircleShape).clickable(onClick = onBack), contentAlignment = Alignment.Center) {
-                Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back", tint = JimiColors.Text)
+        Column {
+            Box(
+                Modifier.size(40.dp).clip(CircleShape).background(JimiColors.Surface2).clickable(onClick = onBack),
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back", tint = JimiColors.Text, modifier = Modifier.size(20.dp))
             }
-            GradientTitle(title, 24, Modifier.padding(start = 4.dp))
+            GradientTitle(title, 28, Modifier.padding(top = 14.dp))
         }
-        Column(Modifier.padding(start = 8.dp), verticalArrangement = Arrangement.spacedBy(16.dp), content = content)
+        content()
     }
 }
 

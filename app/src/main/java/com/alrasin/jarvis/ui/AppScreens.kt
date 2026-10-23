@@ -6,6 +6,7 @@ import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.widthIn
@@ -81,8 +82,8 @@ import java.util.Date
 import java.util.Locale
 
 private val TABS = listOf(
-    "Chat" to Icons.Filled.Face, "History" to Icons.AutoMirrored.Filled.List, "Alerts" to Icons.Filled.Notifications,
-    "Notes" to Icons.Filled.Edit, "Settings" to Icons.Filled.Settings, "Wake" to Icons.Filled.Star,
+    "Chat" to JimiIcons.Chat, "History" to JimiIcons.History, "Alerts" to JimiIcons.Alerts,
+    "Notes" to JimiIcons.Notes, "Settings" to JimiIcons.Settings, "Wake" to JimiIcons.Wake,
 )
 private val SUGGESTIONS = listOf("What's the weather?", "Set a timer for 5 minutes", "Battery level", "Good night")
 
@@ -174,7 +175,7 @@ private fun ChatTab(vm: AppViewModel) {
                     Modifier.matchParentSize().drawBehind {
                         drawRect(
                             Brush.radialGradient(
-                                listOf(JimiColors.AccentDeep.copy(alpha = 0.30f), Color.Transparent),
+                                listOf(JimiColors.AccentDeep.copy(alpha = 0.20f), Color.Transparent),
                                 center = Offset(size.width / 2f, size.height),
                                 radius = size.width * 0.85f,
                             ),
@@ -197,16 +198,24 @@ private fun ChatTab(vm: AppViewModel) {
                 }
             }
         } else {
-            LazyColumn(
-                Modifier.weight(1f), reverseLayout = true,
-                verticalArrangement = Arrangement.spacedBy(10.dp), contentPadding = PaddingValues(vertical = 12.dp),
-            ) {
-                items(turns.take(60), key = { it.id }) { t ->
-                    Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                        Bubble(t.heard, mine = true)
-                        Bubble(t.reply, mine = false)
+            Box(Modifier.weight(1f)) {
+                LazyColumn(
+                    Modifier.fillMaxSize(), reverseLayout = true,
+                    verticalArrangement = Arrangement.spacedBy(28.dp), contentPadding = PaddingValues(top = 24.dp, bottom = 12.dp),
+                ) {
+                    val newest = turns.firstOrNull()?.id
+                    items(turns.take(60), key = { it.id }) { t ->
+                        Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+                            Bubble(t.heard, mine = true)
+                            Bubble(t.reply, mine = false, mark = t.id == newest)
+                        }
                     }
                 }
+                // old messages fade out under the header instead of being cut hard
+                Box(
+                    Modifier.fillMaxWidth().height(28.dp)
+                        .background(Brush.verticalGradient(listOf(JimiColors.Background, Color.Transparent))),
+                )
             }
         }
         InputPill(text, { text = it }, Modifier.padding(top = 4.dp, bottom = 8.dp)) {
@@ -215,12 +224,18 @@ private fun ChatTab(vm: AppViewModel) {
     }
 }
 
-/** Your words: small grey pill on the right. Jimi's answer: plain text, no bubble (D-067). */
+/**
+ * Your words: small grey pill on the right. Jimi's answer: plain text; the newest one gets a tiny still Möbius
+ * ([mark]) so it is clear where the talk ends, without an icon on every line (D-069).
+ */
 @Composable
-fun Bubble(text: String, mine: Boolean) {
+fun Bubble(text: String, mine: Boolean, mark: Boolean = false) {
     if (text.isBlank()) return
     if (!mine) {
-        Text(text, Modifier.fillMaxWidth().padding(end = 24.dp, top = 2.dp, bottom = 6.dp), style = MaterialTheme.typography.bodyLarge, color = JimiColors.Text)
+        Column(Modifier.fillMaxWidth().padding(end = 12.dp)) {
+            if (mark) MobiusStrip(OrbMood.IDLE, size = 24.dp, modifier = Modifier.padding(bottom = 6.dp), intro = false, still = true)
+            Text(text, style = MaterialTheme.typography.bodyLarge, color = JimiColors.Text)
+        }
         return
     }
     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
