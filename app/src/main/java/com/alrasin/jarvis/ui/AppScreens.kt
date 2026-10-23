@@ -67,6 +67,8 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.compose.ui.text.input.VisualTransformation
+import com.alrasin.jarvis.core.Secrets
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -381,10 +383,7 @@ private fun SettingsTab(vm: AppViewModel, onSetup: () -> Unit, onDeviceCheck: ()
     val cloudOn by vm.cloudEnabled.collectAsStateWithLifecycle()
     val cloudChat by vm.cloudForChat.collectAsStateWithLifecycle()
     val cloudFacts by vm.cloudSendFacts.collectAsStateWithLifecycle()
-    val cloudKeySet by vm.cloudKeySet.collectAsStateWithLifecycle()
-    var cloudKey by remember { mutableStateOf("") }
-    val kimiKeySet by vm.kimiKeySet.collectAsStateWithLifecycle()
-    var kimiKey by remember { mutableStateOf("") }
+    val savedKeys by vm.savedKeys.collectAsStateWithLifecycle()
     val models by vm.modelStatus.collectAsStateWithLifecycle()
     val chatModel by vm.chatModel.collectAsStateWithLifecycle()
     LaunchedEffect(chatModel) { vm.refreshModels() }
@@ -447,31 +446,20 @@ private fun SettingsTab(vm: AppViewModel, onSetup: () -> Unit, onDeviceCheck: ()
         }
         GlassCard(title = "Cloud AI (optional, off by default)") {
             Text(
-                "Uses Gemini (Google key, starts with AIza) or Claude (Anthropic key); Kimi is the backup when it fails. " +
-                    "Needs internet. Phone actions " +
-                    "always run on the phone; only your words go out. With \"send all chat\" on, the cloud also picks " +
-                    "actions fast and answers web questions. Say \"think hard …\" to ask the cloud once.",
+                "Free keys work: Groq, Gemini (Google key, starts with AIza), OpenRouter, Cloudflare. Jimi tries them " +
+                    "in this order and uses the next one when a free limit is reached. Claude keys go in the Gemini box. " +
+                    "Needs internet. Phone actions always run on the phone; only your words go out. With \"send all " +
+                    "chat\" on, the cloud also picks actions fast and answers web questions. Say \"think hard …\" to " +
+                    "ask the cloud once.",
                 style = MaterialTheme.typography.bodySmall,
             )
             Toggle("Use cloud AI", cloudOn, vm::setCloudEnabled)
             Toggle("Send all chat to the cloud (not only \"think hard\")", cloudChat, vm::setCloudForChat)
             Toggle("Also send what Jimi remembers about me", cloudFacts, vm::setCloudSendFacts)
-            Text(if (cloudKeySet) "API key is saved, encrypted." else "No API key saved.", style = MaterialTheme.typography.bodySmall)
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                OutlinedTextField(
-                    cloudKey, { cloudKey = it.trim() }, Modifier.weight(1f), label = { Text("API key (empty = remove)") }, singleLine = true,
-                    visualTransformation = PasswordVisualTransformation(),
-                )
-                OutlinedButton(onClick = { vm.setCloudKey(cloudKey); cloudKey = "" }) { Text("Save") }
+            CLOUD_KEY_ROWS.forEach { row ->
+                KeyRow(row, row.secret in savedKeys, onSave = { vm.setKey(row.secret, row.label, it) }, onTest = { vm.testKey(row.secret) })
             }
-            Text(if (kimiKeySet) "Kimi key is saved, encrypted." else "No Kimi key saved.", style = MaterialTheme.typography.bodySmall)
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                OutlinedTextField(
-                    kimiKey, { kimiKey = it.trim() }, Modifier.weight(1f), label = { Text("Kimi key (backup, empty = remove)") }, singleLine = true,
-                    visualTransformation = PasswordVisualTransformation(),
-                )
-                OutlinedButton(onClick = { vm.setKimiKey(kimiKey); kimiKey = "" }) { Text("Save") }
-            }
+            if (message.isNotEmpty()) Text(message, style = MaterialTheme.typography.bodySmall)
         }
         GlassCard(title = "Local AI models") {
             listOf(ChatModels.DEFAULT to "Default (Qwen3 / Gemma)", ChatModels.LFM to "LFM2.5 1.2B Instruct").forEach { (id, label) ->
@@ -555,5 +543,31 @@ private fun Toggle(label: String, value: Boolean, set: (Boolean) -> Unit) {
     Row(verticalAlignment = Alignment.CenterVertically) {
         Text(label, Modifier.weight(1f))
         Switch(checked = checked, onCheckedChange = { checked = it; set(it) })
+    }
+}
+
+/** One cloud key box. [hidden] = shown as dots (keys); the Cloudflare account ID is not secret. */
+private data class KeyRowSpec(val secret: String, val label: String, val hint: String, val hidden: Boolean = true, val testable: Boolean = true)
+
+private val CLOUD_KEY_ROWS = listOf(
+    KeyRowSpec(Secrets.GROQ_KEY, "Groq key", "starts with gsk_"),
+    KeyRowSpec(Secrets.CLOUD_KEY, "Gemini / Claude key", "AIza… or sk-ant-…"),
+    KeyRowSpec(Secrets.OPENROUTER_KEY, "OpenRouter key", "starts with sk-or-"),
+    KeyRowSpec(Secrets.CLOUDFLARE_ACCOUNT, "Cloudflare account ID", "from the Cloudflare dashboard", hidden = false, testable = false),
+    KeyRowSpec(Secrets.CLOUDFLARE_KEY, "Cloudflare token", "Workers AI token"),
+    KeyRowSpec(Secrets.KIMI_KEY, "Kimi key", "backup"),
+)
+
+@Composable
+private fun KeyRow(spec: KeyRowSpec, saved: Boolean, onSave: (String) -> Unit, onTest: () -> Unit) {
+    var value by remember { mutableStateOf("") }
+    Text("${spec.label}: " + if (saved) "saved, encrypted." else "not saved.", style = MaterialTheme.typography.bodySmall)
+    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        OutlinedTextField(
+            value, { value = it.trim() }, Modifier.weight(1f), label = { Text("${spec.hint} (empty = remove)") }, singleLine = true,
+            visualTransformation = if (spec.hidden) PasswordVisualTransformation() else VisualTransformation.None,
+        )
+        OutlinedButton(onClick = { onSave(value); value = "" }) { Text("Save") }
+        if (spec.testable && saved) OutlinedButton(onClick = onTest) { Text("Test") }
     }
 }

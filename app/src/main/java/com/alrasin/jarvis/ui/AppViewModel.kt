@@ -66,6 +66,7 @@ class AppViewModel @Inject constructor(
     private val executor: ToolExecutor,
     private val models: ModelBrain,
     private val speakerProvider: dagger.Lazy<SpeakerVerifier>,
+    private val cloud: dagger.Lazy<com.alrasin.jarvis.brain.CloudBrain>,
 ) : AndroidViewModel(app) {
     private val secrets get() = secretsProvider.get()
     private val speaker get() = speakerProvider.get()
@@ -90,8 +91,8 @@ class AppViewModel @Inject constructor(
     val cloudEnabled = settings.cloudEnabled.state(false)
     val cloudForChat = settings.cloudForChat.state(true)
     val cloudSendFacts = settings.cloudSendFacts.state(false)
-    val cloudKeySet = MutableStateFlow(false)
-    val kimiKeySet = MutableStateFlow(false)
+    /** Names of the saved cloud keys ([Secrets] names), so the screen can show "saved". */
+    val savedKeys = MutableStateFlow<Set<String>>(emptySet())
     val homeCity = settings.homeCity.state("Dhaka")
     val voice = settings.voice.state("piper-amy")
     val voiceSpeed = settings.voiceSpeed.state(1.10f)
@@ -168,8 +169,7 @@ class AppViewModel @Inject constructor(
     init {
         viewModelScope.launch(Dispatchers.IO) {
             voiceSamples.value = speaker.samples
-            cloudKeySet.value = secrets.has(Secrets.CLOUD_KEY)
-            kimiKeySet.value = secrets.has(Secrets.KIMI_KEY)
+            refreshKeys()
             pinSet.value = secrets.has(Secrets.PIN)
         }
         refreshDeviceCheck()
@@ -264,16 +264,21 @@ class AppViewModel @Inject constructor(
         }
     }
 
-    fun setCloudKey(key: String) = viewModelScope.launch(Dispatchers.IO) {
-        secrets.put(Secrets.CLOUD_KEY, key.trim().ifEmpty { null })
-        cloudKeySet.value = secrets.has(Secrets.CLOUD_KEY)
-        _message.value = if (cloudKeySet.value) "API key saved (encrypted)." else "API key removed."
+    private fun refreshKeys() {
+        savedKeys.value = (Secrets.CLOUD_KEYS + Secrets.CLOUDFLARE_ACCOUNT).filter(secrets::has).toSet()
     }
 
-    fun setKimiKey(key: String) = viewModelScope.launch(Dispatchers.IO) {
-        secrets.put(Secrets.KIMI_KEY, key.trim().ifEmpty { null })
-        kimiKeySet.value = secrets.has(Secrets.KIMI_KEY)
-        _message.value = if (kimiKeySet.value) "Kimi key saved (encrypted)." else "Kimi key removed."
+    /** Saves (or removes, when empty) one cloud key, encrypted. [label] is only for the result line. */
+    fun setKey(name: String, label: String, value: String) = viewModelScope.launch(Dispatchers.IO) {
+        secrets.put(name, value.trim().ifEmpty { null })
+        refreshKeys()
+        _message.value = if (name in savedKeys.value) "$label saved (encrypted)." else "$label removed."
+    }
+
+    /** One short request to that service only; the result line shows if the key works. */
+    fun testKey(name: String) = viewModelScope.launch(Dispatchers.IO) {
+        _message.value = "Testing…"
+        _message.value = cloud.get().test(name)
     }
 
     fun enrollVoice() = viewModelScope.launch(Dispatchers.IO) { JarvisCoreService.enroll(app) }

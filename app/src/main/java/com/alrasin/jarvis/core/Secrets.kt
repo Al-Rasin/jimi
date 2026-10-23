@@ -52,5 +52,12 @@ class Secrets @Inject constructor(@ApplicationContext context: Context) {
         const val PIN = "pin"
         const val CLOUD_KEY = "cloud_api_key"
         const val KIMI_KEY = "kimi_api_key"
+        const val GROQ_KEY = "groq_api_key"
+        const val OPENROUTER_KEY = "openrouter_api_key"
+        const val CLOUDFLARE_KEY = "cloudflare_api_token"
+        const val CLOUDFLARE_ACCOUNT = "cloudflare_account_id"
+
+        /** Any of these saved = cloud can run (Cloudflare needs its account ID too). */
+        val CLOUD_KEYS = listOf(CLOUD_KEY, GROQ_KEY, OPENROUTER_KEY, CLOUDFLARE_KEY, KIMI_KEY)
     }
 }
