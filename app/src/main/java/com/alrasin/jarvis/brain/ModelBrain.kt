@@ -51,7 +51,10 @@ class ModelBrain @Inject constructor(
 
     /** Tools the small model may pick. Talk tools are rules-only. */
     private val llmTools by lazy { registry.all }
-    private val grammar by lazy { FunctionGemma.grammar(llmTools) }
+    /** Grammar per shortlist (D-048); a small LRU so repeated commands skip rebuilding it. */
+    private val grammars = object : LinkedHashMap<List<String>, String>(16, 0.75f, true) {
+        override fun removeEldestEntry(eldest: MutableMap.MutableEntry<List<String>, String>?) = size > 32
+    }
 
     private fun toolFile(): File? = ModelSelection.fileFor(IntentRouter.Route.TOOL, dir)
 
@@ -60,8 +63,11 @@ class ModelBrain @Inject constructor(
     fun status(selection: String = ChatModels.DEFAULT): String = if (!Llama.available) "LLM library not built" else
         "tool model: ${toolFile()?.name ?: "none"}, chat model: ${chatFile(selection)?.name ?: "not installed"}"
 
-    /** Prepare the tool schema without allocating model weights or a KV cache. */
-    fun warmUp() = scope.launch { grammar }
+    /** Nothing to prepare now that grammars are built per shortlist; kept for callers. */
+    fun warmUp() = scope.launch { }
+
+    /** Loads the tool model while the user is still talking (wake word, no cloud), hiding the ~3 s load. */
+    fun preloadTools() = scope.launch { withModels { toolModel() } }
 
     fun releaseModels() = scope.launch {
         lock.withLock {
@@ -118,8 +124,7 @@ class ModelBrain @Inject constructor(
         val f = toolFile() ?: return null
         screenModel?.close()
         screenModel = null
-        chatModel?.close()
-        chatModel = null
+        // Tool (~0.3 GB) and chat (~0.4 GB) models stay loaded together: swapping them cost a reload every turn.
         return Llama.load(f, contextSize = 4096, threads = 4)?.also { toolModel = it }
     }
 
@@ -134,21 +139,22 @@ class ModelBrain @Inject constructor(
         }
         screenModel?.close()
         screenModel = null
-        toolModel?.close()
-        toolModel = null
         JarvisLog.i("chat model loading ${f.name} (selection=$selection)")
         return Llama.load(f, contextSize = 2048, threads = 4)?.also { chatModel = it }
     }
 
     suspend fun toolCall(text: String, ctx: String): ToolCall? = withContext(Dispatchers.Default) {
         withModels {
+            val tools = ToolShortlist.pick(text, llmTools)
+            if (tools.isEmpty()) { JarvisLog.i("llm tool skipped: no likely tool"); return@withModels null }
             val m = toolModel() ?: return@withModels null
             val t0 = System.currentTimeMillis()
             val out = runCatching {
-                m.generate(FunctionGemma.prompt(llmTools, ctx, text), grammar, maxTokens = 80, stop = listOf("<end_function_call>", "<end_of_turn>"))
+                val g = grammars.getOrPut(tools.map { it.name }) { FunctionGemma.grammar(tools) }
+                m.generate(FunctionGemma.prompt(tools, ctx, text), g, maxTokens = 80, stop = listOf("<end_function_call>", "<end_of_turn>"))
             }.onFailure { JarvisLog.e("tool model failed", it) }.getOrNull() ?: return@withModels null
             val call = FunctionGemma.parse(if (out.contains("<start_function_call>") && !out.endsWith("<end_function_call>")) "$out<end_function_call>" else out)
-            JarvisLog.i("llm tool ${System.currentTimeMillis() - t0} ms: $out")
+            JarvisLog.i("llm tool ${System.currentTimeMillis() - t0} ms (${tools.size} tools): $out")
             call?.takeIf { valid(it) }
         }
     }

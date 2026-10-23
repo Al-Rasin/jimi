@@ -3,6 +3,7 @@
 // is read once, BENCHMARKS: 600 tokens ≈ 2.7 s uncached), and only decodes the new tail.
 #include <jni.h>
 #include <android/log.h>
+#include <cmath>
 #include <string>
 #include <vector>
 #include "llama.h"
@@ -130,25 +131,48 @@ Java_com_alrasin_jarvis_llm_Llama_nativeGenerate(JNIEnv *env, jclass, jlong hand
     h->cached = tokens;
     LOGI("prompt %zu tokens, %zu cached", tokens.size(), keep);
 
-    auto chain = llama_sampler_chain_init(llama_sampler_chain_default_params());
+    // The grammar is kept apart from the chain: checking it against the whole vocabulary every token is slow
+    // (FunctionGemma has 262k tokens). Sample first, then only test that one token; full grammar pass if rejected.
+    llama_sampler *grammar = nullptr;
     if (jgrammar) {
         const char *g = env->GetStringUTFChars(jgrammar, nullptr);
-        llama_sampler *gs = llama_sampler_init_grammar(h->vocab, g, "root");
+        grammar = llama_sampler_init_grammar(h->vocab, g, "root");
         env->ReleaseStringUTFChars(jgrammar, g);
-        if (gs) llama_sampler_chain_add(chain, gs); else LOGE("grammar parse failed, running without it");
+        if (!grammar) LOGE("grammar parse failed, running without it");
     }
+    auto chain = llama_sampler_chain_init(llama_sampler_chain_default_params());
     if (temperature > 0) {
         llama_sampler_chain_add(chain, llama_sampler_init_temp(temperature));
         llama_sampler_chain_add(chain, llama_sampler_init_dist(LLAMA_DEFAULT_SEED));
     } else {
         llama_sampler_chain_add(chain, llama_sampler_init_greedy());
     }
+    const int n_vocab = llama_vocab_n_tokens(h->vocab);
+    std::vector<llama_token_data> cand;
+    auto sample = [&]() -> llama_token {
+        llama_token t = llama_sampler_sample(chain, h->ctx, -1);
+        if (!grammar) return t;
+        llama_token_data one = {t, 1.0f, 0.0f};
+        llama_token_data_array single = {&one, 1, -1, false};
+        llama_sampler_apply(grammar, &single);
+        if (single.data[0].logit == -INFINITY) {
+            const float *logits = llama_get_logits_ith(h->ctx, -1);
+            cand.resize(n_vocab);
+            for (llama_token id = 0; id < n_vocab; id++) cand[id] = {id, logits[id], 0.0f};
+            llama_token_data_array all = {cand.data(), (size_t) n_vocab, -1, false};
+            llama_sampler_apply(grammar, &all);
+            llama_sampler_apply(chain, &all);
+            t = all.data[all.selected].id;
+        }
+        llama_sampler_accept(grammar, t);
+        return t;
+    };
 
     jclass cls = env->GetObjectClass(cb);
     jmethodID on_piece = env->GetMethodID(cls, "piece", "(Ljava/lang/String;)Z");
     std::string pending;
     for (int i = 0; i < max_tokens; i++) {
-        llama_token t = llama_sampler_sample(chain, h->ctx, -1);
+        llama_token t = sample();
         if (llama_vocab_is_eog(h->vocab, t)) break;
         pending += piece(h->vocab, t);
         size_t ready = utf8_complete(pending);
@@ -165,6 +189,7 @@ Java_com_alrasin_jarvis_llm_Llama_nativeGenerate(JNIEnv *env, jclass, jlong hand
         h->cached.push_back(t);
     }
     llama_sampler_free(chain);
+    if (grammar) llama_sampler_free(grammar);
 }
 
 extern "C" JNIEXPORT void JNICALL

@@ -80,6 +80,7 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 import javax.inject.Inject
+import kotlin.coroutines.EmptyCoroutineContext
 
 /**
  * Always-on core (PLAN 2.1): listens for "Hey Jimi" (3.1), hears the command (3.2), sends it to the
@@ -373,7 +374,8 @@ class JarvisCoreService : LifecycleService() {
     private fun readyVoice(): TextToSpeech? = tts?.takeIf { it.isCompleted }?.getCompleted()
 
     private fun acknowledgeWake(tone: Chimes) {
-        lifecycleScope.launch(Dispatchers.IO) { cloud.warm() }   // TLS handshake while the user talks
+        // While the user talks: open the cloud connection, or load the local tool model when the cloud is not usable.
+        lifecycleScope.launch(Dispatchers.IO) { if (cloud.enabled()) cloud.warm() else models.preloadTools() }
         val audio = cachedAudio[SpeechText.normalize("Uh-huh.")]
         if (!spokenWake || audio == null) { tone.wake(); return }
         val epoch = speechEpoch
@@ -484,7 +486,8 @@ class JarvisCoreService : LifecycleService() {
                 val locked = getSystemService(KeyguardManager::class.java).isKeyguardLocked
                 val input = Assistant.Input(text, raw, source, locked, voiceOk(locked, audio), wakeId = wakeId, audioPath = audioPath)
                 var r = try {
-                    assistant.handle(input) { sentence ->
+                    // adb test hook: source "offline_test" times the on-phone path with the cloud skipped
+                    withContext(if (source == "offline_test") CloudBrain.Offline else EmptyCoroutineContext) { assistant.handle(input) { sentence ->
                         synchronized(speechState) {
                             if (epoch != speechEpoch) throw CancellationException("Speech interrupted")
                             thinkingCue.finish(epoch)
@@ -492,7 +495,7 @@ class JarvisCoreService : LifecycleService() {
                             _phase.value = PHASE_SPEAKING
                             say(sentence, epoch)
                         }
-                    }
+                    } }
                 } finally {
                     synchronized(speechState) { thinkingCue.finish(epoch) }
                 }

@@ -1,5 +1,8 @@
 package com.alrasin.jarvis.brain
 
+import android.content.Context
+import android.net.ConnectivityManager
+import android.net.NetworkCapabilities
 import com.alrasin.jarvis.actions.ToolRegistry
 import com.alrasin.jarvis.core.JarvisLog
 import com.alrasin.jarvis.core.Json
@@ -21,7 +24,11 @@ import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
 import java.util.concurrent.TimeUnit
+import dagger.hilt.android.qualifiers.ApplicationContext
 import javax.inject.Inject
+import kotlin.coroutines.AbstractCoroutineContextElement
+import kotlin.coroutines.CoroutineContext
+import kotlin.coroutines.coroutineContext
 import javax.inject.Singleton
 
 /** A cloud chat model (PLAN 14.1). Only plain talk goes here: tools always run locally. */
@@ -159,6 +166,7 @@ class GeminiProvider(private val apiKey: String, private val model: String = MOD
  */
 @Singleton
 class CloudBrain @Inject constructor(
+    @ApplicationContext private val context: Context,
     private val settings: Settings,
     private val secrets: Secrets,
     private val registry: ToolRegistry,
@@ -166,7 +174,18 @@ class CloudBrain @Inject constructor(
     private var provider: CloudProvider? = null
     private var providerKey: String? = null
 
-    suspend fun enabled(): Boolean = settings.cloudEnabled.first() && secrets.has(Secrets.CLOUD_KEY)
+    /** Off without a validated network too, so offline commands skip the 4 s connect timeout. */
+    suspend fun enabled(): Boolean = coroutineContext[OfflineKey] == null && settings.cloudEnabled.first() &&
+        secrets.has(Secrets.CLOUD_KEY) && online()
+
+    private fun online(): Boolean {
+        val cm = context.getSystemService(ConnectivityManager::class.java) ?: return false
+        return cm.getNetworkCapabilities(cm.activeNetwork)?.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED) == true
+    }
+
+    /** Coroutine marker: skip the cloud for this request (adb "offline_test" source). */
+    object Offline : AbstractCoroutineContextElement(OfflineKey)
+    object OfflineKey : CoroutineContext.Key<Offline>
 
     /** True if [text] asks for the cloud by name, e.g. "think hard about …". */
     fun asked(text: String) = ASK.containsMatchIn(text)

@@ -3,6 +3,7 @@ package com.alrasin.jarvis
 import android.app.Application
 import android.content.pm.ApplicationInfo
 import android.content.ComponentCallbacks2
+import com.alrasin.jarvis.core.JarvisLog
 import android.os.StrictMode
 import com.alrasin.jarvis.brain.ModelBrain
 import com.alrasin.jarvis.service.Notifications
@@ -26,9 +27,9 @@ class JarvisApp : Application() {
 
     override fun onTrimMemory(level: Int) {
         super.onTrimMemory(level)
-        if (level == ComponentCallbacks2.TRIM_MEMORY_RUNNING_LOW ||
-            level == ComponentCallbacks2.TRIM_MEMORY_RUNNING_CRITICAL ||
-            level >= ComponentCallbacks2.TRIM_MEMORY_BACKGROUND) {
+        // BACKGROUND (40) fires for this UI-less service all the time; unloading then cost a 3 s reload per command.
+        if (level == ComponentCallbacks2.TRIM_MEMORY_RUNNING_CRITICAL || level >= ComponentCallbacks2.TRIM_MEMORY_COMPLETE) {
+            JarvisLog.i("memory trim level $level: unloading LLMs")
             models.get().releaseModels()
         }
     }
