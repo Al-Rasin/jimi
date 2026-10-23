@@ -42,7 +42,7 @@ class ToolRegistry @Inject constructor(
         addAll(screenTools(context))
         addAll(dataTools(notes, reminders, scheduler, memory))
         addAll(notificationTools(notifications))
-        addAll(webTools(Web()) { settings.homeCity.first() })
+        addAll(webTools(Web(), FastWeather(context)) { settings.homeCity.first() })
     }
 
     private val byName = all.associateBy { it.name }.also {

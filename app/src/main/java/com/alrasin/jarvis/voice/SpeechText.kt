@@ -117,18 +117,22 @@ object SpeechText {
         return if (value.any(Char::isLetterOrDigit)) value else ""
     }
 
-    fun chunks(text: String, maxWords: Int = 20): List<String> {
+    fun chunks(text: String, maxWords: Int = 20, firstWords: Int = maxWords): List<String> {
         require(maxWords > 0) { "maxWords must be positive" }
+        require(firstWords > 0) { "firstWords must be positive" }
         val clean = normalize(text)
         if (clean.isBlank()) return emptyList()
+        var first = true
         return clean.split(Regex("(?<=[.!?])\\s+")).flatMap { sentence ->
             val words = sentence.split(Regex("\\s+"))
             val result = mutableListOf<String>()
             var start = 0
             while (start < words.size) {
-                var end = minOf(start + maxWords, words.size)
+                val limit = if (first) minOf(firstWords, maxWords) else maxWords
+                first = false
+                var end = minOf(start + limit, words.size)
                 if (end < words.size) {
-                    val comma = (start + minOf(12, maxWords) - 1 until end)
+                    val comma = (start + minOf(12, limit) - 1 until end)
                         .lastOrNull { words[it].endsWith(',') || words[it].endsWith(';') }
                     if (comma != null) end = comma + 1
                 }

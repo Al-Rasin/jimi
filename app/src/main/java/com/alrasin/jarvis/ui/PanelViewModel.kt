@@ -51,6 +51,12 @@ class PanelViewModel @Inject constructor(
             }
         }
         viewModelScope.launch { heard.collect { _live.value = it.isNotBlank() && it != JarvisCoreService.lastTurn.value?.heard } }
+        viewModelScope.launch {
+            phase.collect {
+                if (it == JarvisCoreService.PHASE_THINKING || it == JarvisCoreService.PHASE_SPEAKING)
+                    _live.value = true
+            }
+        }
     }
 
     /** ✗ on the answer: saves a report for diagnosis (WrongAnswers). */
