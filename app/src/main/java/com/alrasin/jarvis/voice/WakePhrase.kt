@@ -8,8 +8,9 @@ object WakePhrase {
     private const val SEPARATOR = "[\\s\\p{P}]+"
     private const val NAMES = "jimi|jimmy|jimmie|jimmi|gymmy|zimmy|zumi|zoomy|azumi|hazumi|yumi|izumi|hayzumi|zooming"
     private val prefix = Regex(
-        "^[\\s\\p{P}]*(?:(?:hey|hay|hi|a)$SEPARATOR(?:$NAMES|jim|jamie|gym)|" +
-            "(?:hazy|gym)$SEPARATOR(?:me|mi)|$NAMES)(?![\\p{L}\\p{N}'’])[\\s\\p{P}]*",
+        "^[\\s\\p{P}]*(?:(?:hey|hay|hi|hello|okay|ok|a)$SEPARATOR(?:$NAMES|jim|jamie|jenny|genie|gimme|gimmie|gym|mi|jee${SEPARATOR}mee)|" +
+            "(?:hazy|gym)$SEPARATOR(?:me|mi)|" +
+            "(?:as${SEPARATOR}you${SEPARATOR}(?:me|may)|as${SEPARATOR}well)(?=$SEPARATOR(?:what|whats|set|wake|alarm|turn|down|open|go|tell|show|play)\\b)|$NAMES)(?![\\p{L}\\p{N}'’])[\\s\\p{P}]*",
         RegexOption.IGNORE_CASE,
     )
 

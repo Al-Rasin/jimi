@@ -76,6 +76,7 @@ class AppViewModel @Inject constructor(
     val notificationList = notifications.recent().state(emptyList())
     val rules = notifications.rulesFlow().state(emptyList())
     val facts = memory.flow().state(emptyList())
+    val spokenWake = settings.spokenWake.state(true)
     val followUp = settings.followUp.state(true)
     val showPanel = settings.showPanel.state(true)
     val autoClear = settings.autoClearNotifications.state(false)
@@ -209,6 +210,7 @@ class AppViewModel @Inject constructor(
 
     fun forget(id: Long) = viewModelScope.launch { memory.delete(id) }
 
+    fun setSpokenWake(v: Boolean) = viewModelScope.launch { settings.setSpokenWake(v) }
     fun setFollowUp(v: Boolean) = viewModelScope.launch { settings.setFollowUp(v) }
     fun setShowPanel(v: Boolean) = viewModelScope.launch { settings.setShowPanel(v) }
     fun setAutoClear(v: Boolean) = viewModelScope.launch { settings.setAutoClearNotifications(v) }

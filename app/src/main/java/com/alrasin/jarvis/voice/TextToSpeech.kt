@@ -41,7 +41,8 @@ class TextToSpeech(
             else File(if (localAlan) downloaded else Voices.dir(context, pack), name).path
         val model = when (pack.engine) {
             Engine.PIPER -> OfflineTtsModelConfig(
-                vits = OfflineTtsVitsModelConfig(model = f(pack.model), tokens = f("tokens.txt"), dataDir = data),
+                vits = OfflineTtsVitsModelConfig(model = f(pack.model), tokens = f("tokens.txt"), dataDir = data,
+                    noiseScale = 0.667f, noiseScaleW = 0.8f, lengthScale = 1.0f),
                 numThreads = threads,
             )
             Engine.SUPERTONIC -> OfflineTtsModelConfig(
@@ -138,7 +139,7 @@ class TextToSpeech(
          * Waits on the real playback position (not the clock): on MIUI a track can start 200+ ms late,
          * and a clock-based wait then stopped it before the last words were heard.
          */
-        fun playPcm(pcm: FloatArray, rate: Int, stop: () -> Boolean = { false }): Boolean {
+        fun playPcm(pcm: FloatArray, rate: Int, onStarted: () -> Unit = {}, stop: () -> Boolean = { false }): Boolean {
             val epoch = synchronized(playbackLock) { playbackEpoch }
             if (stop()) return false
             if (pcm.isEmpty()) return true
@@ -170,7 +171,12 @@ class TextToSpeech(
                 fun cancelled() = stop() || synchronized(playbackLock) { epoch != playbackEpoch }
                 // give up only if playback is stuck (2 s more than the audio length)
                 val end = System.currentTimeMillis() + samples.size * 1000L / rate + 2000
+                var started = false
                 while (!cancelled() && track.playbackHeadPosition < samples.size && System.currentTimeMillis() < end) {
+                    if (!started && track.playbackHeadPosition > 0) {
+                        started = true
+                        onStarted()
+                    }
                     Thread.sleep(20)
                 }
                 return !cancelled()

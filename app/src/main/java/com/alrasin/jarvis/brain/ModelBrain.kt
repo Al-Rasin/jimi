@@ -197,7 +197,7 @@ class ModelBrain @Inject constructor(
                 val out = runCatching {
                     m.generate(prompt, null, maxTokens = 120, stop = listOf("<|im_end|>", "<end_of_turn>")) { p ->
                         buf += p
-                        val (done, rest) = ChatFormat.sentences(buf)
+                        val (done, rest) = ChatFormat.speechChunks(buf)
                         done.forEach { s -> ChatFormat.clean(s).takeIf { it.isNotBlank() }?.let { onSentence(it); spoke = true } }
                         buf = rest
                         true

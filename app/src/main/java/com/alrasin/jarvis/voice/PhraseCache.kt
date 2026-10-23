@@ -178,7 +178,12 @@ class PhraseCache(
         private val states = ConcurrentHashMap<String, State>()
 
         val COMMON: List<String> = listOf(
-            "One moment, Boss.",
+            "Uh-huh.",
+            "Let me check.",
+            "On it.",
+            "Hmm, one sec.",
+            "Boss, Flashlight is on.",
+            "Boss, Flashlight is off.",
             "Done.",
             "Sorry, I didn't catch that.",
             "Sorry Boss, I can't do that yet.",
@@ -206,6 +211,9 @@ class PhraseCache(
             "Unlocked.",
             "Typed.",
             "Scrolled.",
-        )
+        ) + listOf("Wi-Fi", "Bluetooth", "Mobile data", "Do not disturb", "Airplane mode",
+            "Location", "Battery saver", "Auto rotate").flatMap { label ->
+            listOf("Boss, $label is on.", "Boss, $label is off.")
+        }
     }
 }

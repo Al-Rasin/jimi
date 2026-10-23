@@ -50,15 +50,15 @@ fun timeTools(context: Context): List<Tool> = listOf(
         if (!awaitAlarmState(context) { next ->
                 if (next != null && !matchesAlarmMinute(next, expected)) {
                     JarvisLog.i(if (next < expected) {
-                        "set_alarm: requested alarm cannot be seen past an earlier alarm; accepting Clock request"
+                        "set_alarm: requested alarm cannot be seen past an earlier alarm"
                     } else {
-                        "set_alarm: next alarm differs from requested time; accepting Clock request"
+                        "set_alarm: next alarm differs from requested time"
                     })
                 }
-                hasScheduledAlarm(next)
+                matchesAlarmMinute(next, expected)
             }) {
             JarvisLog.e("set_alarm: Clock request sent, but the requested alarm could not be confirmed")
-            return@SimpleTool ToolResult.fail("I asked the clock, but I couldn't confirm the alarm.")
+            return@SimpleTool ToolResult.ok("I asked Clock to set ${plan.at.format(ALARM_DATE_FORMAT)}, but could not verify it. Please check Clock.")
         }
         val repeatReply = if (plan.days != null) " I requested${plan.repeatText.removePrefix(",")}." else ""
         ToolResult.ok("Alarm set for ${plan.at.format(ALARM_DATE_FORMAT)}.$repeatReply")
@@ -98,7 +98,9 @@ internal fun Context.launchClock(intent: Intent): Boolean {
         )
     }
     val defaultPackage = manager.resolveActivity(intent, PackageManager.MATCH_DEFAULT_ONLY)?.activityInfo?.packageName
-    pickClockPackage(handlers, defaultPackage)?.let { intent.setPackage(it) }
+    val clock = pickClockPackage(handlers, defaultPackage) ?: return false
+    intent.setPackage(clock)
+    JarvisLog.i("Clock intent=${intent.action} package=$clock")
     return launch(intent)
 }
 

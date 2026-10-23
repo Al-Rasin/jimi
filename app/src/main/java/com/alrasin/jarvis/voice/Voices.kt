@@ -61,13 +61,10 @@ object Voices {
 
     /** Speaker numbers come from the model metadata (id2speaker). */
     val ALL: List<Voice> = listOf(
-        // Supertonic voice.bin = F1..F5, M1..M5 (sorted file names)
-        Voice("supertonic-f3", "Mia", false, "US", SUPERTONIC, 2),
-        Voice("supertonic-f4", "Ava", false, "US", SUPERTONIC, 3),
-        Voice("supertonic-m2", "Ethan", true, "US", SUPERTONIC, 6),
-        Voice("supertonic-m5", "Owen", true, "US", SUPERTONIC, 9),
+        // fix8: Supertonic is too slow on G88; saved selections fall back to Alan.
         fallback,
         Voice("piper-amy", "Amy", false, "US", piper("amy", "en_US")),
+        Voice("piper-ryan", "Ryan", true, "US", piper("ryan", "en_US")),
     )
 
     fun byId(id: String?): Voice = ALL.firstOrNull { it.id == id } ?: fallback

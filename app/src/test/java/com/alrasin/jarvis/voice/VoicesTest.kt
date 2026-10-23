@@ -5,10 +5,11 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class VoicesTest {
-    @Test fun pickerHasThreeMaleAndThreeFemaleVoices() {
-        assertEquals(6, Voices.ALL.size)
-        assertEquals(3, Voices.ALL.count { it.male })
-        assertEquals(3, Voices.ALL.count { !it.male })
+    @Test fun pickerHasThreeFastPiperVoices() {
+        assertEquals(3, Voices.ALL.size)
+        assertTrue(Voices.ALL.all { it.pack.engine == Engine.PIPER })
+        assertEquals(2, Voices.ALL.count { it.male })
+        assertEquals(1, Voices.ALL.count { !it.male })
         assertEquals(Voices.ALL.size, Voices.ALL.map { it.id }.distinct().size)
         assertEquals(Voices.ALL.size, Voices.ALL.map { it.pack.id to it.sid }.distinct().size)
     }

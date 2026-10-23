@@ -360,6 +360,7 @@ private fun Header(t: String) = GradientTitle(t, 22, Modifier.padding(top = 12.d
 
 @Composable
 private fun SettingsTab(vm: AppViewModel, onSetup: () -> Unit, onDeviceCheck: () -> Unit) {
+    val spokenWake by vm.spokenWake.collectAsStateWithLifecycle()
     val followUp by vm.followUp.collectAsStateWithLifecycle()
     val panel by vm.showPanel.collectAsStateWithLifecycle()
     val autoClear by vm.autoClear.collectAsStateWithLifecycle()
@@ -396,6 +397,7 @@ private fun SettingsTab(vm: AppViewModel, onSetup: () -> Unit, onDeviceCheck: ()
         GlassCard(title = "Conversation") {
             SpeechEngineSetting()
             SecondPassSetting()
+            Toggle("Spoken wake acknowledgement (off for beep)", spokenWake, vm::setSpokenWake)
             Toggle("Keep listening after an answer (no \"Hey Jimi\" needed)", followUp, vm::setFollowUp)
             Toggle("Show panel on wake (also on lock screen)", panel, vm::setShowPanel)
             Toggle("Auto-clear unimportant notifications", autoClear, vm::setAutoClear)

@@ -5,12 +5,12 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class ThinkingCueTest {
-    @Test fun slowReplyGetsOnlyOneCueAfterSixSeconds() {
+    @Test fun slowReplyGetsOnlyOneCueAfterTwelveHundredMillis() {
         val cue = ThinkingCue()
         cue.start(1, 100)
-        assertFalse(cue.take(1_600, 1, true))
-        assertFalse(cue.take(6_099, 1, true))
-        assertTrue(cue.take(6_100, 1, true))
+        assertFalse(cue.take(1_299, 1, true))
+        assertFalse(cue.take(1_299, 1, true))
+        assertTrue(cue.take(1_300, 1, true))
         assertFalse(cue.take(12_100, 1, true))
     }
 

@@ -20,7 +20,7 @@ internal class ThinkingCue {
             epoch = null
             return false
         }
-        if (now - startedAt < 6_000L) return false
+        if (now - startedAt < 1_200L) return false
         epoch = null
         return true
     }

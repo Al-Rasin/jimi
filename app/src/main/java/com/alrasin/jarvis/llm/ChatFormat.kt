@@ -34,7 +34,7 @@ object ChatFormat {
             if (buf[m.range.first] == '.' && abbreviation.containsMatchIn(prefix) && !finalLine) {
                 return@forEach
             }
-            if (m.range.last + 1 < buf.length || buf.endsWith("\n")) {
+            if (m.value.last().isWhitespace()) {
                 val s = prefix.trim()
                 if (s.length > 1) out.add(s)
                 start = m.range.last + 1
@@ -43,6 +43,25 @@ object ChatFormat {
         return out to buf.substring(start)
     }
 
-    fun clean(text: String) = text.replace(Regex("<think>.*?</think>", RegexOption.DOT_MATCHES_ALL), "")
+    /** Speech can start at a clause boundary while the rest of the sentence is generated. */
+    fun speechChunks(buf: String): Pair<List<String>, String> {
+        val visible = buf.replace(Regex("<think>.*?</think>", RegexOption.DOT_MATCHES_ALL), "")
+        if (visible.contains("<think>") || Regex("<[^>]*$").containsMatchIn(visible)) {
+            return emptyList<String>() to visible
+        }
+        val (sentences, pending) = sentences(visible)
+        val out = sentences.toMutableList()
+        var start = 0
+        Regex("[,;:]\\s+").findAll(pending).forEach { boundary ->
+            val clause = pending.substring(start, boundary.range.first + 1).trim()
+            if (clause.split(Regex("\\s+")).size >= 5) {
+                out.add(clause)
+                start = boundary.range.last + 1
+            }
+        }
+        return out to pending.substring(start)
+    }
+
+    fun clean(text: String) = text.replace(Regex("<think>.*?(?:</think>|$)", RegexOption.DOT_MATCHES_ALL), "")
         .replace(Regex("[*#`_]"), "").replace(Regex("\\s+"), " ").trim()
 }

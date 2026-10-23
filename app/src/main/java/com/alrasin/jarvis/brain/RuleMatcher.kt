@@ -28,10 +28,10 @@ object RuleMatcher {
         "auto_rotate" to listOf("auto rotate", "rotation", "auto rotation"),
     )
 
-    fun normalize(text: String): String = NumberWords.normalize(
+    fun normalize(text: String, keepClockColon: Boolean = false): String = NumberWords.normalize(
         text.lowercase()
             .replace("%", " percent")
-            .replace(Regex("[^a-z0-9' ]"), " ")
+            .replace(Regex(if (keepClockColon) "[^a-z0-9': ]" else "[^a-z0-9' ]"), " ")
             .replace("'s ", "s ").replace("'", "")
             .replace(Regex("\\s+"), " ").trim(),
     ).let { polite(mishears(it)) }
@@ -67,7 +67,7 @@ object RuleMatcher {
             .replace(Regex("^(?:(?:hey |ok |okay )?(?:jarvis|jimi|jimmy)[, ]+|(?:please|pls|can you|could you|would you|will you|i want you to|i want to|i would like to|just|hey|ok|okay) )+"), "")
         return talk(t) ?: comms(actionText) ?: media(actionText.trimEnd('.', '!', '?'))
             ?: knowledge(t)?.takeIf { it.tool == "web_search" || it.tool == "wiki_lookup" }
-            ?: toggle(t) ?: time(t, now) ?: notes(t, now) ?: media(t) ?: system(t) ?: screen(t)
+            ?: toggle(t) ?: time(normalize(input, keepClockColon = true), now) ?: notes(t, now) ?: media(t) ?: system(t) ?: screen(t)
             ?: notifications(t) ?: noisyTool(t, now) ?: knowledge(t) ?: memory(t) ?: apps(t)
     }
 
@@ -126,7 +126,7 @@ object RuleMatcher {
                 ?.takeUnless { it.matches(Regex(".*\\d.*|tomorrow|today|tonight")) }
             val specNoLabel = if (label != null) spec.substringBeforeLast(label).removeSuffix(" ").removeSuffix("called").removeSuffix("named").removeSuffix("for").trim() else spec
             var m = TimeParser.parse("at $specNoLabel".replace("at at ", "at "), now) ?: return call("set_alarm", "time" to null, "label" to label)
-            if (!m.hasTime) return null
+            if (!m.hasTime) return call("set_alarm", "label" to label)
             val bareClock = Regex("(?:at )?(1[0-2]|[1-9])(?: (\\d{2}))?(?: o clock)?").matchEntire(specNoLabel)
             if (bareClock != null) {
                 val hour = bareClock.groupValues[1].toInt() % 12

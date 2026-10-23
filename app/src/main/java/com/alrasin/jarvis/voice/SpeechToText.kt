@@ -142,7 +142,8 @@ class SpeechToText(context: Context, dir: File? = null, hotwords: Collection<Str
 
         /** Lower case, no punctuation (Kroko writes "Hey, Jimmy."), keeps apostrophes: "what's". */
         fun normalize(text: String) =
-            text.lowercase().replace(Regex("[^a-z0-9' ]"), " ").replace(Regex("\\s+"), " ").trim()
+            text.lowercase().replace(Regex("(?<!\\d):|:(?!\\d)"), " ")
+                .replace(Regex("[^a-z0-9': ]"), " ").replace(Regex("\\s+"), " ").trim()
 
         /** Prefer int8 files when a folder has both. */
         private fun path(dir: File?, part: String): String {

@@ -20,6 +20,7 @@ private val Context.dataStore by preferencesDataStore("settings")
 class Settings @Inject constructor(@ApplicationContext private val context: Context) {
     private val thresholdKey = floatPreferencesKey("wake_threshold")
     private val enabledKey = booleanPreferencesKey("listening_enabled")
+    private val spokenWakeKey = booleanPreferencesKey("spoken_wake")
     private val followUpKey = booleanPreferencesKey("follow_up")
     private val sttSecondPassKey = booleanPreferencesKey("stt_second_pass")
     private val autoClearKey = booleanPreferencesKey("auto_clear_notifications")
@@ -46,6 +47,9 @@ class Settings @Inject constructor(@ApplicationContext private val context: Cont
     val listeningEnabled: Flow<Boolean> = context.dataStore.data.map { it[enabledKey] ?: false }
 
     /** Listen again for ~6 s after a reply, no wake word needed (round 3). */
+    val spokenWake: Flow<Boolean> = context.dataStore.data.map { it[spokenWakeKey] ?: true }
+    suspend fun setSpokenWake(value: Boolean) = context.dataStore.edit { it[spokenWakeKey] = value }
+
     val followUp: Flow<Boolean> = context.dataStore.data.map { it[followUpKey] ?: true }
     val sttSecondPass: Flow<Boolean> = context.dataStore.data.map { it[sttSecondPassKey] ?: false }
     val autoClearNotifications: Flow<Boolean> = context.dataStore.data.map { it[autoClearKey] ?: false }

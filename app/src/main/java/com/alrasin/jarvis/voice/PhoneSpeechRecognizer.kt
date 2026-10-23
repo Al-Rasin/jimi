@@ -21,13 +21,18 @@ import kotlin.coroutines.resume
 class PhoneSpeechRecognizer(context: Context) {
     private val context = context.applicationContext
 
-    suspend fun recognize(hotwords: List<String> = emptyList(), timeoutMillis: Long = 20_000): String? =
+    suspend fun recognize(hotwords: List<String> = emptyList(), timeoutMillis: Long = 20_000, onReady: () -> Unit = {}): String? =
         withContext(Dispatchers.Main.immediate) {
             var recognizer: SpeechRecognizer? = null
             try {
                 withTimeoutOrNull(timeoutMillis) {
                     val online = isOnline()
-                    val phone = create(online) ?: return@withTimeoutOrNull null
+                    val phone = create(online) ?: run {
+                        JarvisLog.i("STT engine=Phone provider unavailable online=$online")
+                        return@withTimeoutOrNull null
+                    }
+                    val started = android.os.SystemClock.elapsedRealtime()
+                    JarvisLog.i("STT engine=Phone start online=$online language=$LANGUAGE")
                     recognizer = phone
                     suspendCancellableCoroutine { continuation ->
                         fun finish(text: String?) {
@@ -42,7 +47,10 @@ class PhoneSpeechRecognizer(context: Context) {
                                 JarvisLog.i("STT engine=Phone error=$error online=$online")
                                 finish(null)
                             }
-                            override fun onReadyForSpeech(params: Bundle?) = Unit
+                            override fun onReadyForSpeech(params: Bundle?) {
+                                JarvisLog.i("STT engine=Phone ready in ${android.os.SystemClock.elapsedRealtime() - started} ms")
+                                if (continuation.isActive) onReady()
+                            }
                             override fun onBeginningOfSpeech() = Unit
                             override fun onRmsChanged(rmsdB: Float) = Unit
                             override fun onBufferReceived(buffer: ByteArray?) = Unit
@@ -66,7 +74,8 @@ class PhoneSpeechRecognizer(context: Context) {
                 }
             } catch (cancelled: kotlinx.coroutines.CancellationException) {
                 throw cancelled
-            } catch (_: RuntimeException) {
+            } catch (error: RuntimeException) {
+                JarvisLog.e("STT engine=Phone start failed", error)
                 null
             } finally {
                 runCatching { recognizer?.cancel() }
@@ -74,7 +83,7 @@ class PhoneSpeechRecognizer(context: Context) {
             }
         }
 
-    private fun isOnline(): Boolean {
+    fun isOnline(): Boolean {
         val cm = context.getSystemService(ConnectivityManager::class.java) ?: return false
         val caps = cm.getNetworkCapabilities(cm.activeNetwork) ?: return false
         return caps.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED)
