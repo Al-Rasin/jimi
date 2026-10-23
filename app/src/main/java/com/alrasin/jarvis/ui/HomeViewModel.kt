@@ -178,7 +178,8 @@ class HomeViewModel @Inject constructor(
      */
     fun voiceBench(ids: String) = viewModelScope.launch(Dispatchers.Default) {
         val text = "You said: turn on the flashlight and set an alarm for seven."
-        val voices = Voices.ALL.filter { (ids == "all" || it.id in ids.split(',')) && Voices.installed(app, it.pack) }
+        val voices = Voices.ALL.filter { (ids == "all" || it.id in ids.split(',')) && Voices.installed(app, it.pack) } +
+            ids.split(',').filter { it.startsWith(Voices.ANDROID_PREFIX) }.map(Voices::byId)
         for (voice in voices) {
             for (threads in listOf(2, 4)) runCatching {
                 var t0 = System.nanoTime()

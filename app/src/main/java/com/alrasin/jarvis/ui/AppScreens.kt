@@ -28,6 +28,7 @@ import androidx.compose.ui.unit.sp
 import com.alrasin.jarvis.voice.Engine
 import com.alrasin.jarvis.voice.Voice
 import com.alrasin.jarvis.voice.VoicePack
+import com.alrasin.jarvis.voice.GeminiVoice
 import com.alrasin.jarvis.voice.Voices
 import com.alrasin.jarvis.service.JarvisCoreService
 import androidx.compose.foundation.layout.Arrangement
@@ -484,7 +485,7 @@ private fun SettingsTab(vm: AppViewModel, onSetup: () -> Unit, onDeviceCheck: ()
     }
 }
 
-/** Pick Jimi's voice (D-038): natural Supertonic voices (one 128 MB download) or fast Piper voices. */
+/** Pick Jimi's voice (D-038, D-053): the phone's Google voices, Piper voices, and the online Gemini voice. */
 @Composable
 internal fun VoiceCard(vm: AppViewModel) {
     val current by vm.voice.collectAsStateWithLifecycle()
@@ -492,7 +493,11 @@ internal fun VoiceCard(vm: AppViewModel) {
     val installed by vm.installedPacks.collectAsStateWithLifecycle()
     val downloads by vm.downloads.collectAsStateWithLifecycle()
     val trying by vm.trying.collectAsStateWithLifecycle()
+    val phoneVoices by vm.phoneVoices.collectAsStateWithLifecycle()
+    val cloudVoice by vm.cloudVoice.collectAsStateWithLifecycle()
+    val cloudVoiceName by vm.cloudVoiceName.collectAsStateWithLifecycle()
     var open by remember { mutableStateOf(false) }
+    LaunchedEffect(open) { if (open) vm.loadPhoneVoices() }
 
     @Composable
     fun PackBar(pack: VoicePack) {
@@ -507,7 +512,7 @@ internal fun VoiceCard(vm: AppViewModel) {
 
     @Composable
     fun VoiceRow(v: Voice) {
-        val ready = v.pack.id in installed
+        val ready = v.pack.engine == Engine.ANDROID || v.pack.id in installed
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
             Text(
                 (if (v.id == current) "● " else "") + v.label,
@@ -524,15 +529,27 @@ internal fun VoiceCard(vm: AppViewModel) {
 
     GlassCard(title = "Voice") {
         Text("Now: ${Voices.byId(current).label}", style = MaterialTheme.typography.bodySmall)
+        Toggle("Online voice (Gemini) for cloud answers", cloudVoice, vm::setCloudVoice)
+        if (cloudVoice) Text("Now online: ${GeminiVoice.byId(cloudVoiceName).label}. Needs cloud AI + a paid Gemini key (free keys run out fast); adds ~3 s.",
+            style = MaterialTheme.typography.bodySmall)
         Text("Speed ${"%.2f".format(speed)}x", style = MaterialTheme.typography.bodySmall)
         Slider(speed, vm::setVoiceSpeed, valueRange = 0.8f..1.3f, steps = 9)
         TextButton(onClick = { open = !open }) { Text(if (open) "Hide voices" else "Change voice") }
         if (open) {
-            val (natural, fast) = Voices.ALL.partition { it.pack.engine == Engine.SUPERTONIC }
-            Text("Natural (a bit slower to start)", fontWeight = FontWeight.Bold)
-            PackBar(Voices.SUPERTONIC)
-            natural.forEach { VoiceRow(it) }
-            Text("Fast", fontWeight = FontWeight.Bold, modifier = Modifier.padding(top = 8.dp))
+            val fast = Voices.ALL.filter { it.pack.engine == Engine.PIPER }
+            Text("Phone voices (Google, offline)", fontWeight = FontWeight.Bold)
+            if (phoneVoices.isEmpty()) Text("Loading… (needs Google Speech Services with English voice data)", style = MaterialTheme.typography.bodySmall)
+            phoneVoices.forEach { VoiceRow(it) }
+            Text("Online voice (Gemini)", fontWeight = FontWeight.Bold, modifier = Modifier.padding(top = 8.dp))
+            GeminiVoice.VOICES.forEach { c ->
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text((if (c.id == cloudVoiceName) "● " else "") + c.label, Modifier.weight(1f),
+                        fontWeight = if (c.id == cloudVoiceName) FontWeight.Bold else null)
+                    TextButton(onClick = { vm.tryCloudVoice(c.id) }, enabled = trying == null) { Text(if (trying == c.id) "…" else "Try") }
+                    if (c.id != cloudVoiceName) TextButton(onClick = { vm.setCloudVoiceName(c.id) }) { Text("Use") }
+                }
+            }
+            Text("Fast (Piper)", fontWeight = FontWeight.Bold, modifier = Modifier.padding(top = 8.dp))
             fast.forEach { v ->
                 VoiceRow(v)
                 PackBar(v.pack)

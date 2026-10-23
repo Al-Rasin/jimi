@@ -16,7 +16,8 @@ import java.io.File
 import kotlin.math.sqrt
 
 /**
- * Offline voice (PLAN 3.3, D-025, D-038) via sherpa-onnx. [voice] picks the engine (Piper / Supertonic) and speaker;
+ * Offline voice (PLAN 3.3, D-025, D-038) via sherpa-onnx, or the phone's own engine (D-053). [voice] picks the
+ * engine (Piper / Supertonic / phone) and speaker;
  * the built-in Piper "Alan" is in APK assets `tts/`, other voices are downloaded to `files/voices/` (see [Voices]).
  * espeak-ng-data must be a real folder, so it is copied from assets to app files once (all engines share it).
  */
@@ -26,12 +27,19 @@ class TextToSpeech(
     threads: Int = 2,
     speed: Float = 1.0f,
 ) : AutoCloseable {
-    private val tts: OfflineTts
+    private val tts: OfflineTts?
+    private val phone: AndroidTts?
     @Volatile private var stopped = false
     /** 1.0 = normal; can change between sentences without reloading. */
     @Volatile var speed = speed
 
     init {
+        phone = if (voice.pack.engine == Engine.ANDROID) AndroidTts(context, voice.id.removePrefix(Voices.ANDROID_PREFIX)) else null
+        tts = if (phone != null) null else sherpa(context, threads)
+        generate("Hi.")   // first run is ~4x slower; pay it now, not on the first answer
+    }
+
+    private fun sherpa(context: Context, threads: Int): OfflineTts {
         val pack = voice.pack
         val data = if (pack.engine == Engine.PIPER) copyEspeakData(context).path else ""
         val downloaded = PortableModels.dir(context, DIR)
@@ -45,6 +53,7 @@ class TextToSpeech(
                     noiseScale = 0.667f, noiseScaleW = 0.8f, lengthScale = 1.0f),
                 numThreads = threads,
             )
+            Engine.ANDROID -> error("not a sherpa voice")
             Engine.SUPERTONIC -> OfflineTtsModelConfig(
                 supertonic = OfflineTtsSupertonicModelConfig(
                     durationPredictor = f("duration_predictor.int8.onnx"), textEncoder = f("text_encoder.int8.onnx"),
@@ -54,20 +63,23 @@ class TextToSpeech(
                 numThreads = threads,
             )
         }
-        tts = OfflineTts(if (builtIn) context.assets else null, OfflineTtsConfig(model = model))
-        generate("Hi.")   // first run is ~4x slower; pay it now, not on the first answer
+        return OfflineTts(if (builtIn) context.assets else null, OfflineTtsConfig(model = model))
     }
 
-    val sampleRate: Int get() = tts.sampleRate()
+    /** The phone engine's rate is known only after the first sentence (Google: 24 kHz). */
+    @Volatile var sampleRate: Int = tts?.sampleRate() ?: 24_000
+        private set
 
     fun generate(text: String): GeneratedAudio {
         val spoken = SpeechText.normalize(text)
         if (spoken.isBlank()) return GeneratedAudio(FloatArray(0), 24_000)
         val start = System.currentTimeMillis()
-        val audio = if (voice.pack.engine == Engine.SUPERTONIC) {
-            tts.generateWithConfig(spoken, GenerationConfig(sid = voice.sid, speed = speed, numSteps = SUPERTONIC_STEPS, extra = mapOf("lang" to "en")))
+        val audio = if (phone != null) {
+            phone.generate(spoken, speed).also { if (it.samples.isNotEmpty()) sampleRate = it.sampleRate }
+        } else if (voice.pack.engine == Engine.SUPERTONIC) {
+            tts!!.generateWithConfig(spoken, GenerationConfig(sid = voice.sid, speed = speed, numSteps = SUPERTONIC_STEPS, extra = mapOf("lang" to "en")))
         } else {
-            tts.generate(spoken, sid = voice.sid, speed = speed)
+            tts!!.generate(spoken, sid = voice.sid, speed = speed)
         }
         val made = System.currentTimeMillis() - start
         JarvisLog.i("tts ${voice.id}: ${audio.samples.size * 1000L / audio.sampleRate.coerceAtLeast(1)} ms audio in $made ms")
@@ -99,7 +111,10 @@ class TextToSpeech(
         return playPcm(audio.samples, audio.sampleRate) { stopped }
     }
 
-    override fun close() = tts.release()
+    override fun close() {
+        tts?.release()
+        phone?.close()
+    }
 
     companion object {
         private const val DIR = "tts"

@@ -10,8 +10,8 @@ import java.io.File
 import java.net.HttpURLConnection
 import java.net.URL
 
-/** Speech engines in sherpa-onnx that Jimi can use. */
-enum class Engine { PIPER, SUPERTONIC }
+/** Speech engines Jimi can use: sherpa-onnx models, or the phone's own engine (D-053). */
+enum class Engine { PIPER, SUPERTONIC, ANDROID }
 
 /**
  * One downloadable model. A pack can hold many voices (Supertonic) or one (Piper).
@@ -67,12 +67,29 @@ object Voices {
         Voice("piper-ryan", "Ryan", true, "US", piper("ryan", "en_US")),
     )
 
-    fun byId(id: String?): Voice = ALL.firstOrNull { it.id == id } ?: fallback
+    /** Voices of the phone's speech engine are saved as "google:<engine voice name>" (D-053). */
+    const val ANDROID_PREFIX = "google:"
+    val ANDROID_PACK = VoicePack("android", Engine.ANDROID, 0, "", listOf(""))
+
+    fun byId(id: String?): Voice =
+        if (id != null && id.startsWith(ANDROID_PREFIX)) android(id.removePrefix(ANDROID_PREFIX))
+        else ALL.firstOrNull { it.id == id } ?: fallback
+
+    /** e.g. "en-us-x-iol-local" → "Google iol", Male, US. Gender comes from a known-name table (unknown = female). */
+    fun android(engineName: String): Voice {
+        val parts = engineName.lowercase().split('-')
+        val accent = parts.getOrNull(1)?.uppercase()?.let { if (it == "GB") "UK" else it } ?: "EN"
+        val code = parts.getOrNull(3) ?: engineName
+        return Voice(ANDROID_PREFIX + engineName, "Google $code", code in GOOGLE_MALE, accent, ANDROID_PACK)
+    }
+
+    private val GOOGLE_MALE = setOf("iol", "iom", "tpd", "gbb", "gbd", "rjs", "end", "aub", "aud", "cxx")
 
     fun dir(context: Context, pack: VoicePack) = File(context.getExternalFilesDir(null) ?: context.filesDir, "voices/${pack.id}")
 
     fun installed(context: Context, pack: VoicePack): Boolean =
-        if (pack.id == BUILT_IN) PortableModels.voiceReady(context)
+        if (pack.engine == Engine.ANDROID) true
+        else if (pack.id == BUILT_IN) PortableModels.voiceReady(context)
         else pack.files.all { ModelFiles.present(File(dir(context, pack), it)) }
 
     /** Downloads the missing files of [pack]; [progress] gets 0..1. Throws on network errors (partial files are removed). */
@@ -152,6 +169,6 @@ object Voices {
     }
 
     fun delete(context: Context, pack: VoicePack) {
-        if (pack.id != BUILT_IN) dir(context, pack).deleteRecursively()
+        if (pack.id != BUILT_IN && pack.engine != Engine.ANDROID) dir(context, pack).deleteRecursively()
     }
 }

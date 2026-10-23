@@ -6,6 +6,7 @@ import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.floatPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
+import com.alrasin.jarvis.voice.GeminiVoice
 import com.alrasin.jarvis.voice.Voices
 import com.alrasin.jarvis.llm.ChatModels
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -31,6 +32,8 @@ class Settings @Inject constructor(@ApplicationContext private val context: Cont
     private val cloudKey = booleanPreferencesKey("cloud_enabled")
     private val cloudChatKey = booleanPreferencesKey("cloud_for_chat")
     private val cloudFactsKey = booleanPreferencesKey("cloud_send_facts")
+    private val cloudVoiceKey = booleanPreferencesKey("cloud_voice")
+    private val cloudVoiceNameKey = stringPreferencesKey("cloud_voice_name")
     private val voiceKey = stringPreferencesKey("voice")
     private val voiceSpeedKey = floatPreferencesKey("voice_speed")
     private val assistantModeKey = stringPreferencesKey("assistant_mode")
@@ -88,6 +91,11 @@ class Settings @Inject constructor(@ApplicationContext private val context: Cont
     suspend fun setVoiceSpeed(v: Float) = context.dataStore.edit { it[voiceSpeedKey] = v }
     suspend fun setCloudEnabled(v: Boolean) = context.dataStore.edit { it[cloudKey] = v }
     suspend fun setCloudForChat(v: Boolean) = context.dataStore.edit { it[cloudChatKey] = v }
+    /** Gemini voice for answers Gemini wrote, when cloud AI is on and online (D-053). Off: free keys hit the quota fast. */
+    val cloudVoice: Flow<Boolean> = context.dataStore.data.map { it[cloudVoiceKey] ?: false }
+    val cloudVoiceName: Flow<String> = context.dataStore.data.map { GeminiVoice.byId(it[cloudVoiceNameKey]).id }
+    suspend fun setCloudVoice(v: Boolean) = context.dataStore.edit { it[cloudVoiceKey] = v }
+    suspend fun setCloudVoiceName(v: String) = context.dataStore.edit { it[cloudVoiceNameKey] = GeminiVoice.byId(v).id }
     suspend fun setCloudSendFacts(v: Boolean) = context.dataStore.edit { it[cloudFactsKey] = v }
     suspend fun setFollowUp(v: Boolean) = context.dataStore.edit { it[followUpKey] = v }
     suspend fun setSttSecondPass(v: Boolean) = context.dataStore.edit { it[sttSecondPassKey] = v }

@@ -26,6 +26,8 @@ import com.alrasin.jarvis.data.ReminderDao
 import com.alrasin.jarvis.data.Settings
 import com.alrasin.jarvis.data.AssistantMode
 import com.alrasin.jarvis.actions.RootShell
+import com.alrasin.jarvis.voice.AndroidTts
+import com.alrasin.jarvis.voice.GeminiVoice
 import com.alrasin.jarvis.voice.PortableModels
 import com.alrasin.jarvis.data.TurnDao
 import com.alrasin.jarvis.actions.ReminderScheduler
@@ -154,6 +156,10 @@ class AppViewModel @Inject constructor(
     val downloads = MutableStateFlow<Map<String, Float>>(emptyMap())
     /** Id of the voice being tried, null when idle. */
     val trying = MutableStateFlow<String?>(null)
+    /** Offline English voices of the phone's speech engine (D-053); loaded when the voice list opens. */
+    val phoneVoices = MutableStateFlow<List<Voice>>(emptyList())
+    val cloudVoice = settings.cloudVoice.state(false)
+    val cloudVoiceName = settings.cloudVoiceName.state(GeminiVoice.DEFAULT_VOICE)
     val toolNames: List<String> get() = registry.all.map { it.name }.sorted()
 
     private val _message = MutableStateFlow("")
@@ -247,6 +253,30 @@ class AppViewModel @Inject constructor(
     }
 
     fun setVoice(id: String) = viewModelScope.launch { settings.setVoice(id) }
+    fun setCloudVoice(v: Boolean) = viewModelScope.launch { settings.setCloudVoice(v) }
+    fun setCloudVoiceName(v: String) = viewModelScope.launch { settings.setCloudVoiceName(v) }
+
+    fun loadPhoneVoices() {
+        if (phoneVoices.value.isNotEmpty()) return
+        viewModelScope.launch(Dispatchers.IO) {
+            phoneVoices.value = runCatching { AndroidTts(app, null).use { tts -> tts.voices().map { Voices.android(it.name) } } }
+                .onFailure { JarvisLog.e("phone voices failed", it) }
+                .getOrDefault(emptyList())
+        }
+    }
+
+    /** Plays a sample in the Gemini voice [name] (needs cloud AI on, a Gemini key and internet). */
+    fun tryCloudVoice(name: String) {
+        if (trying.value != null) return
+        trying.value = name
+        viewModelScope.launch(Dispatchers.IO) {
+            val key = secrets.get(Secrets.CLOUD_KEY)?.takeIf { it.startsWith("AIza") }
+            val audio = key?.let { GeminiVoice(it).generate("Hi Boss, I'm Jimi. How can I help?", name) }
+            if (audio != null) TextToSpeech.playPcm(audio.samples, audio.sampleRate)
+            else _message.value = if (key == null) "Online voice needs a Gemini API key." else "Online voice failed. Check internet."
+            trying.value = null
+        }
+    }
     fun setVoiceSpeed(v: Float) = viewModelScope.launch { settings.setVoiceSpeed(v) }
     fun setChatModel(v: String) = viewModelScope.launch { settings.setChatModel(v) }
 

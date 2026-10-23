@@ -8,6 +8,7 @@ import com.alrasin.jarvis.actions.ToolRegistry
 import com.alrasin.jarvis.core.JarvisLog
 import com.alrasin.jarvis.core.Json
 import com.alrasin.jarvis.core.Secrets
+import com.alrasin.jarvis.voice.CloudSpeech
 import com.alrasin.jarvis.core.Tool
 import com.alrasin.jarvis.core.ToolCall
 import com.alrasin.jarvis.data.Settings
@@ -211,13 +212,14 @@ class CloudBrain @Inject constructor(
             p.stream(system, history.takeLast(HISTORY), query, CHAT_TOKENS) { piece ->
                 if (first) { first = false; JarvisLog.i("latency: cloud first text ${System.currentTimeMillis() - t0} ms") }
                 val (done, rest) = ChatFormat.speechChunks(buf + piece)
-                done.forEach { s -> ChatFormat.clean(s).takeIf { it.isNotBlank() }?.let { onSentence(it); spoke = true } }
+                done.forEach { s -> ChatFormat.clean(s).takeIf { it.isNotBlank() }?.let { CloudSpeech.mark(it); onSentence(it); spoke = true } }
                 buf = rest
             }
         }
             .onSuccess { JarvisLog.i("cloud (${p.name}) answered in ${System.currentTimeMillis() - t0} ms") }
             .onFailure { JarvisLog.e("cloud failed, using local", it) }
             .getOrNull()?.let(ChatFormat::clean)?.takeIf { it.isNotBlank() } ?: return null
+        CloudSpeech.mark(out)
         if (spoke) ChatFormat.clean(buf).takeIf { it.isNotBlank() }?.let(onSentence)
         return ModelBrain.ChatOut(out, spoke)
     }
@@ -243,6 +245,7 @@ class CloudBrain @Inject constructor(
             .onFailure { JarvisLog.e("cloud tool pick failed, using local", it) }
             .getOrNull() ?: return null
         val call = parseToolCall(out, registry.all)
+        call?.arg("say")?.takeIf { call.tool == NONE.tool }?.let(CloudSpeech::mark)
         JarvisLog.i("cloud (${p.name}) tool ${System.currentTimeMillis() - t0} ms: ${call?.tool ?: "invalid"}")
         return call
     }
@@ -258,7 +261,13 @@ class CloudBrain @Inject constructor(
         return runCatching { p.quick(system, emptyList(), question, CHAT_TOKENS) }
             .onSuccess { JarvisLog.i("cloud (${p.name}) web answer in ${System.currentTimeMillis() - t0} ms") }
             .onFailure { JarvisLog.e("cloud web answer failed, using local", it) }
-            .getOrNull()?.let(ChatFormat::clean)?.takeIf { it.isNotBlank() }
+            .getOrNull()?.let(ChatFormat::clean)?.takeIf { it.isNotBlank() }?.also(CloudSpeech::mark)
+    }
+
+    /** Gemini key for the cloud voice (D-053): only when cloud AI is on, online, and the key is a Google one. */
+    suspend fun voiceKey(): String? {
+        if (!enabled() || !settings.cloudVoice.first()) return null
+        return secrets.get(Secrets.CLOUD_KEY)?.takeIf { it.startsWith("AIza") }
     }
 
     private fun provider(): CloudProvider? {
