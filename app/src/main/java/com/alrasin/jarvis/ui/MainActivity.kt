@@ -1,7 +1,9 @@
 package com.alrasin.jarvis.ui
 
 import android.os.Bundle
+import android.graphics.Color
 import androidx.activity.ComponentActivity
+import androidx.activity.SystemBarStyle
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.core.view.doOnPreDraw
@@ -19,7 +21,9 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         // Compose only gets keyboard insets edge-to-edge; without it the ArcDial thinks the keyboard is open and hides.
-        enableEdgeToEdge()
+        // always light (D-057): dark status / nav bar icons even when the phone is in dark mode
+        val bars = SystemBarStyle.light(Color.TRANSPARENT, Color.TRANSPARENT)
+        enableEdgeToEdge(bars, bars)
         super.onCreate(savedInstanceState)
         intent.getStringExtra("test_dir")?.let { vm.scoreDir(it) }
         intent.getStringExtra("stt_dir")?.let {

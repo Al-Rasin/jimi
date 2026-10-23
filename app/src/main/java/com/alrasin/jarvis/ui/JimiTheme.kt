@@ -14,7 +14,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Shapes
 import androidx.compose.material3.Text
 import androidx.compose.material3.Typography
-import androidx.compose.material3.darkColorScheme
+import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
@@ -27,23 +27,25 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.alrasin.jarvis.R
 
+/** Light premium palette (D-057): off-white page, white cards, ink text, one indigo accent ("Cyan" kept as the name). */
 object JimiColors {
-    val Background = Color(0xFF0B0D12)
-    val Surface1 = Color(0xFF12151C)
-    val Surface2 = Color(0xFF1A1E27)
-    val Surface3 = Color(0xFF232836)
-    val Outline = Color(0xFF2E3442)
-    val OutlineStrong = Color(0xFF3A4152)
-    val Cyan = Color(0xFF5BD8E6)
-    val OnCyan = Color(0xFF00363D)
+    val Background = Color(0xFFF6F7FB)
+    val Surface1 = Color(0xFFFFFFFF)
+    val Surface2 = Color(0xFFF0F2F7)
+    val Surface3 = Color(0xFFE8EBF2)
+    val Outline = Color(0xFFE4E7EE)
+    val OutlineStrong = Color(0xFFD3D8E2)
+    val Cyan = Color(0xFF5B5BF0)
+    val OnCyan = Color(0xFFFFFFFF)
+    val AccentSoft = Color(0xFFECECFE)
     val OrbBlue = Color(0xFF6A8DFF)
-    val Violet = Color(0xFF8E9BFF)
-    val Text = Color(0xFFECEFF4)
-    val SecondaryText = Color(0xFFA3AAB8)
-    val TertiaryText = Color(0xFF858DA0)
-    val Error = Color(0xFFFF6B7A)
-    val Success = Color(0xFF4ADE9B)
-    val Warning = Color(0xFFF5B84A)
+    val Violet = Color(0xFF8E7BFF)
+    val Text = Color(0xFF14161F)
+    val SecondaryText = Color(0xFF5B6272)
+    val TertiaryText = Color(0xFF8A91A0)
+    val Error = Color(0xFFD93A4A)
+    val Success = Color(0xFF1E9E6A)
+    val Warning = Color(0xFFC98500)
 }
 
 val JimiDisplay = FontFamily(
@@ -71,15 +73,15 @@ private val jimiTypography = Typography(
 @Composable
 fun JimiTheme(content: @Composable () -> Unit) {
     MaterialTheme(
-        colorScheme = darkColorScheme(
+        colorScheme = lightColorScheme(
             primary = JimiColors.Cyan,
             onPrimary = JimiColors.OnCyan,
-            primaryContainer = JimiColors.OnCyan,
+            primaryContainer = JimiColors.AccentSoft,
             onPrimaryContainer = JimiColors.Cyan,
-            inversePrimary = JimiColors.OnCyan,
+            inversePrimary = JimiColors.AccentSoft,
             secondary = JimiColors.Cyan,
             onSecondary = JimiColors.OnCyan,
-            secondaryContainer = JimiColors.Surface3,
+            secondaryContainer = JimiColors.AccentSoft,
             onSecondaryContainer = JimiColors.Text,
             tertiary = JimiColors.Cyan,
             onTertiary = JimiColors.OnCyan,
@@ -104,10 +106,10 @@ fun JimiTheme(content: @Composable () -> Unit) {
             outline = JimiColors.OutlineStrong,
             outlineVariant = JimiColors.Outline,
             error = JimiColors.Error,
-            onError = JimiColors.Background,
-            errorContainer = JimiColors.Surface3,
+            onError = Color.White,
+            errorContainer = Color(0xFFFDECEE),
             onErrorContainer = JimiColors.Error,
-            scrim = Color.Black,
+            scrim = Color(0x66000000),
         ),
         typography = jimiTypography,
         shapes = Shapes(
@@ -135,12 +137,12 @@ fun GradientTitle(text: String, size: Int = 22, modifier: Modifier = Modifier) =
 fun GlassCard(modifier: Modifier = Modifier, title: String? = null, content: @Composable ColumnScope.() -> Unit) {
     Column(
         modifier.fillMaxWidth()
-            .background(JimiColors.Surface1, RoundedCornerShape(20.dp))
-            .border(1.dp, JimiColors.Outline, RoundedCornerShape(20.dp))
-            .padding(16.dp),
+            .background(JimiColors.Surface1, RoundedCornerShape(24.dp))
+            .border(1.dp, JimiColors.Outline, RoundedCornerShape(24.dp))
+            .padding(18.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        if (title != null) GradientTitle(title)
+        if (title != null) GradientTitle(title, size = 17)
         CompositionLocalProvider(LocalContentColor provides JimiColors.Text) { content() }
     }
 }

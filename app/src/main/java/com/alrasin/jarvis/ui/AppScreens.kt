@@ -1,6 +1,16 @@
 package com.alrasin.jarvis.ui
 
 import androidx.compose.foundation.background
+import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.systemBarsPadding
+import androidx.compose.material3.NavigationBar
+import androidx.compose.material3.NavigationBarItem
+import androidx.compose.material3.NavigationBarItemDefaults
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.graphics.Color
+import kotlinx.coroutines.launch
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
@@ -20,7 +30,6 @@ import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Face
 import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.Settings
-import androidx.compose.material.icons.filled.Star
 import androidx.compose.material3.Icon
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.SolidColor
@@ -79,7 +88,7 @@ import java.util.Locale
 
 private val TABS = listOf(
     "Chat" to Icons.Filled.Face, "History" to Icons.AutoMirrored.Filled.List, "Alerts" to Icons.Filled.Notifications,
-    "Notes" to Icons.Filled.Edit, "Settings" to Icons.Filled.Settings, "Wake" to Icons.Filled.Star,
+    "Notes" to Icons.Filled.Edit, "Settings" to Icons.Filled.Settings,
 )
 private val SUGGESTIONS = listOf("What's the weather?", "Set a timer for 5 minutes", "Battery level", "Good night")
 
@@ -88,6 +97,7 @@ fun AppShell(vm: AppViewModel, home: HomeViewModel) {
     val setupComplete by vm.setupComplete.collectAsStateWithLifecycle()
     var setupOpen by rememberSaveable { mutableStateOf(false) }
     var deviceCheckOpen by rememberSaveable { mutableStateOf(false) }
+    var wakeOpen by rememberSaveable { mutableStateOf(false) }
     if (setupComplete == null) return
     if (setupComplete == false || setupOpen) {
         SetupWizard(vm, home) { vm.finishSetup(); setupOpen = false }
@@ -97,6 +107,15 @@ fun AppShell(vm: AppViewModel, home: HomeViewModel) {
         DeviceCheckScreen(vm) { deviceCheckOpen = false }
         return
     }
+    if (wakeOpen) {
+        // wake-word test page, opened from Settings (D-057)
+        BackHandler { wakeOpen = false }
+        Column(Modifier.fillMaxSize().background(MaterialTheme.colorScheme.background).systemBarsPadding()) {
+            TextButton(onClick = { wakeOpen = false }, Modifier.padding(start = 8.dp)) { Text("Back to Settings") }
+            HomeScreen(home)
+        }
+        return
+    }
     val pager = rememberPagerState { TABS.size }
     val running by home.running.collectAsStateWithLifecycle()
     val phase by home.phase.collectAsStateWithLifecycle()
@@ -104,34 +123,49 @@ fun AppShell(vm: AppViewModel, home: HomeViewModel) {
         containerColor = MaterialTheme.colorScheme.background,
         topBar = {
             Row(
-                Modifier.fillMaxWidth().statusBarsPadding().padding(horizontal = 20.dp, vertical = 12.dp),
+                Modifier.fillMaxWidth().statusBarsPadding().padding(start = 20.dp, end = 16.dp, top = 10.dp, bottom = 6.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
-                MobiusStrip(if (running) moodOf(phase) else OrbMood.IDLE, size = 44.dp)
-                Column(Modifier.weight(1f).padding(start = 10.dp)) {
-                    GradientTitle("Jimi", 22)
-                    Text(
-                        if (running) (if (phase == JarvisCoreService.PHASE_WAKE) "Listening for \"Hey Jimi\"" else phase) else "Asleep",
-                        style = MaterialTheme.typography.labelMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
+                MobiusStrip(if (running) moodOf(phase) else OrbMood.IDLE, size = 36.dp)
+                Column(Modifier.weight(1f).padding(start = 12.dp)) {
+                    GradientTitle("Jimi", 20)
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Box(Modifier.size(7.dp).clip(CircleShape).background(if (running) JimiColors.Success else JimiColors.TertiaryText))
+                        Text(
+                            if (running) (if (phase == JarvisCoreService.PHASE_WAKE) "Listening for \"Hey Jimi\"" else phase) else "Asleep",
+                            style = MaterialTheme.typography.labelMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.padding(start = 6.dp),
+                            maxLines = 1, overflow = TextOverflow.Ellipsis,
+                        )
+                    }
                 }
-                Text(
-                    if (running) "On" else "Off",
-                    color = if (running) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant,
-                    style = MaterialTheme.typography.labelLarge,
-                    modifier = Modifier.clip(RoundedCornerShape(50))
-                        .background(if (running) PanelColors.Cyan else MaterialTheme.colorScheme.surfaceVariant)
-                        .clickable { if (running) home.stop() else home.start() }
-                        .padding(horizontal = 18.dp, vertical = 8.dp),
-                )
+                Switch(checked = running, onCheckedChange = { if (it) home.start() else home.stop() })
             }
         },
         bottomBar = {
-            MobiusNav(TABS, pager)
+            // plain 5-tab bar (D-057); swiping the pages still works
+            val scope = rememberCoroutineScope()
+            Column {
+                Box(Modifier.fillMaxWidth().height(1.dp).background(JimiColors.Outline))
+                NavigationBar(containerColor = JimiColors.Surface1, tonalElevation = 0.dp) {
+                    TABS.forEachIndexed { i, (label, icon) ->
+                        NavigationBarItem(
+                            selected = pager.currentPage == i,
+                            onClick = { scope.launch { pager.animateScrollToPage(i) } },
+                            icon = { Icon(icon, contentDescription = label) },
+                            label = { Text(label, style = MaterialTheme.typography.labelMedium) },
+                            colors = NavigationBarItemDefaults.colors(
+                                selectedIconColor = JimiColors.Cyan, selectedTextColor = JimiColors.Cyan,
+                                indicatorColor = JimiColors.AccentSoft,
+                                unselectedIconColor = JimiColors.TertiaryText, unselectedTextColor = JimiColors.TertiaryText,
+                            ),
+                        )
+                    }
+                }
+            }
         },
     ) { pad ->
-        // swipe between pages; the Möbius bar rolls along (D-050)
         HorizontalPager(pager, Modifier.padding(pad).fillMaxSize(), key = { TABS[it].first }) { page ->
             Box(Modifier.fillMaxSize()) {
                 when (page) {
@@ -139,8 +173,7 @@ fun AppShell(vm: AppViewModel, home: HomeViewModel) {
                     1 -> HistoryTab(vm)
                     2 -> AlertsTab(vm)
                     3 -> NotesTab(vm)
-                    4 -> SettingsTab(vm, { setupOpen = true }, { deviceCheckOpen = true })
-                    else -> HomeScreen(home)
+                    else -> SettingsTab(vm, { setupOpen = true }, { deviceCheckOpen = true }, { wakeOpen = true })
                 }
             }
         }
@@ -162,8 +195,8 @@ private fun ChatTab(vm: AppViewModel) {
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.Center,
             ) {
-                MobiusStrip(OrbMood.IDLE, size = 180.dp)
-                GradientTitle("Hi Boss", 34, Modifier.padding(top = 8.dp))
+                MobiusStrip(OrbMood.IDLE, size = 132.dp)
+                GradientTitle("Hi Boss", 30, Modifier.padding(top = 12.dp))
                 Text("Say \"Hey Jimi\" or type below.", color = MaterialTheme.colorScheme.onSurfaceVariant)
                 FlowRow(
                     Modifier.padding(top = 20.dp),
@@ -174,7 +207,7 @@ private fun ChatTab(vm: AppViewModel) {
         } else {
             LazyColumn(
                 Modifier.weight(1f), reverseLayout = true,
-                verticalArrangement = Arrangement.spacedBy(12.dp), contentPadding = PaddingValues(vertical = 12.dp),
+                verticalArrangement = Arrangement.spacedBy(18.dp), contentPadding = PaddingValues(vertical = 12.dp),
             ) {
                 items(turns.take(60), key = { it.id }) { t ->
                     Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
@@ -190,50 +223,57 @@ private fun ChatTab(vm: AppViewModel) {
     }
 }
 
-/** User messages align right; assistant messages align left. */
+/** User line: soft grey bubble on the right. Jimi's answer: plain text on the left under a small logo (D-057). */
 @Composable
 fun Bubble(text: String, mine: Boolean) {
     if (text.isBlank()) return
-    Row(Modifier.fillMaxWidth(), horizontalArrangement = if (mine) Arrangement.End else Arrangement.Start, verticalAlignment = Alignment.Top) {
-        if (!mine) MobiusStrip(OrbMood.IDLE, size = 28.dp, modifier = Modifier.padding(end = 6.dp, top = 2.dp), still = true)
-        Text(
-            text,
-            style = MaterialTheme.typography.bodyLarge,
-            color = PanelColors.Text,
-            modifier = Modifier.widthIn(max = 300.dp)
-                .clip(RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp, bottomStart = if (mine) 20.dp else 6.dp, bottomEnd = if (mine) 6.dp else 20.dp))
-                .then(
-                    if (mine) Modifier.background(MaterialTheme.colorScheme.surfaceContainerHigh)
-                    else Modifier.background(MaterialTheme.colorScheme.surfaceContainerLow),
-                )
-                .padding(16.dp),
-        )
+    if (mine) {
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+            Text(
+                text,
+                style = MaterialTheme.typography.bodyLarge,
+                color = JimiColors.Text,
+                modifier = Modifier.widthIn(max = 290.dp)
+                    .clip(RoundedCornerShape(topStart = 20.dp, topEnd = 20.dp, bottomStart = 20.dp, bottomEnd = 6.dp))
+                    .background(JimiColors.Surface3)
+                    .padding(horizontal = 16.dp, vertical = 11.dp),
+            )
+        }
+    } else {
+        Row(Modifier.fillMaxWidth().padding(end = 24.dp), verticalAlignment = Alignment.Top) {
+            MobiusStrip(OrbMood.IDLE, size = 24.dp, modifier = Modifier.padding(end = 10.dp, top = 1.dp), still = true)
+            Text(text, style = MaterialTheme.typography.bodyLarge, color = JimiColors.Text)
+        }
     }
 }
 
-/** Rounded text field with the mic / send button. */
+/** White rounded text field with the mic / send button. */
 @Composable
 fun InputPill(text: String, onText: (String) -> Unit, modifier: Modifier = Modifier, onGo: () -> Unit) {
+    val shape = RoundedCornerShape(28.dp)
     Row(
-        modifier.fillMaxWidth().background(PanelColors.Field, RoundedCornerShape(28.dp)).padding(start = 18.dp, end = 6.dp),
+        modifier.fillMaxWidth()
+            .shadow(10.dp, shape, ambientColor = Color(0x22000000), spotColor = Color(0x22000000))
+            .background(JimiColors.Surface1, shape).border(1.dp, JimiColors.Outline, shape)
+            .padding(start = 20.dp, end = 6.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         BasicTextField(
             value = text, onValueChange = onText, singleLine = true,
-            textStyle = MaterialTheme.typography.bodyLarge.copy(color = PanelColors.Text),
-            cursorBrush = SolidColor(PanelColors.Cyan),
+            textStyle = MaterialTheme.typography.bodyLarge.copy(color = JimiColors.Text),
+            cursorBrush = SolidColor(JimiColors.Cyan),
             modifier = Modifier.weight(1f).padding(vertical = 16.dp),
             decorationBox = { inner ->
-                if (text.isEmpty()) Text("Type to Jimi", color = PanelColors.Dim)
+                if (text.isEmpty()) Text("Ask Jimi anything", color = JimiColors.TertiaryText)
                 inner()
             },
         )
         Box(
-            Modifier.size(48.dp).clip(CircleShape).background(PanelColors.Cyan).clickable(onClick = onGo),
+            Modifier.size(44.dp).clip(CircleShape).background(JimiColors.Cyan).clickable(onClick = onGo),
             contentAlignment = Alignment.Center,
         ) {
-            if (text.isBlank()) Text("🎤", fontSize = 18.sp)
-            else Icon(Icons.AutoMirrored.Filled.Send, contentDescription = "Send", tint = MaterialTheme.colorScheme.onPrimary)
+            if (text.isBlank()) MicGlyph(Color.White)
+            else Icon(Icons.AutoMirrored.Filled.Send, contentDescription = "Send", tint = Color.White, modifier = Modifier.size(20.dp))
         }
     }
 }
@@ -242,12 +282,13 @@ fun InputPill(text: String, onText: (String) -> Unit, modifier: Modifier = Modif
 fun Pill(text: String, selected: Boolean = false, onClick: () -> Unit) {
     Text(
         text,
-        color = if (selected) PanelColors.Cyan else PanelColors.Text,
+        color = if (selected) JimiColors.Cyan else JimiColors.Text,
         style = MaterialTheme.typography.labelLarge,
-        modifier = Modifier.clip(RoundedCornerShape(12.dp))
-            .border(1.dp, if (selected) PanelColors.Cyan else MaterialTheme.colorScheme.outline, RoundedCornerShape(12.dp))
+        modifier = Modifier.clip(CircleShape)
+            .background(if (selected) JimiColors.AccentSoft else JimiColors.Surface1)
+            .border(1.dp, if (selected) JimiColors.Cyan.copy(alpha = 0.4f) else JimiColors.Outline, CircleShape)
             .clickable(onClick = onClick)
-            .padding(horizontal = 14.dp, vertical = 8.dp),
+            .padding(horizontal = 16.dp, vertical = 10.dp),
     )
 }
 
@@ -365,7 +406,7 @@ private fun NotesTab(vm: AppViewModel) {
 private fun Header(t: String) = GradientTitle(t, 22, Modifier.padding(top = 12.dp))
 
 @Composable
-private fun SettingsTab(vm: AppViewModel, onSetup: () -> Unit, onDeviceCheck: () -> Unit) {
+private fun SettingsTab(vm: AppViewModel, onSetup: () -> Unit, onDeviceCheck: () -> Unit, onWake: () -> Unit) {
     val spokenWake by vm.spokenWake.collectAsStateWithLifecycle()
     val followUp by vm.followUp.collectAsStateWithLifecycle()
     val panel by vm.showPanel.collectAsStateWithLifecycle()
@@ -397,6 +438,7 @@ private fun SettingsTab(vm: AppViewModel, onSetup: () -> Unit, onDeviceCheck: ()
         GlassCard(title = "Setup") {
             Button(onClick = onSetup) { Text("Run setup wizard") }
             OutlinedButton(onClick = onDeviceCheck) { Text("Device check") }
+            OutlinedButton(onClick = onWake) { Text("Wake word test") }
             Text("Root is optional. Extra permissions and background settings depend on this phone.", style = MaterialTheme.typography.bodySmall)
             Button(onClick = vm::rootSetup) { Text("Set up with root") }
             if (message.isNotBlank()) Text(message, style = MaterialTheme.typography.bodySmall)
