@@ -643,7 +643,12 @@ class JarvisCoreService : LifecycleService() {
         val vocabulary = SttVocabularyLoader(this).load()
         val currentVocabulary = AtomicReference(vocabulary)
         val vocabularyJob = lifecycleScope.launch(Dispatchers.IO) {
-            SttVocabularyUpdates(this@JarvisCoreService).snapshots().collect { currentVocabulary.set(it) }
+            SttVocabularyUpdates(this@JarvisCoreService).snapshots().collect {
+                val appsChanged = it.apps != currentVocabulary.get().apps
+                currentVocabulary.set(it)
+                // App installed or removed: learn its abilities now, not tomorrow (D-056, G.1).
+                if (appsChanged) runCatching { registry.profile.scan() }.onFailure { e -> JarvisLog.e("phone scan failed", e) }
+            }
         }
         var corrector = SttCorrector(vocabulary.contacts, vocabulary.apps)
         val engineSettings = SpeechEngineSettings(this)

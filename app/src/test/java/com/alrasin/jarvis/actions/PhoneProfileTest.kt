@@ -51,4 +51,15 @@ class PhoneProfileTest {
     @Test fun appWordsHintOpenApp() {
         assertEquals(setOf("spotify", "whatsapp", "chrome", "messenger"), ToolShortlist.appWords(profile.apps))
     }
+
+    @Test fun androidAbilitiesMergeWithHints() {
+        val merged = PhoneProfile.merge(
+            mapOf("messaging" to listOf("Messages", "WhatsApp"), "notes" to listOf("Keep")),
+            mapOf("messaging" to listOf("WhatsApp", "Messenger"), "payments" to listOf("bKash"), "video" to emptyList()),
+        )
+        assertEquals(listOf("Messages", "WhatsApp", "Messenger"), merged["messaging"])
+        assertEquals(listOf("Keep"), merged["notes"])
+        assertEquals(listOf("bKash"), merged["payments"])
+        assertFalse("video" in merged)
+    }
 }

@@ -2,8 +2,12 @@ package com.alrasin.jarvis.actions
 
 import android.Manifest
 import android.content.Context
+import android.content.Intent
+import android.content.pm.ApplicationInfo
 import android.content.pm.PackageManager
+import android.net.Uri
 import android.os.Build
+import android.provider.MediaStore
 import android.provider.ContactsContract
 import android.telephony.SubscriptionManager
 import com.alrasin.jarvis.core.JarvisLog
@@ -57,7 +61,7 @@ class PhoneProfile(private val context: Context, private val apps: AppList) {
             device = "${Build.MANUFACTURER} ${Build.MODEL}".trim(),
             android = "Android ${Build.VERSION.RELEASE}" + (miui()?.let { ", MIUI $it" } ?: ""),
             apps = installed.map { it.label }.distinct().sortedBy { it.lowercase() },
-            roles = roles(installed),
+            roles = merge(abilities(installed), roles(installed)),
             contacts = count(null),
             whatsappContacts = count(WHATSAPP_ACCOUNT),
             sims = sims(),
@@ -67,6 +71,22 @@ class PhoneProfile(private val context: Context, private val apps: AppList) {
         cached = p
         JarvisLog.i("phone profile: ${p.apps.size} apps, ${p.contacts} contacts in ${System.currentTimeMillis() - t0} ms")
         p
+    }
+
+    /**
+     * What each app can do, asked from Android (D-056, QUALITY-PLAN G.1), so it works on any phone:
+     * apps that handle a standard intent, plus the app category the developer set.
+     */
+    private fun abilities(installed: List<AppList.App>): Map<String, List<String>> {
+        val pm = context.packageManager
+        val labels = installed.associate { it.pkg to it.label }
+        fun handlers(i: Intent) = runCatching { pm.queryIntentActivities(i, PackageManager.MATCH_ALL) }.getOrDefault(emptyList())
+            .mapNotNull { labels[it.activityInfo.packageName] }.distinct()
+        val byIntent = ABILITY_INTENTS.mapValues { (_, make) -> handlers(make()) }
+        val byCategory = installed.groupBy { a ->
+            runCatching { CATEGORY_ROLES[pm.getApplicationInfo(a.pkg, 0).category] }.getOrNull()
+        }.filterKeys { it != null }.map { (k, v) -> k!! to v.map { it.label } }.toMap()
+        return merge(byIntent, byCategory)
     }
 
     private fun load(): Profile? = runCatching { if (file.isFile) fromJson(file.readText()) else null }.getOrNull()
@@ -99,7 +119,32 @@ class PhoneProfile(private val context: Context, private val apps: AppList) {
             "gps" to PackageManager.FEATURE_LOCATION_GPS, "infrared" to PackageManager.FEATURE_CONSUMER_IR,
         )
 
-        /** Package prefixes → what the app is for. Unknown apps are still listed in [Profile.apps]. */
+        /** Role → an intent only apps with that ability handle. */
+        private val ABILITY_INTENTS: Map<String, () -> Intent> = mapOf(
+            "messaging" to { Intent(Intent.ACTION_SENDTO, Uri.parse("smsto:1")) },
+            "calls" to { Intent(Intent.ACTION_DIAL, Uri.parse("tel:1")) },
+            "maps" to { Intent(Intent.ACTION_VIEW, Uri.parse("geo:0,0")) },
+            "email" to { Intent(Intent.ACTION_SENDTO, Uri.parse("mailto:a@b.c")) },
+            "play from search" to { Intent(MediaStore.INTENT_ACTION_MEDIA_PLAY_FROM_SEARCH) },
+            "browser" to { Intent(Intent.ACTION_VIEW, Uri.parse("http://example.com")).addCategory(Intent.CATEGORY_BROWSABLE) },
+            "camera" to { Intent(MediaStore.ACTION_IMAGE_CAPTURE) },
+            "notes" to { Intent(NoteApp.CREATE_NOTE).setType("text/plain") },
+            "calendar" to { Intent(Intent.ACTION_INSERT, Uri.parse("content://com.android.calendar/events")) },
+        )
+
+        /** ApplicationInfo.category (set by the app's developer) → role. */
+        private val CATEGORY_ROLES = mapOf(
+            ApplicationInfo.CATEGORY_AUDIO to "music", ApplicationInfo.CATEGORY_VIDEO to "video",
+            ApplicationInfo.CATEGORY_MAPS to "maps", ApplicationInfo.CATEGORY_SOCIAL to "social",
+            ApplicationInfo.CATEGORY_NEWS to "news", ApplicationInfo.CATEGORY_IMAGE to "photos",
+            ApplicationInfo.CATEGORY_GAME to "games",   // "productivity" left out: on MIUI it holds Play Store, banks, files…
+        )
+
+        /** Union per role, order kept, no duplicates. */
+        internal fun merge(a: Map<String, List<String>>, b: Map<String, List<String>>): Map<String, List<String>> =
+            (a.keys + b.keys).associateWith { k -> (a[k].orEmpty() + b[k].orEmpty()).distinct() }.filterValues { it.isNotEmpty() }
+
+        /** Hand hints by package prefix, added to what Android reports (payments has no standard intent). */
         private val ROLE_PACKAGES = mapOf(
             "messaging" to listOf("com.whatsapp", "com.facebook.orca", "org.telegram", "com.imo.android", "com.viber",
                 "com.google.android.apps.messaging", "com.android.mms", "com.discord", "com.instagram.android"),
