@@ -1,5 +1,6 @@
 package com.alrasin.jarvis.brain
 
+import com.alrasin.jarvis.agent.AgentRouting
 import com.alrasin.jarvis.core.ToolCall
 import java.util.Locale
 
@@ -100,7 +101,8 @@ object IntentRouter {
             null -> launchRequest.matchEntire(normalized)?.groupValues?.get(1)
             else -> null
         }
-        if (launchApp != null && (isAppLaunchQuestion(normalized) ||
+        // "open messenger and find …" is a screen task, not an unknown app called "messenger and find".
+        if (launchApp != null && !AgentRouting.needsMultiStep(normalized) && (isAppLaunchQuestion(normalized) ||
                 (ruleCall == null && RuleMatcher.appNameMatches?.invoke(launchApp) == false))) {
             return Decision(Route.CHAT, 0.96f, "unmatched app or app question")
         }

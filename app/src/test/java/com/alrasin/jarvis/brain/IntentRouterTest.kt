@@ -261,4 +261,17 @@ class IntentRouterTest {
         }
         assertTrue(failures.joinToString("\n"), failures.isEmpty())
     }
+
+    @Test fun openAppAndDoSomethingIsNotChat() {
+        val previous = RuleMatcher.appNameMatches
+        try {
+            RuleMatcher.appNameMatches = { it == "messenger" }
+            listOf("open messenger and find", "open messenger and find my sister's chat").forEach { text ->
+                val decision = IntentRouter.classify(text, RuleMatcher.match(text))
+                assertFalse(text, decision.route == IntentRouter.Route.CHAT && decision.isConfident)
+            }
+        } finally {
+            RuleMatcher.appNameMatches = previous
+        }
+    }
 }

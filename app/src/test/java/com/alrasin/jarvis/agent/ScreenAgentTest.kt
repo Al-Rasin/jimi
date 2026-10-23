@@ -27,6 +27,11 @@ class ScreenAgentTest {
             """{"action":"scroll","direction":"sideways"}""").forEach { assertNull(it, AgentAction.parse(it)) }
     }
 
+    @Test fun parsesFencedCloudReply() {
+        assertEquals(AgentAction.OpenApp("com.facebook.orca"), AgentAction.parse("```json\n{\"action\":\"open_app\",\"package\":\"com.facebook.orca\"}\n```"))
+        assertNull(AgentAction.parse("I can't do that."))
+    }
+
     @Test fun compactsAndRedacts() {
         val compact = ScreenSnapshot.compact("app", (1..100).map { ScreenElement(it, "x".repeat(1000), password = true) })
         assertEquals(60, compact.elements.size)
@@ -46,6 +51,13 @@ class ScreenAgentTest {
             listOf(ScreenElement(1, "Other", clickable = true, safetyUncertain = true)))))
         val otp = ScreenSnapshot("app", listOf(ScreenElement(1, "OTP", editable = true)))
         assertNotNull(AgentSafety.confirmation(AgentAction.Type(1, "123456"), otp))
+    }
+
+    @Test fun namedAppOpensBeforeTheModel() = runBlocking {
+        val screen = Screen(safe)
+        val result = ScreenAgent(model(AgentAction.Done("Found it")), screen).run("open messenger and find the search box")
+        assertEquals("Found it", result.summary)
+        assertEquals(listOf<AgentAction>(AgentAction.OpenApp("messenger")), screen.actions)
     }
 
     @Test fun loopExecutesThenFinishes() = runBlocking {
@@ -138,14 +150,14 @@ class ScreenAgentTest {
         assertTrue(screen.actions.isEmpty())
     }
 
-    @Test fun failureStopsLoop() = runBlocking {
+    @Test fun failureStopsLoopAfterOneRetry() = runBlocking {
         var calls = 0
         val screen = object : AgentScreen {
             override suspend fun snapshot() = safe
             override suspend fun perform(action: AgentAction, snapshot: ScreenSnapshot): Boolean { calls++; return false }
         }
         assertTrue(ScreenAgent(model(AgentAction.Tap(1)), screen).run("task").summary.contains("failed"))
-        assertEquals(1, calls)
+        assertEquals(2, calls)
     }
 
     private fun slowModel() = object : AgentModel {

@@ -45,7 +45,7 @@ class AgentModels @Inject constructor(
                     }
                 }
                 val response = try { request.await() } finally { request.cancel() }
-                return AgentAction.parse(response) ?: error("Cloud returned an invalid screen action.")
+                return AgentAction.parse(response) ?: error("Cloud returned an invalid screen action: ${response.take(200)}")
             }
         } else LocalAgentModel(File(context.getExternalFilesDir(null), "models/llm"), models)
     }

@@ -164,7 +164,7 @@ class AccessibilityAgentScreen(private val context: Context) : AgentScreen {
             Intent(Settings.ACTION_SETTINGS)
         } else {
             val matches = apps.all().filter { it.pkg == name || it.label.equals(name, ignoreCase = true) }
-            val app = matches.singleOrNull() ?: return false
+            val app = matches.singleOrNull() ?: apps.find(name) ?: return false
             if (app.pkg == context.packageName) return false
             context.packageManager.getLaunchIntentForPackage(app.pkg) ?: return false
         }
