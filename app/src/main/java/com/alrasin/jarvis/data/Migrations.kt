@@ -12,3 +12,14 @@ internal val MIGRATION_SQL_1_2 = listOf(
     "CREATE TABLE IF NOT EXISTS `tool_call_log` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `timeMs` INTEGER NOT NULL, `heard` TEXT NOT NULL, `tool` TEXT NOT NULL, `argsJson` TEXT NOT NULL, `source` TEXT NOT NULL, `ok` INTEGER NOT NULL, `result` TEXT NOT NULL, `corrected` TEXT)",
     "CREATE TABLE IF NOT EXISTS `routine` (`name` TEXT NOT NULL, `stepsJson` TEXT NOT NULL, `enabled` INTEGER NOT NULL, PRIMARY KEY(`name`))",
 )
+
+/** Tables added in DB v3: app map (ROADMAP J.1). */
+internal val MIGRATION_SQL_2_3 = listOf(
+    "CREATE TABLE IF NOT EXISTS `app_info` (`pkg` TEXT NOT NULL, `versionCode` INTEGER NOT NULL, `label` TEXT NOT NULL, `category` TEXT NOT NULL, `source` TEXT NOT NULL, `lastLearned` INTEGER NOT NULL, PRIMARY KEY(`pkg`))",
+    "CREATE TABLE IF NOT EXISTS `app_screen` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `pkg` TEXT NOT NULL, `fingerprint` TEXT NOT NULL, `name` TEXT NOT NULL, `lastSeen` INTEGER NOT NULL)",
+    "CREATE INDEX IF NOT EXISTS `index_app_screen_pkg` ON `app_screen` (`pkg`)",
+    "CREATE TABLE IF NOT EXISTS `app_element` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `screen` INTEGER NOT NULL, `selectorsJson` TEXT NOT NULL, `role` TEXT NOT NULL, `label` TEXT NOT NULL, `risk` TEXT NOT NULL)",
+    "CREATE INDEX IF NOT EXISTS `index_app_element_screen` ON `app_element` (`screen`)",
+    "CREATE TABLE IF NOT EXISTS `app_edge` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `fromScreen` INTEGER NOT NULL, `element` INTEGER NOT NULL, `toScreen` INTEGER NOT NULL, `timesSeen` INTEGER NOT NULL, `lastOk` INTEGER NOT NULL, `failedCount` INTEGER NOT NULL)",
+    "CREATE INDEX IF NOT EXISTS `index_app_edge_fromScreen` ON `app_edge` (`fromScreen`)",
+)

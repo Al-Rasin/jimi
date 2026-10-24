@@ -4,6 +4,13 @@ object AgentSafety {
     private val risky = Regex("(?i)pay|buy|send|delete|purchase|checkout|place.?order|confirm|book.?ride|request.?ride|remove|transfer|submit")
     private val secret = Regex("(?i)password|passcode|\\bpin\\b|\\botp\\b|one.?time|verification.?code|security.?code")
 
+    /** Risk for a stored map element from its label text. [password] = field is a password/secret input. */
+    fun riskLevel(label: String, password: Boolean = false): String = when {
+        password || secret.containsMatchIn(label) -> "secret"
+        risky.containsMatchIn(label) -> "high"
+        else -> "low"
+    }
+
     fun confirmation(action: AgentAction, snapshot: ScreenSnapshot): String? {
         val index = when (action) { is AgentAction.Tap -> action.element; is AgentAction.Type -> action.element; else -> return null }
         val target = snapshot.elements.firstOrNull { it.index == index } ?: return "The target is unavailable."

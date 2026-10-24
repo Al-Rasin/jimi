@@ -6,6 +6,11 @@ import androidx.room.Room
 import androidx.room.RoomDatabase
 import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
+import com.alrasin.jarvis.agent.appmap.AppEdge
+import com.alrasin.jarvis.agent.appmap.AppElement
+import com.alrasin.jarvis.agent.appmap.AppInfo
+import com.alrasin.jarvis.agent.appmap.AppMapDao
+import com.alrasin.jarvis.agent.appmap.AppScreen
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
@@ -17,8 +22,9 @@ import javax.inject.Singleton
     entities = [
         WakeEvent::class, ConversationTurn::class, Note::class, Reminder::class, NotificationLog::class,
         AppRule::class, MemoryFact::class, ToolCallLog::class, Routine::class,
+        AppInfo::class, AppScreen::class, AppElement::class, AppEdge::class,
     ],
-    version = 2,
+    version = 3,
     exportSchema = true,
 )
 abstract class JarvisDatabase : RoomDatabase() {
@@ -30,12 +36,20 @@ abstract class JarvisDatabase : RoomDatabase() {
     abstract fun memoryDao(): MemoryDao
     abstract fun toolLogDao(): ToolLogDao
     abstract fun routineDao(): RoutineDao
+    abstract fun appMapDao(): AppMapDao
 
     companion object {
         /** v1 had only wake_event (kept as is). SQL copied from app/schemas/…/2.json. */
         val MIGRATION_1_2 = object : Migration(1, 2) {
             override fun migrate(db: SupportSQLiteDatabase) {
                 MIGRATION_SQL_1_2.forEach(db::execSQL)
+            }
+        }
+
+        /** v3 adds the app map tables (ROADMAP J.1). */
+        val MIGRATION_2_3 = object : Migration(2, 3) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                MIGRATION_SQL_2_3.forEach(db::execSQL)
             }
         }
     }
@@ -48,7 +62,7 @@ object DataModule {
     @Singleton
     fun database(@ApplicationContext context: Context): JarvisDatabase =
         Room.databaseBuilder(context, JarvisDatabase::class.java, "jarvis.db")
-            .addMigrations(JarvisDatabase.MIGRATION_1_2)
+            .addMigrations(JarvisDatabase.MIGRATION_1_2, JarvisDatabase.MIGRATION_2_3)
             .build()
 
     @Provides fun wakeEventDao(db: JarvisDatabase): WakeEventDao = db.wakeEventDao()
@@ -59,4 +73,5 @@ object DataModule {
     @Provides fun memoryDao(db: JarvisDatabase): MemoryDao = db.memoryDao()
     @Provides fun toolLogDao(db: JarvisDatabase): ToolLogDao = db.toolLogDao()
     @Provides fun routineDao(db: JarvisDatabase): RoutineDao = db.routineDao()
+    @Provides fun appMapDao(db: JarvisDatabase): AppMapDao = db.appMapDao()
 }
