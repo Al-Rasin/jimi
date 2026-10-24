@@ -9,7 +9,7 @@ import android.provider.AlarmClock
 import com.alrasin.jarvis.core.JarvisLog
 import com.alrasin.jarvis.core.Tool
 import com.alrasin.jarvis.core.ToolResult
-import kotlinx.coroutines.delay
+import com.alrasin.jarvis.core.pollUntil
 import java.time.DayOfWeek
 import java.time.LocalDate
 import java.time.LocalDateTime
@@ -106,17 +106,19 @@ internal fun Context.launchClock(intent: Intent): Boolean {
 
 private suspend fun awaitAlarmState(context: Context, matches: (Long?) -> Boolean): Boolean {
     val manager = context.getSystemService(AlarmManager::class.java) ?: return false
-    repeat(5) { attempt ->
-        if (attempt > 0) delay(500)
+    var failed = false
+    val matched = pollUntil(5, 500) {
+        if (failed) return@pollUntil true
         val next = try {
             manager.nextAlarmClock?.triggerTime
         } catch (e: RuntimeException) {
             JarvisLog.e("Could not read the next Clock alarm", e)
-            return false
+            failed = true
+            return@pollUntil true
         }
-        if (matches(next)) return true
+        matches(next)
     }
-    return false
+    return matched && !failed
 }
 
 internal fun hasScheduledAlarm(next: Long?): Boolean = next != null

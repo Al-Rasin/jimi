@@ -1,6 +1,7 @@
 package com.alrasin.jarvis.agent
 
 import com.alrasin.jarvis.core.JarvisLog
+import com.alrasin.jarvis.core.pollUntil
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.currentCoroutineContext
@@ -67,11 +68,9 @@ class ScreenAgent(
     /** Waits (max ~4 s) until two looks at the screen match, so a loading app does not change under a tap. */
     private suspend fun settle() {
         var last = screen.snapshot()
-        repeat(8) {
-            delay(500)
+        pollUntil(8, 500, delayFirst = true) {
             val now = screen.snapshot()
-            if (now == last && now.elements.isNotEmpty()) return
-            last = now
+            (now == last && now.elements.isNotEmpty()).also { if (!it) last = now }
         }
     }
 

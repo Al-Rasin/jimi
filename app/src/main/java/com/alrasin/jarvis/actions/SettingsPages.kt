@@ -6,6 +6,7 @@ import android.content.Intent
 import android.provider.Settings
 import com.alrasin.jarvis.core.JarvisLog
 import com.alrasin.jarvis.core.ToolResult
+import com.alrasin.jarvis.core.pollUntil
 import kotlinx.coroutines.delay
 
 /**
@@ -88,7 +89,7 @@ class SettingsPages(private val context: Context) {
     /** Settings app → search box → type [name] (then simpler words if nothing is found) → tap the closest result. */
     private suspend fun search(service: JarvisAccessibilityService, name: String): Boolean {
         if (!context.launch(Intent(Settings.ACTION_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_CLEAR_TASK))) return false
-        if (!waitFor { service.clickExact(settingsPkg, labels = SEARCH_LABELS) }) return false
+        if (!pollUntil(16, 250) { service.clickExact(settingsPkg, labels = SEARCH_LABELS) }) return false
         var typed = ""
         // A cold search index takes ~20 s to load on a slow phone and says "no results" until then, so keep cycling.
         val end = System.currentTimeMillis() + SEARCH_MS
@@ -97,12 +98,12 @@ class SettingsPages(private val context: Context) {
             typed = query
             var hit: String? = null
             // Slow polling: reading the screen too often keeps a slow Settings app from showing its results.
-            if (!waitFor(8, pause = 1000) { match(name, service.texts(settingsPkg).filter { !it.equals(query, true) }).also { hit = it } != null }) {
+            if (!pollUntil(8, 1000) { match(name, service.texts(settingsPkg).filter { !it.equals(query, true) }).also { hit = it } != null }) {
                 JarvisLog.i("setting search \"$query\": no match in ${service.texts(settingsPkg).take(6)}")
                 if (System.currentTimeMillis() >= end) break else continue
             }
             JarvisLog.i("setting search \"$query\" → \"$hit\"")
-            return waitFor { service.clickUniqueText(settingsPkg, hit!!) }
+            return pollUntil(16, 250) { service.clickUniqueText(settingsPkg, hit!!) }
         }
         return false
     }
@@ -115,14 +116,6 @@ class SettingsPages(private val context: Context) {
         val clear = if (old.isEmpty()) "" else "input keyevent 123 ${"67 ".repeat(old.length)}; "
         val safe = query.filter { it.isLetterOrDigit() || it == ' ' || it == '-' }.replace(" ", "%s")
         return RootShell.run("${clear}input text $safe").ok || service.replaceText(settingsPkg, query)
-    }
-
-    private suspend fun waitFor(tries: Int = 16, pause: Long = 250, check: () -> Boolean): Boolean {
-        repeat(tries) {
-            if (check()) return true
-            delay(pause)
-        }
-        return false
     }
 
     companion object {

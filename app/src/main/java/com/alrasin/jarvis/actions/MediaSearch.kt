@@ -5,7 +5,7 @@ import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import com.alrasin.jarvis.core.ToolResult
-import kotlinx.coroutines.delay
+import com.alrasin.jarvis.core.pollUntil
 import java.util.Locale
 
 internal enum class MediaApp(val key: String, val label: String, val pkg: String) {
@@ -56,11 +56,8 @@ internal suspend fun playSearch(context: Context, query: String, requestedApp: S
     if (!opened) return ToolResult.fail("I couldn't open ${app.label} search.")
     val service = JarvisAccessibilityService.instance
         ?: return ToolResult.fail("I opened ${app.label} search. Enable Jimi accessibility so I can select the first result.")
-    repeat(24) {
-        delay(250)
-        if (service.clickFirstMediaResult(app.pkg)) {
-            return ToolResult.ok("I selected the first result for $query in ${app.label}. Playback requested, Boss.")
-        }
+    if (pollUntil(24, 250, delayFirst = true) { service.clickFirstMediaResult(app.pkg) }) {
+        return ToolResult.ok("I selected the first result for $query in ${app.label}. Playback requested, Boss.")
     }
     return ToolResult.fail("I opened ${app.label} search but couldn't select a video or song. Unlock the phone and check the results and internet connection.")
 }

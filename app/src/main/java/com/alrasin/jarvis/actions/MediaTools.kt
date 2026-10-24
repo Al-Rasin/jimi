@@ -6,16 +6,13 @@ import android.os.SystemClock
 import android.view.KeyEvent
 import com.alrasin.jarvis.core.Tool
 import com.alrasin.jarvis.core.ToolResult
-import kotlinx.coroutines.delay
+import com.alrasin.jarvis.core.pollUntil
 
 fun mediaTools(context: Context): List<Tool> {
     val audio by lazy { context.getSystemService(AudioManager::class.java) }
     fun musicActive(): Boolean? = runCatching { audio.isMusicActive }.getOrNull()
     suspend fun awaitMusic(active: Boolean): Boolean? {
-        repeat(10) {
-            delay(200)
-            if (musicActive() == active) return active
-        }
+        if (pollUntil(10, 200, delayFirst = true) { musicActive() == active }) return active
         return musicActive()
     }
     fun key(code: Int) {

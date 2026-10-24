@@ -6,7 +6,7 @@ import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
 import com.alrasin.jarvis.core.JarvisLog
-import kotlinx.coroutines.delay
+import com.alrasin.jarvis.core.pollUntil
 
 /**
  * Saves a note in the phone's own notes app (D-056), found from Android, not a hand list: first the app that handles
@@ -39,8 +39,8 @@ class NoteApp(private val context: Context) {
         val intent = Intent(if (t.createNote) CREATE_NOTE else Intent.ACTION_SEND).setType("text/plain").setPackage(t.pkg)
             .putExtra(Intent.EXTRA_TEXT, text)
         title?.let { intent.putExtra(Intent.EXTRA_SUBJECT, it) }
-        if (!context.launch(intent) || !waitFor { service.hasWindow(t.pkg) }) return null
-        if (waitFor { service.clickExact(t.pkg, labels = SAVE_LABELS) }) return t.label.also { JarvisLog.i("note saved in ${t.pkg}") }
+        if (!context.launch(intent) || !pollUntil(20, 250) { service.hasWindow(t.pkg) }) return null
+        if (pollUntil(20, 250) { service.clickExact(t.pkg, labels = SAVE_LABELS) }) return t.label.also { JarvisLog.i("note saved in ${t.pkg}") }
         // Editors without a Save button (MIUI Notes) save on Back, once the text is in.
         if (service.editableText(t.pkg)?.contains(text.take(20)) == true) {
             service.global(AccessibilityService.GLOBAL_ACTION_BACK)
@@ -48,14 +48,6 @@ class NoteApp(private val context: Context) {
         }
         JarvisLog.i("note: no Save in ${t.pkg}")
         return null
-    }
-
-    private suspend fun waitFor(check: () -> Boolean): Boolean {
-        repeat(20) {
-            if (check()) return true
-            delay(250)
-        }
-        return false
     }
 
     companion object {

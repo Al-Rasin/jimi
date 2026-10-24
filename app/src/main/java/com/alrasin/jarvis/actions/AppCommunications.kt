@@ -8,6 +8,7 @@ import android.provider.ContactsContract
 import android.telephony.PhoneNumberUtils
 import android.telephony.TelephonyManager
 import com.alrasin.jarvis.core.ToolResult
+import com.alrasin.jarvis.core.pollUntil
 import kotlinx.coroutines.delay
 import java.util.Locale
 
@@ -87,7 +88,7 @@ internal class AppCommunications(private val context: Context, private val conta
             return ToolResult.fail("I couldn't enter the exact message in ${person.name}'s $label chat. Nothing was sent.")
         val ids = if (app == "whatsapp") listOf("$pkg:id/send") else emptyList()
         if (!conversationMatches(service, pkg, person)) return ToolResult.fail("The $label conversation changed. Nothing was sent.")
-        if (!waitFor { service.clickExact(pkg, labels = listOf("Send", "Send message"), ids = ids) })
+        if (!pollUntil(20, 250) { service.clickExact(pkg, labels = listOf("Send", "Send message"), ids = ids) })
             return ToolResult.fail("The message is ready in $label, but I couldn't identify Send. Nothing was sent.")
         return ToolResult.ok("Boss, I tapped send for ${person.name} in $label. Delivery isn't confirmed.")
     }
@@ -107,16 +108,16 @@ internal class AppCommunications(private val context: Context, private val conta
         }
         if (!context.launch(Intent(Intent.ACTION_VIEW, uri).setPackage(pkg))) return ToolResult.fail("I couldn't open $label.")
         // Messenger has no "you" mark in the thread; the deep link to the owner's own id is the check there.
-        val opened = waitFor { service.editableText(pkg) != null && (app != "whatsapp" || service.isSelfChat(pkg)) }
+        val opened = pollUntil(20, 250) { service.editableText(pkg) != null && (app != "whatsapp" || service.isSelfChat(pkg)) }
         if (!opened) return ToolResult.fail("I couldn't open your own $label chat. Nothing was sent. Unlock the phone and try again.")
         service.focusEditable(pkg)
         delay(300)
-        if (!service.replaceText(pkg, text) || !waitFor { service.editableText(pkg) == text })
+        if (!service.replaceText(pkg, text) || !pollUntil(20, 250) { service.editableText(pkg) == text })
             return ToolResult.fail("I couldn't enter the exact message in your $label chat. Nothing was sent.")
         if (app == "whatsapp" && !service.isSelfChat(pkg)) return ToolResult.fail("The WhatsApp chat changed. Nothing was sent.")
         val ids = if (app == "whatsapp") listOf("$pkg:id/send") else emptyList()
         // Messenger swaps the like button for Send only after the text is in.
-        if (!waitFor { service.clickExact(pkg, labels = listOf("Send", "Send message"), ids = ids) })
+        if (!pollUntil(20, 250) { service.clickExact(pkg, labels = listOf("Send", "Send message"), ids = ids) })
             return ToolResult.fail("The message is ready in $label, but I couldn't identify Send. Nothing was sent.")
         return ToolResult.ok("Boss, I sent it to your own $label chat.")
     }
@@ -130,13 +131,13 @@ internal class AppCommunications(private val context: Context, private val conta
             if (!context.launch(Intent(Intent.ACTION_VIEW, uri).setPackage(pkg))) return "I couldn't open WhatsApp."
         } else if (!openContactRow(person, pkg)) {
             val launch = context.packageManager.getLaunchIntentForPackage(pkg) ?: return "I couldn't open Messenger."
-            if (!context.launch(launch) || !waitFor { service.appPackage() == pkg }) return "I couldn't open Messenger. Unlock the phone and try again."
-            if (!waitFor { service.clickExact(pkg, labels = listOf("Search", "Search Messenger")) }) return "I couldn't find Messenger search. Open Messenger's Chats tab and try again."
-            if (!waitFor { service.replaceText(pkg, person.name) }) return "I couldn't type in Messenger search."
+            if (!context.launch(launch) || !pollUntil(20, 250) { service.appPackage() == pkg }) return "I couldn't open Messenger. Unlock the phone and try again."
+            if (!pollUntil(20, 250) { service.clickExact(pkg, labels = listOf("Search", "Search Messenger")) }) return "I couldn't find Messenger search. Open Messenger's Chats tab and try again."
+            if (!pollUntil(20, 250) { service.replaceText(pkg, person.name) }) return "I couldn't type in Messenger search."
             delay(750)
-            if (!waitFor { service.clickUniqueText(pkg, person.name) }) return "I couldn't find one unique Messenger result for ${person.name}. Choose their conversation in Messenger."
+            if (!pollUntil(20, 250) { service.clickUniqueText(pkg, person.name) }) return "I couldn't find one unique Messenger result for ${person.name}. Choose their conversation in Messenger."
         }
-        val verified = waitFor {
+        val verified = pollUntil(20, 250) {
             conversationMatches(service, pkg, person) && service.editableText(pkg) != null
         }
         return if (verified) null else "I couldn't verify ${person.name}'s $label conversation. Nothing was sent or called. Unlock the phone and check $label."
@@ -147,14 +148,6 @@ internal class AppCommunications(private val context: Context, private val conta
             service.hasConversationTitle(pkg, person.name) || service.hasConversationTitle(pkg, person.number) ||
                 international(person.number)?.let { service.hasConversationTitle(pkg, "+$it") } == true
             )
-
-    private suspend fun waitFor(check: () -> Boolean): Boolean {
-        repeat(20) {
-            if (check()) return true
-            delay(250)
-        }
-        return false
-    }
 }
 
 internal object CommsAddress {

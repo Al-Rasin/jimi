@@ -23,6 +23,7 @@ import com.alrasin.jarvis.core.JarvisLog
 import com.alrasin.jarvis.core.Risk
 import com.alrasin.jarvis.core.Tool
 import com.alrasin.jarvis.core.ToolResult
+import com.alrasin.jarvis.core.pollUntil
 import kotlinx.coroutines.delay
 import java.io.File
 import java.text.SimpleDateFormat
@@ -66,13 +67,7 @@ class Torch(private val context: Context) {
     }
 
     /** MIUI can accept setTorchMode from a background app and silently ignore it; wait for the callback to confirm. */
-    private suspend fun confirmed(value: Boolean): Boolean {
-        repeat(10) {
-            if (state == value) return true
-            delay(50)
-        }
-        return state == value
-    }
+    private suspend fun confirmed(value: Boolean): Boolean = pollUntil(10, 50) { state == value }
 
     /** Camera API first; MIUI refuses it for background apps, then the flash LED is switched with root. */
     suspend fun set(value: Boolean): Boolean {
@@ -213,9 +208,7 @@ fun systemTools(context: Context, torch: Torch): List<Tool> {
             if (!requested && settingsPage(target)) return@SimpleTool ToolResult.ok("Boss, I opened ${nice(target)} settings. Set it ${if (want) "on" else "off"} there.")
             var actual = isOn(target)
             // poll often so a quick switch is reported quickly; same 2 s ceiling as before
-            repeat(20) {
-                if (actual != want) { delay(100); actual = isOn(target) }
-            }
+            if (actual != want) pollUntil(20, 100, delayFirst = true) { actual = isOn(target); actual == want }
             if (actual != want && settingsPage(target)) ToolResult.ok("Boss, the change isn't confirmed. I opened ${nice(target)} settings; set it ${if (want) "on" else "off"} there.")
             else toggleTruth(nice(target), want, actual)
         },
@@ -311,7 +304,7 @@ fun unlockTool(context: Context, pin: suspend () -> String?) = SimpleTool("unloc
     val p = pin()
     if (!Keyguard.unlock(context, p)) return@SimpleTool ToolResult.fail("Boss, I couldn't request an unlock. Please unlock the phone yourself.")
     val keyguard = context.getSystemService(KeyguardManager::class.java)
-    repeat(20) { if (keyguard.isKeyguardLocked) delay(100) }   // PIN check can take a moment on MIUI
+    pollUntil(20, 100) { !keyguard.isKeyguardLocked }   // PIN check can take a moment on MIUI
     if (!keyguard.isKeyguardLocked) ToolResult.ok("Boss, unlocked.")
     else ToolResult.fail("Boss, the phone is still locked.")
 }
