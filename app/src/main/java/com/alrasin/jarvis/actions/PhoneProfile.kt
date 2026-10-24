@@ -163,6 +163,10 @@ class PhoneProfile(private val context: Context, private val apps: AppList) {
             installed.filter { a -> prefixes.any { a.pkg.startsWith(it, ignoreCase = true) } }.map { it.label }.distinct()
         }.filterValues { it.isNotEmpty() }
 
+        /** True for banking/payment apps (ROADMAP: never auto-unlock for these). */
+        internal fun isPaymentPackage(pkg: String): Boolean =
+            ROLE_PACKAGES["payments"].orEmpty().any { pkg.startsWith(it, ignoreCase = true) }
+
         /** Short spoken summary. */
         fun say(p: Profile): String = buildString {
             append("This is a ${p.device} on ${p.android}. ")

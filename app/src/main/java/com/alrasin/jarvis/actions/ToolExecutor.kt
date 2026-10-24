@@ -32,18 +32,28 @@ class ToolExecutor @Inject constructor(private val registry: ToolRegistry) {
 
     suspend fun execute(call: ToolCall, ctx: ToolContext, confirmed: Boolean, voiceOk: Boolean?): Outcome {
         val tool = registry.get(call.tool) ?: return Outcome.Done(ToolResult.fail("I don't know how to ${call.tool.replace('_', ' ')} yet."))
+        val wasLocked = ctx.locked
         return gate.execute(call, tool.risk, ctx.locked, confirmed, voiceOk) {
-            coroutineContext[SmokeSession]?.intercept(call) ?: unlockFirst(call, ctx, voiceOk) ?: run(tool, call, ctx)
+            coroutineContext[SmokeSession]?.intercept(call)
+                ?: unlockFirst(call, ctx, voiceOk)
+                ?: run(tool, call, ctx).also { if (wasLocked && needsScreen(call)) relock(ctx) }
         }
     }
 
-    /** D-047: app actions need the screen; unlock with the saved PIN only after the owner's voice matched. */
-    private suspend fun unlockFirst(call: ToolCall, ctx: ToolContext, voiceOk: Boolean?): ToolResult? =
-        when (unlockNeed(call, ctx.locked, voiceOk)) {
+    /** ROADMAP "Unlock for every screen task": unlock with the saved PIN only after the owner's voice matched,
+     * never for payment/banking apps, then lock again in [execute] once the task is done. */
+    private suspend fun unlockFirst(call: ToolCall, ctx: ToolContext, voiceOk: Boolean?): ToolResult? {
+        val isPaymentApp = call.tool == "open_app" &&
+            call.arg("app")?.let { registry.apps.find(it)?.pkg }?.let(PhoneProfile::isPaymentPackage) == true
+        return when (unlockNeed(call, ctx.locked, voiceOk, isPaymentApp)) {
             Unlock.NONE -> null
+            Unlock.PAYMENT_APP -> ToolResult.fail(
+                "${Persona.ADDRESS}, I won't unlock the phone for a banking or payment app. Please unlock it yourself.",
+            )
             Unlock.VOICE_ID_OFF -> ToolResult.fail(
                 "${Persona.ADDRESS}, the phone is locked. Turn on voice ID so I can unlock it with your PIN, or unlock it yourself.",
             )
+            Unlock.VOICE_MISMATCH -> ToolResult.fail("${Persona.ADDRESS}, please unlock the phone yourself first.")
             Unlock.UNLOCK -> {
                 val unlock = registry.get("unlock_phone") ?: return ToolResult.fail("I can't unlock the phone.")
                 val r = run(unlock, ToolCall("unlock_phone"), ctx)
@@ -51,6 +61,13 @@ class ToolExecutor @Inject constructor(private val registry: ToolRegistry) {
                 if (r.ok) null else r
             }
         }
+    }
+
+    private suspend fun relock(ctx: ToolContext) {
+        val lock = registry.get("lock_phone") ?: return
+        val r = run(lock, ToolCall("lock_phone"), ctx)
+        JarvisLog.i("re-lock after screen task: ${if (r.ok) "ok" else "failed"}")
+    }
 
     private suspend fun run(tool: Tool, call: ToolCall, ctx: ToolContext): ToolResult =
         runCatching { tool.run(call, ctx) }
@@ -58,21 +75,22 @@ class ToolExecutor @Inject constructor(private val registry: ToolRegistry) {
             .getOrElse { ToolResult.fail("Sorry, that failed: ${it.message ?: it.javaClass.simpleName}") }
 }
 
-internal enum class Unlock { NONE, UNLOCK, VOICE_ID_OFF }
+internal enum class Unlock { NONE, UNLOCK, VOICE_ID_OFF, VOICE_MISMATCH, PAYMENT_APP }
 
 /** Tools that drive another app's screen and so cannot work behind the lock screen. */
 internal fun needsScreen(call: ToolCall): Boolean = when (call.tool) {
-    "send_whatsapp", "open_app" -> true
+    "send_whatsapp", "open_app", "read_screen", "tap", "type_text", "scroll" -> true
     "send_sms" -> call.arg("app").equals("messenger", ignoreCase = true)
     "call" -> call.arg("app")?.lowercase() in setOf("whatsapp", "messenger")
     else -> false
 }
 
-internal fun unlockNeed(call: ToolCall, locked: Boolean, voiceOk: Boolean?): Unlock = when {
+internal fun unlockNeed(call: ToolCall, locked: Boolean, voiceOk: Boolean?, isPaymentApp: Boolean = false): Unlock = when {
     !locked || !needsScreen(call) -> Unlock.NONE
+    isPaymentApp -> Unlock.PAYMENT_APP
     voiceOk == true -> Unlock.UNLOCK
-    voiceOk == null && call.tool != "open_app" -> Unlock.VOICE_ID_OFF
-    else -> Unlock.NONE
+    voiceOk == null -> Unlock.VOICE_ID_OFF
+    else -> Unlock.VOICE_MISMATCH
 }
 
 internal class ToolSafetyGate {

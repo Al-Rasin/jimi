@@ -11,8 +11,29 @@ class AutoUnlockTest {
     @Test fun unlocksOnlyWhenLockedScreenToolAndVoiceMatched() {
         assertEquals(Unlock.UNLOCK, unlockNeed(whatsapp, locked = true, voiceOk = true))
         assertEquals(Unlock.NONE, unlockNeed(whatsapp, locked = false, voiceOk = true))
-        assertEquals(Unlock.NONE, unlockNeed(whatsapp, locked = true, voiceOk = false))
+        assertEquals(Unlock.VOICE_MISMATCH, unlockNeed(whatsapp, locked = true, voiceOk = false))
         assertEquals(Unlock.VOICE_ID_OFF, unlockNeed(whatsapp, locked = true, voiceOk = null))
+    }
+
+    @Test fun screenReadersAndDriversAllNeedUnlock() {
+        for (tool in listOf("read_screen", "tap", "type_text", "scroll")) {
+            assertEquals(tool, Unlock.UNLOCK, unlockNeed(ToolCall(tool), locked = true, voiceOk = true))
+            assertEquals(tool, Unlock.NONE, unlockNeed(ToolCall(tool), locked = false, voiceOk = true))
+        }
+    }
+
+    @Test fun navigationToolsNeverNeedUnlock() {
+        for (tool in listOf("go_back", "go_home", "open_recents")) {
+            assertEquals(tool, Unlock.NONE, unlockNeed(ToolCall(tool), locked = true, voiceOk = true))
+            assertEquals(tool, Unlock.NONE, unlockNeed(ToolCall(tool), locked = true, voiceOk = null))
+        }
+    }
+
+    @Test fun paymentAppsNeverAutoUnlockEvenWithGoodVoice() {
+        assertEquals(
+            Unlock.PAYMENT_APP,
+            unlockNeed(ToolCall("open_app", mapOf("app" to "bkash")), locked = true, voiceOk = true, isPaymentApp = true),
+        )
     }
 
     @Test fun plainSmsAndPhoneCallsDoNotNeedTheScreen() {
@@ -22,8 +43,8 @@ class AutoUnlockTest {
         assertEquals(Unlock.UNLOCK, unlockNeed(ToolCall("call", mapOf("app" to "whatsapp")), true, true))
     }
 
-    @Test fun openAppWithoutVoiceIdRunsAsBefore() {
-        assertEquals(Unlock.NONE, unlockNeed(ToolCall("open_app", mapOf("app" to "youtube")), true, null))
+    @Test fun openAppNowNeedsVoiceIdLikeAnyOtherScreenTool() {
+        assertEquals(Unlock.VOICE_ID_OFF, unlockNeed(ToolCall("open_app", mapOf("app" to "youtube")), true, null))
         assertEquals(Unlock.UNLOCK, unlockNeed(ToolCall("open_app", mapOf("app" to "youtube")), true, true))
     }
 

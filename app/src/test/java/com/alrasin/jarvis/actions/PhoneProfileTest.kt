@@ -29,6 +29,13 @@ class PhoneProfileTest {
         assertFalse(roles.values.flatten().contains("Notes"))
     }
 
+    @Test fun isPaymentPackageMatchesKnownBankingAppsOnly() {
+        assertTrue(PhoneProfile.isPaymentPackage("com.bKash.customer"))
+        assertTrue(PhoneProfile.isPaymentPackage("com.konasl.nagad"))
+        assertTrue(PhoneProfile.isPaymentPackage("com.google.android.apps.nbu.paisa.user"))
+        assertFalse(PhoneProfile.isPaymentPackage("com.whatsapp"))
+    }
+
     @Test fun cloudLineHasAppsButNoContactNumbers() {
         val line = PhoneProfile.cloudLine(profile)
         assertTrue(line.contains("Spotify") && line.contains("messaging apps: WhatsApp, Messenger"))
