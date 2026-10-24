@@ -41,6 +41,7 @@ class ToolRegistry @Inject constructor(
         addAll(appTools(context, apps))
         addAll(timeTools(context))
         addAll(commsTools(context, contacts))
+        add(chatReadTool(context, contacts, notifications))
         addAll(mediaTools(context))
         addAll(systemTools(context, Torch(context)))
         add(unlockTool(context) { secrets.get(Secrets.PIN) })

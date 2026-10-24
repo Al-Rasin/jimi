@@ -16,6 +16,7 @@ import com.alrasin.jarvis.agent.appmap.AppCards
 import com.alrasin.jarvis.agent.appmap.AppLearner
 import com.alrasin.jarvis.agent.appmap.AppWatcher
 import com.alrasin.jarvis.core.JarvisLog
+import com.alrasin.jarvis.notify.ChatHistory
 import dagger.hilt.android.AndroidEntryPoint
 import javax.inject.Inject
 import kotlinx.coroutines.CoroutineScope
@@ -99,6 +100,24 @@ class JarvisAccessibilityService : AccessibilityService() {
     /** Non-editable visible texts of [packageName], top to bottom. */
     fun texts(packageName: String): List<String> = visibleNodes(packageName)
         .filter { !it.isEditable }.mapNotNull { it.text?.toString()?.trim()?.ifEmpty { null } }.distinct()
+
+    /**
+     * Message bubbles of the open chat, top to bottom. WhatsApp: "message_text" nodes; own ones carry the tick icon ("status").
+     * Other apps: texts inside the scrolling message list; own messages cannot be told apart there.
+     */
+    fun chatBubbles(packageName: String): List<ChatHistory.Bubble> {
+        val nodes = visibleNodes(packageName)
+        val wa = nodes.filter { it.viewIdResourceName.orEmpty().endsWith(":id/message_text") }
+        if (wa.isNotEmpty()) return wa.mapNotNull { n ->
+            val text = n.text?.toString()?.trim()?.ifEmpty { null } ?: return@mapNotNull null
+            val bubble = n.parent?.parent ?: n.parent
+            ChatHistory.Bubble(text, mine = bubble.findAll(maxDepth = 4) { it.viewIdResourceName.orEmpty().endsWith(":id/status") }.isNotEmpty())
+        }
+        return nodes.filter { n ->
+            !n.isEditable && !n.text.isNullOrBlank() && generateSequence(n.parent) { it.parent }.take(8)
+                .any { it.isScrollable }
+        }.map { ChatHistory.Bubble(it.text.toString().trim(), mine = false) }
+    }
 
     /** The on/off switch in the row labelled [label]: true/false, or null when the row has no switch. */
     fun switchState(packageName: String, label: String): Boolean? = switchIn(rowOf(packageName, label))?.isChecked

@@ -190,6 +190,7 @@ object RuleMatcher {
             val app = (it.groupValues[1].ifEmpty { it.groupValues[2] }).takeIf(String::isNotEmpty)?.let(::commsApp)
             return call(if (app == "whatsapp") "send_whatsapp" else "send_sms", "app" to app?.takeIf { a -> a == "messenger" })
         }
+        anyOrderChat(t)?.let { return it }
         if (normalize(t).matches(re("(?:read|check|show|any|do i have any)(?: me)?(?: my)?(?: new| unread| latest| last)? (?:messages|texts|sms)|(?:read|show) (?:the )?last (?:message|text|sms)"))) return call("read_messages")
         Regex("^(?:send|write|compose) (?:an |a )?(?:email|mail|e mail)(?: to ([a-z0-9 ]+?))?(?: about (.+))?$").find(t)
             ?.let { return call("compose_email", "to" to it.groupValues[1], "subject" to it.groupValues[2]) }
@@ -197,6 +198,57 @@ object RuleMatcher {
     }
 
     private fun commsApp(app: String) = app.replace(" ", "")
+
+    private val LEAD_OPEN = Regex("^(?:open|launch|go to|start) (?:the )?(whats ?app|messenger)(?: app)?(?:\\s*,\\s*|\\s+)(?:(?:and then|and|then) )?(.+)$")
+    private val LEAD_IN = Regex("^(?:in|on|using|via|through) (?:the )?(whats ?app|messenger|sms)(?: app)?\\s*,?\\s+(.+)$")
+    private val TRAIL_APP = Regex("\\s+(?:in|on|using|via|through) (?:the )?(whats ?app|messenger|sms)(?: app)?$")
+    private val NOT_A_CONTACT = setOf("you", "he", "she", "they", "i", "we", "it", "me", "us", "him", "her", "them")
+    private val COUNT_WORDS = listOf("one", "two", "three", "four", "five", "six", "seven", "eight", "nine", "ten")
+
+    /**
+     * Messaging in any word order and reading one person's chat (ROADMAP §H.1): the app may come first
+     * ("open messenger and …", "in whatsapp …") or last ("… on messenger"). Sending needs the app named.
+     */
+    private fun anyOrderChat(raw: String): ToolCall? {
+        var s = raw.trimEnd('.', '!', '?').trim()
+        var app: String? = null
+        (LEAD_OPEN.find(s) ?: LEAD_IN.find(s))?.let { app = commsApp(it.groupValues[1]); s = it.groupValues[2] }
+        TRAIL_APP.find(s)?.let {
+            val tail = commsApp(it.groupValues[1])
+            if (app != null && app != tail) return null
+            app = tail
+            s = s.substring(0, it.range.first)
+        }
+        readChat(s, app)?.let { return it }
+        val sendApp = app ?: return null
+        Regex("^(?:send|write)(?: an?)? (?:message|text|msg|sms)(?: (.+))?$").find(s)?.let { return message(it.groupValues[1], sendApp) }
+        Regex("^(?:say|send|write) (.+) to (.+)$").find(s)?.let {
+            if (it.groupValues[2].trim() in NOT_A_CONTACT) return null
+            return call(if (sendApp == "whatsapp") "send_whatsapp" else "send_sms", "contact" to it.groupValues[2],
+                "text" to it.groupValues[1], "app" to sendApp.takeIf { a -> a == "messenger" })
+        }
+        Regex("^tell (.+)$").find(s)?.takeUnless { it.groupValues[1].substringBefore(' ') in NOT_A_CONTACT }
+            ?.let { return message(it.groupValues[1], sendApp) }
+        Regex("^(?:message|text|msg) (.+)$").find(s)?.let { return message(it.groupValues[1], sendApp) }
+        return null
+    }
+
+    private fun readChat(s: String, app: String?): ToolCall? {
+        val last = "(?:the |my )?(?:last|latest|newest|recent|new)(?: (\\w+))? (messages?|texts?|sms|chats?)"
+        val (who, n, noun) = Regex("^(?:read|show|tell)(?: me)? $last (?:of|from|by) (.+)$").find(s)
+            ?.let { Triple(it.groupValues[3], it.groupValues[1], it.groupValues[2]) }
+            ?: Regex("^(?:read|show|tell)(?: me)? (.+?)(?:'s|') (?:last|latest|newest|recent|new)(?: (\\w+))? (messages?|texts?|chats?)$").find(s)
+                ?.let { Triple(it.groupValues[1], it.groupValues[2], it.groupValues[3]) }
+            ?: Regex("^what did (.+?) (?:say|send|write|text|message)(?: me)?$").find(s)?.let { Triple(it.groupValues[1], "", "message") }
+            ?: Regex("^(?:read|show|check)(?: me)? (?:my |the )?(?:chat|chats|messages|texts|conversation) (?:with|from) (.+)$").find(s)
+                ?.let { Triple(it.groupValues[1], "", "messages") }
+            ?: return null
+        val contact = who.trim()
+        if (contact.isEmpty() || contact in NOT_A_CONTACT) return null
+        val count = n.toIntOrNull() ?: COUNT_WORDS.indexOf(n).takeIf { it >= 0 }?.plus(1)
+            ?: if (n.isNotEmpty()) return null else if (noun.endsWith("s") && noun != "sms") 3 else 1
+        return call("read_chat", "contact" to contact, "app" to app, "count" to count.toString())
+    }
     private val SPOKEN_LETTER = Regex("[a-z]|ji|jee|gee|bee|tee|dee|pee|ef|eff|kay|jay|em|en|es|vee|zed|zee")
 
     /**

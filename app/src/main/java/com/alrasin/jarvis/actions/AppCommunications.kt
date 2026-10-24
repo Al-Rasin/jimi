@@ -11,6 +11,7 @@ import com.alrasin.jarvis.core.ToolResult
 import com.alrasin.jarvis.core.isInstalled
 import com.alrasin.jarvis.core.launch
 import com.alrasin.jarvis.core.pollUntil
+import com.alrasin.jarvis.notify.ChatHistory
 import kotlinx.coroutines.delay
 import java.util.Locale
 
@@ -106,6 +107,19 @@ internal class AppCommunications(private val context: Context, private val conta
         if (!conversationMatches(service, pkg, person)) return ToolResult.fail("The $label conversation changed. Nothing was sent.")
         tapSend(service, app, AppChat(pkg, label))?.let { return ToolResult.fail(it) }
         return ToolResult.ok("Boss, I tapped send for ${person.name} in $label. Delivery isn't confirmed.")
+    }
+
+    /** Opens [person]'s chat and reads their newest [count] bubbles (read_chat fallback when notifications have nothing). */
+    suspend fun readChat(person: Contacts.Contact, app: String, count: Int): ToolResult {
+        val (pkg, label) = chat(app) ?: return ToolResult.fail("${chatLabel(app)} is not installed.")
+        val service = requireScreen { return ToolResult.fail("Enable Jimi accessibility in Android settings so I can read the $label chat.") }
+        openConversation(person, app, pkg, service)?.let { return ToolResult.fail(it.replace("Nothing was sent or called. ", "")) }
+        delay(500)
+        val texts = ChatHistory.lastIncoming(service.chatBubbles(pkg), count)
+        if (texts.isEmpty()) return ToolResult.fail("I opened ${person.name}'s $label chat, but couldn't read any message from them.")
+        val say = if (texts.size == 1) "${person.name} on $label said: ${texts[0]}"
+        else "Last ${texts.size} from ${person.name} on $label: " + texts.mapIndexed { i, t -> "${i + 1}, $t" }.joinToString(". ")
+        return ToolResult.ok(say)
     }
 
     /** "Message yourself" on WhatsApp, or the owner's own Messenger thread. */

@@ -13,7 +13,8 @@ object ToolShortlist {
 
     /** Spoken words → tools they usually mean, for words that are not in the tool descriptions. */
     private val HINTS: Map<String, List<String>> = mapOf(
-        "text" to listOf("send_sms", "send_whatsapp"), "message" to listOf("send_sms", "send_whatsapp"),
+        "text" to listOf("send_sms", "send_whatsapp"), "message" to listOf("send_sms", "send_whatsapp", "read_chat"),
+        "messages" to listOf("read_chat", "read_messages"), "chat" to listOf("read_chat"), "said" to listOf("read_chat"),
         "msg" to listOf("send_sms", "send_whatsapp"), "sms" to listOf("send_sms"), "whatsapp" to listOf("send_whatsapp", "call"),
         "messenger" to listOf("send_sms", "call"), "tell" to listOf("send_sms", "send_whatsapp"), "ping" to listOf("send_sms", "send_whatsapp"),
         "ring" to listOf("call"), "dial" to listOf("call"), "phone" to listOf("call"), "video" to listOf("call"),

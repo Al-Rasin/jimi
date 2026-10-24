@@ -120,7 +120,7 @@ internal class ToolSafetyGate {
             declaredRisk != Risk.SAFE -> declaredRisk
             call.tool in setOf("delete_reminder", "forget_fact", "cancel_alarm") -> Risk.CONFIRM
             (locked || lockdown) && call.tool in setOf(
-                "read_messages", "read_notes", "list_reminders", "recall_facts",
+                "read_messages", "read_chat", "read_notes", "list_reminders", "recall_facts",
                 "read_screen", "read_notifications", "notification_summary",
             ) -> Risk.VOICE_ID
             else -> Risk.SAFE
@@ -164,6 +164,7 @@ internal class ToolSafetyGate {
             }
             "forget_fact" -> arg("text")?.let { "Forget \"$it\"" } ?: "Forget that fact"
             "read_messages" -> "Read your latest messages"
+            "read_chat" -> "Read $contact's last messages$app"
             "read_notes" -> "Read your latest notes"
             "list_reminders" -> "Read your pending reminders"
             "recall_facts" -> "Read what I remember about you"
