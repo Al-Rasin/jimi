@@ -180,30 +180,30 @@ class JarvisAccessibilityService : AccessibilityService() {
     }
 
     /** Clicks the node whose text/description best matches [text]; climbs to a clickable parent. Root tap as fallback. */
-    fun clickText(text: String): Boolean {
+    suspend fun clickText(text: String): Boolean {
         val root = rootInActiveWindow ?: return false
         val all = root.findAll { it.isVisibleToUser && (!it.text.isNullOrBlank() || !it.contentDescription.isNullOrBlank()) }
         val node = Fuzzy.best(text, all, { it.label() }, min = 0.55) ?: return false
         return click(node)
     }
 
-    fun clickByDescription(desc: String): Boolean {
+    suspend fun clickByDescription(desc: String): Boolean {
         val root = rootInActiveWindow ?: return false
         val found = root.findAll { it.contentDescription?.toString().equals(desc, ignoreCase = true) }
-        return found.firstOrNull()?.let(::click) ?: false
+        return found.firstOrNull()?.let { click(it) } ?: false
     }
 
-    fun clickById(id: String): Boolean =
-        rootInActiveWindow?.findAccessibilityNodeInfosByViewId(id)?.firstOrNull()?.let(::click) ?: false
+    suspend fun clickById(id: String): Boolean =
+        rootInActiveWindow?.findAccessibilityNodeInfosByViewId(id)?.firstOrNull()?.let { click(it) } ?: false
 
-    private fun click(node: AccessibilityNodeInfo): Boolean {
+    private suspend fun click(node: AccessibilityNodeInfo): Boolean {
         var n: AccessibilityNodeInfo? = node
         while (n != null) {
             if (n.isClickable && n.performAction(AccessibilityNodeInfo.ACTION_CLICK)) return true
             n = n.parent
         }
         val r = Rect().also(node::getBoundsInScreen)
-        return Runtime.getRuntime().exec(arrayOf("su", "-c", "input tap ${r.centerX()} ${r.centerY()}")).waitFor() == 0
+        return RootInput.tap(r.centerX(), r.centerY()).ok
     }
 
     fun typeText(text: String): Boolean {
