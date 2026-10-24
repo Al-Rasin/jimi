@@ -28,3 +28,19 @@ object RootShell {
     /** Quote for sh: 'it'\''s'. */
     fun quote(s: String) = "'" + s.replace("'", "'\\''") + "'"
 }
+
+/** `input` commands via root (ROADMAP §L.4). Dedupes the raw `RootShell.run("input ...")` calls across actions/. */
+object RootInput {
+    suspend fun tap(x: Int, y: Int): RootShell.Result = RootShell.run("input tap $x $y")
+    suspend fun swipe(x1: Int, y1: Int, x2: Int, y2: Int, durationMs: Int = 250): RootShell.Result =
+        RootShell.run("input swipe $x1 $y1 $x2 $y2 $durationMs")
+    suspend fun key(code: Int): RootShell.Result = RootShell.run("input keyevent $code")
+    suspend fun text(text: String): RootShell.Result = RootShell.run("input text ${RootShell.quote(text)}")
+}
+
+/** `settings get/put/list` via root (ROADMAP §L.4). Dedupes the raw `RootShell.run("settings ...")` calls across actions/. */
+object RootSettings {
+    suspend fun get(ns: String, key: String): String = RootShell.run("settings get $ns $key", log = false).out.trim()
+    suspend fun put(ns: String, key: String, value: String): Boolean = RootShell.run("settings put $ns $key $value").ok
+    suspend fun list(ns: String): List<String> = RootShell.run("settings list $ns", log = false).out.lines()
+}
