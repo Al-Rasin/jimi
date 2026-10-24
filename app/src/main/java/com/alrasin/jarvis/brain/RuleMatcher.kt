@@ -171,6 +171,7 @@ object RuleMatcher {
 
     private fun comms(t: String): ToolCall? {
         val calling = t.trimEnd('.', '!', '?').replace(Regex("(?: (?:please|for me|now|okay|ok))+$"), "")
+        callControl(calling)?.let { return it }
         Regex("^(whats ?app|messenger) (?:(video|voice|audio) )?call(?: to)? (.+)$").find(calling)?.let {
             return call("call", "contact" to it.groupValues[3], "app" to commsApp(it.groupValues[1]),
                 "video" to it.groupValues[2].takeIf { mode -> mode.isNotEmpty() }?.let { mode -> (mode == "video").toString() })
@@ -195,6 +196,16 @@ object RuleMatcher {
         Regex("^(?:send|write|compose) (?:an |a )?(?:email|mail|e mail)(?: to ([a-z0-9 ]+?))?(?: about (.+))?$").find(t)
             ?.let { return call("compose_email", "to" to it.groupValues[1], "subject" to it.groupValues[2]) }
         return null
+    }
+
+    /** Ringing call and call log (ROADMAP B §I.1). Before "call <name>" so "call back" is not a contact. */
+    private fun callControl(t: String): ToolCall? = when {
+        t.matches(re("(?:answer|pick up)(?: it)?|(?:answer|pick up|receive|accept|take)(?: (?:the|this|that|my))? (?:phone|call|phone call|whats ?app call|messenger call)|pick (?:it|the call|the phone) up")) -> call("answer_call")
+        t.matches(re("(?:reject|decline|hang up)(?: it)?|(?:reject|decline|cut|end|hang up|drop|disconnect)(?: (?:the|this|that|my))? (?:phone|call|phone call|whats ?app call|messenger call)|hang (?:it )?up")) -> call("reject_call")
+        t.matches(re("(?:any |read |check |show )?(?:my )?missed calls?|who (?:called|rang|was calling)(?: me)?(?: today)?|did (?:anyone|anybody|someone) call(?: me)?")) -> call("missed_calls")
+        t.matches(re("call (?:them |him |her )?back|call back(?: the last (?:caller|number|missed call))?|return (?:the |that )?(?:last )?call")) -> call("call_back")
+        t.matches(re("redial|call (?:the )?last number(?: again)?|call again")) -> call("redial")
+        else -> null
     }
 
     private fun commsApp(app: String) = app.replace(" ", "")

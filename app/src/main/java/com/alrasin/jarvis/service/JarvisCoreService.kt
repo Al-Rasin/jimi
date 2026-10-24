@@ -11,8 +11,10 @@ import android.content.pm.ServiceInfo
 import android.os.BatteryManager
 import android.os.PowerManager
 import android.os.SystemClock
+import android.telephony.TelephonyManager
 import androidx.lifecycle.LifecycleService
 import androidx.lifecycle.lifecycleScope
+import com.alrasin.jarvis.actions.CallText
 import com.alrasin.jarvis.actions.RootShell
 import com.alrasin.jarvis.agent.ScreenAgentSession
 import com.alrasin.jarvis.actions.ToolRegistry
@@ -265,6 +267,7 @@ class JarvisCoreService : LifecycleService() {
         lifecycleScope.launch { settings.voiceId.collect { voiceId = it } }
         lifecycleScope.launch { settings.speakerThreshold.collect { speakerThreshold = it } }
         registerReceiver(battery, IntentFilter(Intent.ACTION_BATTERY_CHANGED))
+        registerReceiver(ringing, IntentFilter(TelephonyManager.ACTION_PHONE_STATE_CHANGED))
         lifecycleScope.launch(Dispatchers.IO) { protectFromLowMemoryKiller() }
     }
 
@@ -485,6 +488,22 @@ class JarvisCoreService : LifecycleService() {
             }
         }
     }
+
+    /** Says who is calling (ROADMAP B §I.1). The number only comes with READ_CALL_LOG; Android sends the broadcast twice, so say it once per ring. */
+    private val ringing = object : BroadcastReceiver() {
+        override fun onReceive(context: Context, intent: Intent) {
+            if (intent.getStringExtra(TelephonyManager.EXTRA_STATE) != TelephonyManager.EXTRA_STATE_RINGING) { ringAnnounced = false; return }
+            @Suppress("DEPRECATION")
+            val number = intent.getStringExtra(TelephonyManager.EXTRA_INCOMING_NUMBER) ?: return
+            if (ringAnnounced) return
+            ringAnnounced = true
+            lifecycleScope.launch {
+                val name = withContext(Dispatchers.IO) { if (number.isBlank()) "" else registry.contacts.nameFor(number) }
+                announce(CallText.ringing(name))
+            }
+        }
+    }
+    private var ringAnnounced = false
 
     /** Runs one command through the assistant and speaks the answer. Then maybe listens for a follow-up. */
     private fun ask(text: String, raw: String, source: String, wakeId: Long?, audioPath: String?, audio: ShortArray?, refine: (suspend () -> String)? = null) = synchronized(speechState) {
@@ -1085,6 +1104,7 @@ class JarvisCoreService : LifecycleService() {
     override fun onDestroy() {
         listenJob?.cancel()
         runCatching { unregisterReceiver(battery) }
+        runCatching { unregisterReceiver(ringing) }
         speech.close()
         shutUp()
         speechEpoch++

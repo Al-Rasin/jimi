@@ -159,6 +159,8 @@ internal class ToolSafetyGate {
                 val verb = if (app.isNotEmpty() && call.arg("video").equals("true", ignoreCase = true)) "Video call" else "Call"
                 "$verb $contact$app"
             }
+            "call_back" -> "Call back the last caller"
+            "redial" -> "Call the last number again"
             "unlock_phone" -> "Unlock your phone"
             "clear_notifications" -> "Clear all your notifications"
             "cancel_alarm" -> "Cancel all your alarms and timers"

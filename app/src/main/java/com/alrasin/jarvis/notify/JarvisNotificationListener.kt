@@ -6,10 +6,12 @@ import android.app.NotificationManager
 import android.content.pm.PackageManager
 import android.service.notification.NotificationListenerService
 import android.service.notification.StatusBarNotification
+import com.alrasin.jarvis.actions.CallText
 import com.alrasin.jarvis.core.JarvisLog
 import com.alrasin.jarvis.data.NotificationDao
 import com.alrasin.jarvis.data.NotificationLog
 import com.alrasin.jarvis.data.Settings
+import com.alrasin.jarvis.service.JarvisCoreService
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.CancellationException
@@ -48,6 +50,7 @@ class JarvisNotificationListener : NotificationListenerService() {
     override fun onNotificationPosted(sbn: StatusBarNotification) {
         val n = sbn.notification
         if (sbn.packageName == packageName) return
+        announceAppCall(sbn)
         scope.launch {
             try {
                 operations.withLock {
@@ -74,6 +77,23 @@ class JarvisNotificationListener : NotificationListenerService() {
             }
         }
     }
+
+    /** WhatsApp / Messenger ringing call (ROADMAP B §I.1): say who calls once per call notification. */
+    private fun announceAppCall(sbn: StatusBarNotification) {
+        val n = sbn.notification
+        val app = CallText.APP_CALLS[sbn.packageName] ?: return
+        if (n.category != Notification.CATEGORY_CALL || !CallText.isIncoming(n.actions.orEmpty().map { it.title?.toString() })) return
+        if (sbn.key == lastCallKey) return
+        lastCallKey = sbn.key
+        val who = n.extras.getCharSequence(Notification.EXTRA_TITLE)?.toString().orEmpty()
+        JarvisCoreService.say(this, CallText.ringing(who, app))
+    }
+
+    override fun onNotificationRemoved(sbn: StatusBarNotification) {
+        if (sbn.key == lastCallKey) lastCallKey = null
+    }
+
+    @Volatile private var lastCallKey: String? = null
 
     private fun snapshot(sbn: StatusBarNotification, rule: String? = null): NotificationLog {
         val n = sbn.notification

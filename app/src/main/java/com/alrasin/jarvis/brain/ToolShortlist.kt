@@ -45,7 +45,7 @@ object ToolShortlist {
         "email" to listOf("compose_email"), "mail" to listOf("compose_email"),
         "notification" to listOf("read_notifications", "notification_summary", "clear_notifications"),
         "notifications" to listOf("read_notifications", "notification_summary", "clear_notifications"),
-        "missed" to listOf("notification_summary", "read_messages"),
+        "missed" to listOf("missed_calls", "notification_summary", "read_messages"),
         "open" to listOf("open_app", "open_url", "open_result"), "launch" to listOf("open_app"), "start" to listOf("open_app"),
         "app" to listOf("open_app", "close_app"), "close" to listOf("close_app"), "kill" to listOf("close_app"),
         "website" to listOf("open_url"), "site" to listOf("open_url"), "search" to listOf("web_search", "search_in_app"), "google" to listOf("web_search"),
@@ -59,6 +59,8 @@ object ToolShortlist {
         "result" to listOf("open_result"), "results" to listOf("open_result", "read_list"), "tab" to listOf("go_tab"),
         "list" to listOf("read_list"), "switch" to listOf("toggle_named"), "toggle" to listOf("toggle_named"),
         "option" to listOf("toggle_named"), "recipe" to listOf("run_recipe"),
+        "answer" to listOf("answer_call"), "reject" to listOf("reject_call"), "decline" to listOf("reject_call"),
+        "hang" to listOf("reject_call"), "redial" to listOf("redial"), "caller" to listOf("call_back", "missed_calls"),
     )
 
     private val STOP = setOf(
