@@ -35,3 +35,6 @@ __pycache__/
 
 # llama.cpp source (tools/fetch_llama.sh)
 app/src/main/cpp/llama.cpp/
+
+# screen-model privacy list
+training/screen/private_words.txt
