@@ -482,6 +482,12 @@ object RuleMatcher {
 
     /** App map (ROADMAP §J.4): "open privacy settings in whatsapp", "what can you do in youtube". */
     private fun appMap(t: String): ToolCall? {
+        // Explorer (§J.5): "learn this app", "learn mi remote".
+        if (t.matches(re("(?:learn|explore) (?:this|the|the current|current) app"))) return call("learn_app")
+        Regex("^(?:learn|explore) (?:the )?(.+?)(?: app)?$").find(t)?.let {
+            val app = it.groupValues[1]
+            if (appNameMatches?.invoke(app) == true) return call("learn_app", "app" to app)
+        }
         // polite() already dropped "can you": "what can you do in x" arrives as "what do in x"
         Regex("^what (?:(?:can|could) you )?do (?:in|on|with|inside) (?:the )?(.+?)(?: app)?$").find(t)?.let {
             val app = it.groupValues[1]

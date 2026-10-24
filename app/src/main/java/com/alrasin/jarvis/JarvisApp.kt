@@ -5,6 +5,7 @@ import android.content.pm.ApplicationInfo
 import android.content.ComponentCallbacks2
 import com.alrasin.jarvis.core.JarvisLog
 import android.os.StrictMode
+import com.alrasin.jarvis.agent.appmap.NightExploreWorker
 import com.alrasin.jarvis.brain.ModelBrain
 import com.alrasin.jarvis.service.Notifications
 import dagger.hilt.android.HiltAndroidApp
@@ -23,6 +24,7 @@ class JarvisApp : Application() {
                 .penaltyLog().build())
         }
         Notifications.createChannels(this)
+        NightExploreWorker.schedule(this)
     }
 
     override fun onTrimMemory(level: Int) {

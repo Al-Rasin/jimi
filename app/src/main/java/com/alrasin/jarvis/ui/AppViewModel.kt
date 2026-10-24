@@ -83,6 +83,7 @@ class AppViewModel @Inject constructor(
     val followUp = settings.followUp.state(true)
     val showPanel = settings.showPanel.state(true)
     val autoClear = settings.autoClearNotifications.state(false)
+    val nightExplore = settings.nightExplore.state(false)
     val voiceId = settings.voiceId.state(false)
     val speakerThreshold = settings.speakerThreshold.state(Settings.DEFAULT_SPEAKER_THRESHOLD)
     val enrollStatus = JarvisCoreService.enrollStatus
@@ -225,6 +226,7 @@ class AppViewModel @Inject constructor(
     fun setFollowUp(v: Boolean) = viewModelScope.launch { settings.setFollowUp(v) }
     fun setShowPanel(v: Boolean) = viewModelScope.launch { settings.setShowPanel(v) }
     fun setAutoClear(v: Boolean) = viewModelScope.launch { settings.setAutoClearNotifications(v) }
+    fun setNightExplore(v: Boolean) = viewModelScope.launch { settings.setNightExplore(v) }
     fun setVoiceId(v: Boolean) = viewModelScope.launch { settings.setVoiceId(v) }
     fun setSpeakerThreshold(v: Float) = viewModelScope.launch { settings.setSpeakerThreshold(v) }
     fun setCloudEnabled(v: Boolean) = viewModelScope.launch { settings.setCloudEnabled(v) }

@@ -52,6 +52,16 @@ class AppWatcher(private val service: AccessibilityService, private val learner:
 
     data class LiveScreen(val pkg: String, val fingerprint: String)
 
+    /** Raw nodes of [root] for the app explorer (§J.5). */
+    fun liveNodes(root: AccessibilityNodeInfo): LiveNodes? {
+        val pkg = root.packageName?.toString() ?: return null
+        val nodes = ArrayList<ScreenStructure.RawNode>()
+        collect(root, parentClass = "", inList = false, nodes)
+        return LiveNodes(pkg, windowClass[pkg] ?: pkg, nodes)
+    }
+
+    data class LiveNodes(val pkg: String, val windowClass: String, val nodes: List<ScreenStructure.RawNode>)
+
     fun stop() {
         main.removeCallbacks(snapshot)
         scope.cancel()

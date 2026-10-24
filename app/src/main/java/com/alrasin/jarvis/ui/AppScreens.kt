@@ -391,6 +391,7 @@ private fun SettingsTab(vm: AppViewModel, onSetup: () -> Unit, onDeviceCheck: ()
     val followUp by vm.followUp.collectAsStateWithLifecycle()
     val panel by vm.showPanel.collectAsStateWithLifecycle()
     val autoClear by vm.autoClear.collectAsStateWithLifecycle()
+    val nightExplore by vm.nightExplore.collectAsStateWithLifecycle()
     val voiceId by vm.voiceId.collectAsStateWithLifecycle()
     val city by vm.homeCity.collectAsStateWithLifecycle()
     val message by vm.message.collectAsStateWithLifecycle()
@@ -517,6 +518,7 @@ private fun SettingsTab(vm: AppViewModel, onSetup: () -> Unit, onDeviceCheck: ()
                 ToggleRow("Keep listening after answer", followUp) { vm.setFollowUp(it) }
                 ToggleRow("Panel on wake", panel) { vm.setShowPanel(it) }
                 ToggleRow("Auto-clear noise alerts", autoClear) { vm.setAutoClear(it) }
+                ToggleRow("Learn apps at night", nightExplore) { vm.setNightExplore(it) }
             }
             RowsCard {
                 NavRow("Voice", Voices.byId(voice).label.substringBefore(" ·")) { page = "voice" }

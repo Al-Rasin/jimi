@@ -1,7 +1,9 @@
 package com.alrasin.jarvis.actions
 
 import android.content.Context
+import com.alrasin.jarvis.agent.appmap.AppExplorer
 import com.alrasin.jarvis.agent.appmap.Planner
+import com.alrasin.jarvis.agent.appmap.learnTool
 import com.alrasin.jarvis.agent.appmap.mapTools
 import com.alrasin.jarvis.agent.RecipeStore
 import com.alrasin.jarvis.agent.recipeTools
@@ -35,6 +37,7 @@ class ToolRegistry @Inject constructor(
     secrets: Secrets,
     planner: Planner,
     recipes: RecipeStore,
+    explorer: AppExplorer,
 ) {
     val apps = AppList(context)
     val contacts = Contacts(context)
@@ -60,6 +63,7 @@ class ToolRegistry @Inject constructor(
         addAll(mapTools(planner, apps))
         addAll(skillTools(context, planner, apps))
         addAll(recipeTools(context, planner, apps, recipes))
+        add(learnTool(context, explorer, planner, apps))
     }
 
     private val byName = all.associateBy { it.name }.also {

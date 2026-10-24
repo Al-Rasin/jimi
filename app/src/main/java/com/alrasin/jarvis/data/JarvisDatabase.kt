@@ -24,7 +24,7 @@ import javax.inject.Singleton
         AppRule::class, MemoryFact::class, ToolCallLog::class, Routine::class,
         AppInfo::class, AppScreen::class, AppElement::class, AppEdge::class, RecipeRow::class,
     ],
-    version = 4,
+    version = 5,
     exportSchema = true,
 )
 abstract class JarvisDatabase : RoomDatabase() {
@@ -60,6 +60,13 @@ abstract class JarvisDatabase : RoomDatabase() {
                 MIGRATION_SQL_3_4.forEach(db::execSQL)
             }
         }
+
+        /** v5 declares the app map indexes (they made migrated DBs fail Room's check). */
+        val MIGRATION_4_5 = object : Migration(4, 5) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                MIGRATION_SQL_4_5.forEach(db::execSQL)
+            }
+        }
     }
 }
 
@@ -70,7 +77,7 @@ object DataModule {
     @Singleton
     fun database(@ApplicationContext context: Context): JarvisDatabase =
         Room.databaseBuilder(context, JarvisDatabase::class.java, "jarvis.db")
-            .addMigrations(JarvisDatabase.MIGRATION_1_2, JarvisDatabase.MIGRATION_2_3, JarvisDatabase.MIGRATION_3_4)
+            .addMigrations(JarvisDatabase.MIGRATION_1_2, JarvisDatabase.MIGRATION_2_3, JarvisDatabase.MIGRATION_3_4, JarvisDatabase.MIGRATION_4_5)
             .build()
 
     @Provides fun wakeEventDao(db: JarvisDatabase): WakeEventDao = db.wakeEventDao()

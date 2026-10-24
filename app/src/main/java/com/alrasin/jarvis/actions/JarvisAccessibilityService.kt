@@ -68,6 +68,9 @@ class JarvisAccessibilityService : AccessibilityService() {
 
     fun liveScreen() = watcher?.liveScreen()
 
+    /** Raw nodes of the top app window, for the app explorer (§J.5). */
+    fun liveNodes() = agentRoot()?.let { watcher?.liveNodes(it) }
+
     /** Active window of [packageName], else all its on-screen windows (Messenger chat heads use several, none active). */
     private fun rootsFor(packageName: String): List<AccessibilityNodeInfo> {
         rootInActiveWindow?.takeIf { it.packageName?.toString() == packageName }?.let { return listOf(it) }

@@ -24,6 +24,8 @@ class Settings @Inject constructor(@ApplicationContext private val context: Cont
     private val followUpKey = booleanPreferencesKey("follow_up")
     private val sttSecondPassKey = booleanPreferencesKey("stt_second_pass")
     private val autoClearKey = booleanPreferencesKey("auto_clear_notifications")
+    private val nightExploreKey = booleanPreferencesKey("night_explore")
+    private val nightExploredKey = stringPreferencesKey("night_explored")
     private val cityKey = stringPreferencesKey("home_city")
     private val panelKey = booleanPreferencesKey("show_panel")
     private val voiceIdKey = booleanPreferencesKey("voice_id")
@@ -60,6 +62,10 @@ class Settings @Inject constructor(@ApplicationContext private val context: Cont
     val followUp: Flow<Boolean> = context.dataStore.data.map { it[followUpKey] ?: true }
     val sttSecondPass: Flow<Boolean> = context.dataStore.data.map { it[sttSecondPassKey] ?: false }
     val autoClearNotifications: Flow<Boolean> = context.dataStore.data.map { it[autoClearKey] ?: false }
+    /** User OK for learning apps at night while charging (§J.5). Off by default. */
+    val nightExplore: Flow<Boolean> = context.dataStore.data.map { it[nightExploreKey] ?: false }
+    /** When each app was last explored at night: "pkg=millis;pkg=millis". */
+    val nightExplored: Flow<String> = context.dataStore.data.map { it[nightExploredKey] ?: "" }
     val homeCity: Flow<String> = context.dataStore.data.map { it[cityKey] ?: "Dhaka" }
     /** Assistant panel over the lock screen / apps after a wake. */
     val showPanel: Flow<Boolean> = context.dataStore.data.map { it[panelKey] ?: true }
@@ -92,6 +98,8 @@ class Settings @Inject constructor(@ApplicationContext private val context: Cont
     suspend fun setFollowUp(v: Boolean) = context.dataStore.edit { it[followUpKey] = v }
     suspend fun setSttSecondPass(v: Boolean) = context.dataStore.edit { it[sttSecondPassKey] = v }
     suspend fun setAutoClearNotifications(v: Boolean) = context.dataStore.edit { it[autoClearKey] = v }
+    suspend fun setNightExplore(v: Boolean) = context.dataStore.edit { it[nightExploreKey] = v }
+    suspend fun setNightExplored(v: String) = context.dataStore.edit { it[nightExploredKey] = v }
     suspend fun setHomeCity(v: String) = context.dataStore.edit { it[cityKey] = v }
     suspend fun setShowPanel(v: Boolean) = context.dataStore.edit { it[panelKey] = v }
     suspend fun setVoiceId(v: Boolean) = context.dataStore.edit { it[voiceIdKey] = v }

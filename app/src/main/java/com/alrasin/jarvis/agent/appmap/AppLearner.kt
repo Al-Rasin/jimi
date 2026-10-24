@@ -28,6 +28,13 @@ class AppLearner @Inject constructor(
     private var lastScreen: Long? = null
     private var pendingClick: ScreenStructure.Element? = null
 
+    /** Until this time, clicks are the explorer's own taps (§J.5), not the user's. */
+    @Volatile private var ownTapUntil = 0L
+
+    /** Last time the user (not the explorer) tapped — the explorer stops on it. */
+    @Volatile var userClickAt = 0L
+        private set
+
     /** Called after a window change or a click settled. */
     suspend fun onScreen(pkg: String, windowClass: String, nodes: List<ScreenStructure.RawNode>) = lock.withLock {
         runCatching {
@@ -49,7 +56,26 @@ class AppLearner @Inject constructor(
 
     /** User tapped something. Only structural elements count (list rows return null and are ignored). */
     suspend fun onClick(pkg: String, node: ScreenStructure.RawNode) = lock.withLock {
+        val now = System.currentTimeMillis()
+        if (now < ownTapUntil) return@withLock
+        userClickAt = now
         pendingClick = if (pkg == lastPkg) ScreenStructure.element(node) else null
+    }
+
+    /** The explorer is about to tap [element]; its click event must not count as the user's. */
+    suspend fun onOwnTap(pkg: String, element: ScreenStructure.Element) = lock.withLock {
+        ownTapUntil = System.currentTimeMillis() + OWN_TAP_MS
+        pendingClick = if (pkg == lastPkg) element else null
+    }
+
+    /** Save risky elements the explorer skipped, marked high, on the current screen. */
+    suspend fun noteRisky(pkg: String, elements: List<ScreenStructure.Element>) = lock.withLock {
+        runCatching {
+            val screen = lastScreen?.takeIf { lastPkg == pkg && elements.isNotEmpty() } ?: return@withLock
+            val known = dao.elementsFor(screen).map { it.role to it.label }.toSet()
+            elements.filter { (it.role to it.label) !in known }
+                .forEach { dao.insertElement(toEntity(screen, it).copy(risk = "high")) }
+        }.onFailure { JarvisLog.e("app learn risky failed", it) }
     }
 
     private suspend fun saveScreen(
@@ -103,6 +129,7 @@ class AppLearner @Inject constructor(
 
     companion object {
         private const val INFO_REFRESH_MS = 60 * 60 * 1000L
+        private const val OWN_TAP_MS = 1500L
 
         /** Selectors in the order UiQuery.forLabel tries them: id → desc → text. */
         internal fun selectorsJson(e: ScreenStructure.Element): String = Json.write(

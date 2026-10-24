@@ -28,3 +28,11 @@ internal val MIGRATION_SQL_2_3 = listOf(
 internal val MIGRATION_SQL_3_4 = listOf(
     "CREATE TABLE IF NOT EXISTS `recipes` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `pkg` TEXT NOT NULL, `name` TEXT NOT NULL, `say` TEXT NOT NULL, `stepsJson` TEXT NOT NULL, `risky` INTEGER NOT NULL, `source` TEXT NOT NULL, `minVersion` INTEGER NOT NULL, `maxVersion` INTEGER NOT NULL, `timeMs` INTEGER NOT NULL)",
 )
+
+/** v5: the app map indexes made by [MIGRATION_SQL_2_3] are now declared on the entities, so fresh
+ *  v3/v4 installs (made without them) get them too and every DB matches the schema. */
+internal val MIGRATION_SQL_4_5 = listOf(
+    "CREATE INDEX IF NOT EXISTS `index_app_screen_pkg` ON `app_screen` (`pkg`)",
+    "CREATE INDEX IF NOT EXISTS `index_app_element_screen` ON `app_element` (`screen`)",
+    "CREATE INDEX IF NOT EXISTS `index_app_edge_fromScreen` ON `app_edge` (`fromScreen`)",
+)

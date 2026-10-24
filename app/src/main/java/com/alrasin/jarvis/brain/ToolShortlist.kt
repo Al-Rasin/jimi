@@ -58,6 +58,7 @@ object ToolShortlist {
         "press" to listOf("tap", "tap_named"), "type" to listOf("type_text"),
         "result" to listOf("open_result"), "results" to listOf("open_result", "read_list"), "tab" to listOf("go_tab"),
         "list" to listOf("read_list"), "switch" to listOf("toggle_named"), "toggle" to listOf("toggle_named"),
+        "learn" to listOf("learn_app"), "explore" to listOf("learn_app"),
         "option" to listOf("toggle_named"), "recipe" to listOf("run_recipe"),
         "answer" to listOf("answer_call"), "reject" to listOf("reject_call"), "decline" to listOf("reject_call"),
         "hang" to listOf("reject_call"), "redial" to listOf("redial"), "caller" to listOf("call_back", "missed_calls"),
