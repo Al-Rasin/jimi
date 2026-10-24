@@ -9,7 +9,7 @@ fun screenTools(context: Context): List<Tool> {
     fun a() = JarvisAccessibilityService.instance
     val noA = ToolResult.fail("Screen control is off. Open Jarvis setup to turn on accessibility.")
     suspend fun keyOr(action: Int, key: Int, done: String): ToolResult =
-        if (a()?.global(action) == true || RootShell.run("input keyevent $key").ok) ToolResult.ok(done) else noA
+        if (a()?.global(action) == true || RootInput.key(key).ok) ToolResult.ok(done) else noA
     return listOf(
         SimpleTool("read_screen", "Read the text on the screen") { _, _ ->
             val text = a()?.screenText() ?: return@SimpleTool noA
@@ -32,7 +32,7 @@ fun screenTools(context: Context): List<Tool> {
             val dm = context.resources.displayMetrics
             val x = dm.widthPixels / 2
             val (y1, y2) = if (down) dm.heightPixels * 7 / 10 to dm.heightPixels * 3 / 10 else dm.heightPixels * 3 / 10 to dm.heightPixels * 7 / 10
-            if (RootShell.run("input swipe $x $y1 $x $y2 250").ok) ToolResult.ok("Scrolled.") else noA
+            if (RootInput.swipe(x, y1, x, y2, 250).ok) ToolResult.ok("Scrolled.") else noA
         },
         SimpleTool("go_back", "Press back") { _, _ -> keyOr(AccessibilityService.GLOBAL_ACTION_BACK, 4, "Back.") },
         SimpleTool("go_home", "Go to the home screen") { _, _ -> keyOr(AccessibilityService.GLOBAL_ACTION_HOME, 3, "Home.") },

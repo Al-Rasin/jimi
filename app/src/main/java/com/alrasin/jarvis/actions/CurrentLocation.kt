@@ -30,7 +30,7 @@ class CurrentLocation(private val context: Context) {
     suspend fun get(timeoutMs: Long = 6_000): Fix? {
         if (!allowed()) { JarvisLog.i("location: permission missing"); return null }
         if (!lm.isLocationEnabled && RootShell.available) {
-            RootShell.run("settings put secure location_mode 3")
+            RootSettings.put("secure", "location_mode", "3")
             JarvisLog.i("location: switched on with root")
         }
         if (!lm.isLocationEnabled) return null

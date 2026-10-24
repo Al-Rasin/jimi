@@ -75,13 +75,13 @@ class SettingsPages(private val context: Context) {
      */
     private suspend fun stored(name: String, on: Boolean): ToolResult? {
         val entries = NAMESPACES.flatMap { ns ->
-            RootShell.run("settings list $ns", log = false).out.lines().mapNotNull { line ->
+            RootSettings.list(ns).mapNotNull { line ->
                 line.split('=', limit = 2).takeIf { it.size == 2 }?.let { (k, v) -> Triple(ns, k.trim(), v.trim()) }
             }
         }
         val (ns, key, _) = key(name, entries) ?: return null
         val v = if (on) "1" else "0"
-        val done = RootShell.run("settings put $ns $key $v", "settings get $ns $key").out.trim().lines().lastOrNull() == v
+        val done = RootSettings.put(ns, key, v) && RootSettings.get(ns, key) == v
         JarvisLog.i("setting key $ns/$key → $v ${if (done) "ok" else "failed"}")
         return if (done) ToolResult.ok("${name.replaceFirstChar { it.uppercase() }} is ${if (on) "on" else "off"} now.") else null
     }

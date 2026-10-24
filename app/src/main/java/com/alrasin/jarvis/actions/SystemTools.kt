@@ -153,10 +153,8 @@ fun systemTools(context: Context, torch: Torch): List<Tool> {
                 }
             }.getOrDefault(false) || RootShell.run("cmd notification set_dnd ${if (on) "priority" else "off"}").ok
             "airplane" -> RootShell.run("cmd connectivity airplane-mode $e").ok
-            "location" -> RootShell.run(
-                "settings put secure location_mode ${if (on) 3 else 0}",
-                "cmd location set-location-enabled $on 2>/dev/null; true",
-            ).ok
+            "location" -> RootSettings.put("secure", "location_mode", if (on) "3" else "0") &&
+                RootShell.run("cmd location set-location-enabled $on 2>/dev/null; true").ok
             "hotspot" -> {
                 context.launch(Intent("android.settings.TETHER_SETTINGS")) || settingsPage(target)
             }
@@ -270,7 +268,7 @@ fun systemTools(context: Context, torch: Torch): List<Tool> {
         },
         SimpleTool("lock_phone", "Lock the phone (screen off)") { _, _ ->
             val a = JarvisAccessibilityService.instance
-            val requested = a?.lockScreen() == true || RootShell.run("input keyevent 223").ok
+            val requested = a?.lockScreen() == true || RootInput.key(223).ok
             if (!requested) return@SimpleTool ToolResult.fail("Boss, I couldn't request a lock.")
             delay(300)
             if (context.isLocked()) ToolResult.ok("Boss, locked.")
@@ -292,11 +290,11 @@ object Keyguard {
         if (!RootShell.available) return false
         val dm = context.resources.displayMetrics
         val x = dm.widthPixels / 2
-        RootShell.run("input keyevent 224")   // wake up
-        RootShell.run("input swipe $x ${dm.heightPixels * 85 / 100} $x ${dm.heightPixels * 30 / 100} 200")
+        RootInput.key(224)   // wake up
+        RootInput.swipe(x, dm.heightPixels * 85 / 100, x, dm.heightPixels * 30 / 100, 200)
         if (pin.isNullOrEmpty()) return true
         kotlinx.coroutines.delay(400)
-        return RootShell.run("input text ${RootShell.quote(pin)}", "input keyevent 66").ok
+        return RootInput.text(pin).ok && RootInput.key(66).ok
     }
 }
 
