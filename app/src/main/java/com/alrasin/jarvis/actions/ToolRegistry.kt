@@ -3,6 +3,8 @@ package com.alrasin.jarvis.actions
 import android.content.Context
 import com.alrasin.jarvis.agent.appmap.Planner
 import com.alrasin.jarvis.agent.appmap.mapTools
+import com.alrasin.jarvis.agent.RecipeStore
+import com.alrasin.jarvis.agent.recipeTools
 import com.alrasin.jarvis.agent.skillTools
 import com.alrasin.jarvis.core.Secrets
 import com.alrasin.jarvis.core.Tool
@@ -32,6 +34,7 @@ class ToolRegistry @Inject constructor(
     settings: Settings,
     secrets: Secrets,
     planner: Planner,
+    recipes: RecipeStore,
 ) {
     val apps = AppList(context)
     val contacts = Contacts(context)
@@ -55,6 +58,7 @@ class ToolRegistry @Inject constructor(
         add(settingTool(SettingsPages(context)))
         addAll(mapTools(planner, apps))
         addAll(skillTools(context, planner, apps))
+        addAll(recipeTools(context, planner, apps, recipes))
     }
 
     private val byName = all.associateBy { it.name }.also {

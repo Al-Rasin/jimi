@@ -9,6 +9,7 @@ import com.alrasin.jarvis.actions.SelfAccount
 import com.alrasin.jarvis.actions.ToolExecutor
 import com.alrasin.jarvis.agent.AgentResult
 import com.alrasin.jarvis.agent.AgentRouting
+import com.alrasin.jarvis.agent.RecipeStore
 import com.alrasin.jarvis.agent.ScreenAgentSession
 import com.alrasin.jarvis.core.JarvisLog
 import com.alrasin.jarvis.core.SmokeSession
@@ -48,6 +49,7 @@ class Assistant @Inject constructor(
     private val models: ModelBrain,
     private val cloud: CloudBrain,
     private val screenAgent: ScreenAgentSession,
+    private val recipes: RecipeStore,
 ) {
     data class Input(
         val heard: String,
@@ -256,6 +258,13 @@ class Assistant @Inject constructor(
                 return runTool(it, input, "rule")
             }
             if (!intent.isConfident || intent.route != IntentRouter.Route.CHAT) {
+                // A saved recipe replays known steps with no AI (ROADMAP #9).
+                recipes.find(text)?.let { (r, params) ->
+                    JarvisLog.i("route recipe ${r.name} (${r.source})")
+                    val call = ToolCall("run_recipe", mapOf("name" to r.name, "app" to r.appName, "pkg" to r.pkg,
+                        "risky" to r.risky.toString(), "params" to Json.write(params)))
+                    return runTool(call, input, "recipe")
+                }
                 if (!AgentRouting.needsMultiStep(text)) {
                     JarvisLog.i("route llm fallback: rule=${rule?.tool ?: "none"}, reason=${intent.reason}")
                     // Cloud picks in ~1 s when allowed (D-045); NONE means plain talk, null means ask the local model.

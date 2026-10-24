@@ -41,6 +41,14 @@ class ScreenAgent(
     var hasPendingQuestion: Boolean = false
         private set
 
+    /** One action that worked, with the element it hit, so a finished task can be saved as a recipe (ROADMAP #9). */
+    data class Performed(val action: AgentAction, val element: ScreenElement?, val pkg: String)
+    private val done = mutableListOf<Performed>()
+    val performed: List<Performed> get() = done.toList()
+    val command: String get() = task
+    var succeeded: Boolean = false
+        private set
+
     fun stop() { stopped = true; pending = null; hasPendingQuestion = false; activeJob?.cancel(Stopped()) }
 
     suspend fun run(task: String): AgentResult {
@@ -51,6 +59,8 @@ class ScreenAgent(
         steps = 0
         started = now()
         history.clear()
+        done.clear()
+        succeeded = false
         onStep(model.description)
         return bounded { openNamedApp(); loop() }
     }
@@ -60,6 +70,7 @@ class ScreenAgent(
         val app = START.find(task.trim())?.groupValues?.get(1) ?: return
         val action = AgentAction.OpenApp(app)
         if (!screen.perform(action, ScreenSnapshot("", emptyList()))) return
+        done += Performed(action, null, "")
         steps++
         "Step $steps: ${action.label()}".also { onStep(it); history += it }
         settle()
@@ -139,7 +150,7 @@ class ScreenAgent(
             onStep(line)
             history += line
             when (action) {
-                is AgentAction.Done -> return AgentResult(action.summary)
+                is AgentAction.Done -> { succeeded = true; return AgentResult(action.summary) }
                 is AgentAction.AskUser -> {
                     hasPendingQuestion = true
                     return AgentResult(action.question, question = true)
@@ -168,9 +179,17 @@ class ScreenAgent(
         else -> true
     }
 
+    private fun AgentAction.target(): Int? = when (this) {
+        is AgentAction.Tap -> element
+        is AgentAction.Type -> element
+        else -> null
+    }
+
     private suspend fun execute(action: AgentAction, snapshot: ScreenSnapshot): Boolean {
         if (!allowed()) return false
-        if (action == AgentAction.Wait) { delay(500); return allowed() }
-        return screen.perform(action, snapshot).also { if (it && allowed()) delay(250) }
+        val ok = if (action == AgentAction.Wait) { delay(500); allowed() }
+        else screen.perform(action, snapshot).also { if (it && allowed()) delay(250) }
+        if (ok) done += Performed(action, snapshot.elements.firstOrNull { it.index == action.target() }, snapshot.packageName)
+        return ok
     }
 }

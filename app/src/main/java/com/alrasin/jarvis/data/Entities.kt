@@ -90,3 +90,22 @@ data class Routine(
     val stepsJson: String,
     val enabled: Boolean = true,
 )
+
+/**
+ * A saved recipe (ROADMAP §H.5): steps the screen agent did for one command, replayed with no AI next time.
+ * [say] = spoken patterns, one per line, with {param} holes. [stepsJson] = JSON array of steps.
+ * [source]: agent. [minVersion]/[maxVersion]: app versionCode range it works for (0 = any).
+ */
+@Entity(tableName = "recipes")
+data class RecipeRow(
+    @PrimaryKey(autoGenerate = true) val id: Long = 0,
+    val pkg: String,
+    val name: String,
+    val say: String,
+    val stepsJson: String,
+    val risky: Boolean,
+    val source: String,
+    val minVersion: Long,
+    val maxVersion: Long,
+    val timeMs: Long,
+)

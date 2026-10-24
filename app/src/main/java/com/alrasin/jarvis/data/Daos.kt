@@ -73,3 +73,11 @@ interface RoutineDao {
     @Query("SELECT * FROM routine ORDER BY name") fun all(): Flow<List<Routine>>
     @Query("DELETE FROM routine WHERE name = :name") suspend fun delete(name: String)
 }
+
+@Dao
+interface RecipeDao {
+    @Insert(onConflict = OnConflictStrategy.REPLACE) suspend fun put(r: RecipeRow): Long
+    @Query("SELECT * FROM recipes ORDER BY timeMs DESC") suspend fun all(): List<RecipeRow>
+    @Query("DELETE FROM recipes WHERE id = :id") suspend fun delete(id: Long)
+    @Query("DELETE FROM recipes WHERE pkg = :pkg AND say = :say") suspend fun deleteSame(pkg: String, say: String)
+}

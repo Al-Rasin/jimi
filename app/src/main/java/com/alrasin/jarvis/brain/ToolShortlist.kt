@@ -58,7 +58,7 @@ object ToolShortlist {
         "press" to listOf("tap", "tap_named"), "type" to listOf("type_text"),
         "result" to listOf("open_result"), "results" to listOf("open_result", "read_list"), "tab" to listOf("go_tab"),
         "list" to listOf("read_list"), "switch" to listOf("toggle_named"), "toggle" to listOf("toggle_named"),
-        "option" to listOf("toggle_named"),
+        "option" to listOf("toggle_named"), "recipe" to listOf("run_recipe"),
     )
 
     private val STOP = setOf(

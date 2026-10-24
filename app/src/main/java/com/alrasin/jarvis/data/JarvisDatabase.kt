@@ -22,9 +22,9 @@ import javax.inject.Singleton
     entities = [
         WakeEvent::class, ConversationTurn::class, Note::class, Reminder::class, NotificationLog::class,
         AppRule::class, MemoryFact::class, ToolCallLog::class, Routine::class,
-        AppInfo::class, AppScreen::class, AppElement::class, AppEdge::class,
+        AppInfo::class, AppScreen::class, AppElement::class, AppEdge::class, RecipeRow::class,
     ],
-    version = 3,
+    version = 4,
     exportSchema = true,
 )
 abstract class JarvisDatabase : RoomDatabase() {
@@ -37,6 +37,7 @@ abstract class JarvisDatabase : RoomDatabase() {
     abstract fun toolLogDao(): ToolLogDao
     abstract fun routineDao(): RoutineDao
     abstract fun appMapDao(): AppMapDao
+    abstract fun recipeDao(): RecipeDao
 
     companion object {
         /** v1 had only wake_event (kept as is). SQL copied from app/schemas/…/2.json. */
@@ -52,6 +53,13 @@ abstract class JarvisDatabase : RoomDatabase() {
                 MIGRATION_SQL_2_3.forEach(db::execSQL)
             }
         }
+
+        /** v4 adds saved recipes (ROADMAP §H.5). */
+        val MIGRATION_3_4 = object : Migration(3, 4) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                MIGRATION_SQL_3_4.forEach(db::execSQL)
+            }
+        }
     }
 }
 
@@ -62,7 +70,7 @@ object DataModule {
     @Singleton
     fun database(@ApplicationContext context: Context): JarvisDatabase =
         Room.databaseBuilder(context, JarvisDatabase::class.java, "jarvis.db")
-            .addMigrations(JarvisDatabase.MIGRATION_1_2, JarvisDatabase.MIGRATION_2_3)
+            .addMigrations(JarvisDatabase.MIGRATION_1_2, JarvisDatabase.MIGRATION_2_3, JarvisDatabase.MIGRATION_3_4)
             .build()
 
     @Provides fun wakeEventDao(db: JarvisDatabase): WakeEventDao = db.wakeEventDao()
@@ -74,4 +82,5 @@ object DataModule {
     @Provides fun toolLogDao(db: JarvisDatabase): ToolLogDao = db.toolLogDao()
     @Provides fun routineDao(db: JarvisDatabase): RoutineDao = db.routineDao()
     @Provides fun appMapDao(db: JarvisDatabase): AppMapDao = db.appMapDao()
+    @Provides fun recipeDao(db: JarvisDatabase): RecipeDao = db.recipeDao()
 }

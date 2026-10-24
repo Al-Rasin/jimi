@@ -306,7 +306,7 @@ private suspend fun scrollDown(service: JarvisAccessibilityService): Boolean {
 }
 
 /** Card says "search via deep link": open it with the query filled in. Null = no link, use the screen. */
-private fun searchByLink(context: Context, app: Planner.App, query: String): ToolResult? {
+internal fun searchByLink(context: Context, app: Planner.App, query: String): ToolResult? {
     val card = app.card ?: return null
     val task = card.search?.deepLink?.takeIf { it.isNotBlank() } ?: return null
     val link = card.deepLinks.firstOrNull { it.task == task } ?: return null
@@ -317,7 +317,7 @@ private fun searchByLink(context: Context, app: Planner.App, query: String): Too
 }
 
 /** Tap the search box (card selectors first, then any search box / magnifier), type, press enter. */
-private suspend fun searchOnScreen(context: Context, service: JarvisAccessibilityService, app: Planner.App, query: String): ToolResult {
+internal suspend fun searchOnScreen(context: Context, service: JarvisAccessibilityService, app: Planner.App, query: String): ToolResult {
     val cardSelectors = app.card?.search?.selectors?.let(AppCard::toSelectors).orEmpty()
     val first = cardSelectors.takeIf { it.isNotEmpty() }?.let { UiQuery.waitFor(it, 1500) }
         ?: Skills.read(service)?.let { Skills.pickSearch(it.items)?.node }

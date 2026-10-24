@@ -23,3 +23,8 @@ internal val MIGRATION_SQL_2_3 = listOf(
     "CREATE TABLE IF NOT EXISTS `app_edge` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `fromScreen` INTEGER NOT NULL, `element` INTEGER NOT NULL, `toScreen` INTEGER NOT NULL, `timesSeen` INTEGER NOT NULL, `lastOk` INTEGER NOT NULL, `failedCount` INTEGER NOT NULL)",
     "CREATE INDEX IF NOT EXISTS `index_app_edge_fromScreen` ON `app_edge` (`fromScreen`)",
 )
+
+/** Table added in DB v4: saved recipes (ROADMAP §H.5). */
+internal val MIGRATION_SQL_3_4 = listOf(
+    "CREATE TABLE IF NOT EXISTS `recipes` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `pkg` TEXT NOT NULL, `name` TEXT NOT NULL, `say` TEXT NOT NULL, `stepsJson` TEXT NOT NULL, `risky` INTEGER NOT NULL, `source` TEXT NOT NULL, `minVersion` INTEGER NOT NULL, `maxVersion` INTEGER NOT NULL, `timeMs` INTEGER NOT NULL)",
+)

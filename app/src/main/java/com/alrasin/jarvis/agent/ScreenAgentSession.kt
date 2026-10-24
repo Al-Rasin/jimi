@@ -2,6 +2,7 @@ package com.alrasin.jarvis.agent
 
 import android.content.Context
 import com.alrasin.jarvis.actions.Outcome
+import com.alrasin.jarvis.actions.PhoneProfile
 import com.alrasin.jarvis.actions.ToolSafetyGate
 import com.alrasin.jarvis.core.JarvisLog
 import com.alrasin.jarvis.core.Risk
@@ -19,6 +20,7 @@ import javax.inject.Singleton
 class ScreenAgentSession @Inject constructor(
     @ApplicationContext private val context: Context,
     private val models: AgentModels,
+    private val store: RecipeStore,
 ) {
     private val gate = ToolSafetyGate()
     @Volatile private var agent: ScreenAgent? = null
@@ -47,19 +49,21 @@ class ScreenAgentSession @Inject constructor(
             acting {
                 speak(backend.description)
                 next.run(task)
-            }
+            }.also { remember(next) }
         }
 
     suspend fun confirm(voiceConfirmed: Boolean, locked: Boolean, voiceOk: Boolean?): AgentResult =
         guarded(locked, voiceOk) {
             panel = AgentPanel(context, ::stop)
             acting { agent?.confirm(voiceConfirmed) ?: AgentResult("There is no screen action to confirm.") }
+                .also { agent?.let { remember(it, confirmed = true) } }
         }
 
     suspend fun answer(text: String, locked: Boolean, voiceOk: Boolean?): AgentResult =
         guarded(locked, voiceOk) {
             panel = AgentPanel(context, ::stop)
             acting { agent?.answer(text) ?: AgentResult("Please ask for the screen task again.") }
+                .also { agent?.let { remember(it) } }
         }
 
     private suspend fun acting(block: suspend () -> AgentResult): AgentResult {
@@ -80,6 +84,21 @@ class ScreenAgentSession @Inject constructor(
             ToolResult.ok("Screen agent finished.")
         }
         return result ?: AgentResult((outcome as? Outcome.Denied)?.why ?: "Screen access was refused.")
+    }
+
+    /** A finished task becomes a recipe, so the same command next time runs with no AI (ROADMAP #9). */
+    private suspend fun remember(agent: ScreenAgent, confirmed: Boolean = false) {
+        if (!agent.succeeded) return
+        val done = agent.performed
+        val pkg = done.map { it.pkg }.firstOrNull { it.isNotBlank() && it != context.packageName } ?: return
+        if (PhoneProfile.isPaymentPackage(pkg) || done.any { it.element?.password == true }) return
+        val risky = confirmed || done.any { p -> p.element?.let { Skills.isRisky(it.text.ifBlank { it.description }) } == true }
+        runCatching {
+            val pm = context.packageManager
+            val version = pm.getPackageInfo(pkg, 0).longVersionCode
+            val name = pm.getApplicationLabel(pm.getApplicationInfo(pkg, 0)).toString()
+            RecipeBook.fromAgent(agent.command, pkg, name, done, risky, version)?.let { store.save(it) }
+        }.onFailure { JarvisLog.i("recipe not saved: ${it.message}") }
     }
 
     private fun release() {

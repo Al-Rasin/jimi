@@ -33,6 +33,9 @@ class AppCards @Inject constructor(
         return byPkg.values.firstOrNull { c -> c.name.lowercase() == n || c.aliases.any { it.lowercase() == n } }
     }
 
+    /** Every loaded card once (cards of installed apps only). */
+    fun all(): List<AppCard> = byPkg.values.distinct()
+
     suspend fun loadInstalled() = lock.withLock {
         val cards = readAll()
         val pm = context.packageManager
