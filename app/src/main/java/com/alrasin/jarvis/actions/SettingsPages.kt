@@ -1,11 +1,11 @@
 package com.alrasin.jarvis.actions
 
-import android.app.KeyguardManager
 import android.content.Context
 import android.content.Intent
 import android.provider.Settings
 import com.alrasin.jarvis.core.JarvisLog
 import com.alrasin.jarvis.core.ToolResult
+import com.alrasin.jarvis.core.isLocked
 import com.alrasin.jarvis.core.pollUntil
 import kotlinx.coroutines.delay
 
@@ -34,7 +34,7 @@ class SettingsPages(private val context: Context) {
 
     suspend fun run(name: String, state: String?): ToolResult {
         direct(name, state)?.let { return it }
-        if (context.getSystemService(KeyguardManager::class.java).isKeyguardLocked) return ToolResult.fail("Unlock the phone first, Boss.")
+        if (context.isLocked()) return ToolResult.fail("Unlock the phone first, Boss.")
         if (state == "on" || state == "off") stored(name, state == "on")?.let { return it }
         val service = JarvisAccessibilityService.instance
         val page = best(name, pages)

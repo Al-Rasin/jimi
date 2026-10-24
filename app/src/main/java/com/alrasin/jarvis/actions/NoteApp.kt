@@ -1,11 +1,11 @@
 package com.alrasin.jarvis.actions
 
 import android.accessibilityservice.AccessibilityService
-import android.app.KeyguardManager
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
 import com.alrasin.jarvis.core.JarvisLog
+import com.alrasin.jarvis.core.isLocked
 import com.alrasin.jarvis.core.pollUntil
 
 /**
@@ -34,8 +34,8 @@ class NoteApp(private val context: Context) {
     /** Label of the app it was saved in, or null (locked, no notes app, no accessibility, or Save not found). */
     suspend fun save(text: String, title: String? = null): String? {
         val t = target() ?: return null
-        if (context.getSystemService(KeyguardManager::class.java).isKeyguardLocked) return null
-        val service = JarvisAccessibilityService.instance ?: return null
+        if (context.isLocked()) return null
+        val service = requireScreen { return null }
         val intent = Intent(if (t.createNote) CREATE_NOTE else Intent.ACTION_SEND).setType("text/plain").setPackage(t.pkg)
             .putExtra(Intent.EXTRA_TEXT, text)
         title?.let { intent.putExtra(Intent.EXTRA_SUBJECT, it) }

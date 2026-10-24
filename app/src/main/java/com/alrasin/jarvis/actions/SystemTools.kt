@@ -2,7 +2,6 @@ package com.alrasin.jarvis.actions
 
 import android.annotation.SuppressLint
 import android.accessibilityservice.AccessibilityService
-import android.app.KeyguardManager
 import android.app.NotificationManager
 import android.bluetooth.BluetoothManager
 import android.content.Context
@@ -23,6 +22,7 @@ import com.alrasin.jarvis.core.JarvisLog
 import com.alrasin.jarvis.core.Risk
 import com.alrasin.jarvis.core.Tool
 import com.alrasin.jarvis.core.ToolResult
+import com.alrasin.jarvis.core.isLocked
 import com.alrasin.jarvis.core.pollUntil
 import kotlinx.coroutines.delay
 import java.io.File
@@ -273,7 +273,7 @@ fun systemTools(context: Context, torch: Torch): List<Tool> {
             val requested = a?.lockScreen() == true || RootShell.run("input keyevent 223").ok
             if (!requested) return@SimpleTool ToolResult.fail("Boss, I couldn't request a lock.")
             delay(300)
-            if (context.getSystemService(KeyguardManager::class.java).isKeyguardLocked) ToolResult.ok("Boss, locked.")
+            if (context.isLocked()) ToolResult.ok("Boss, locked.")
             else ToolResult.ok("Boss, I requested a screen lock.")
         },
     )
@@ -303,9 +303,8 @@ object Keyguard {
 fun unlockTool(context: Context, pin: suspend () -> String?) = SimpleTool("unlock_phone", "Unlock the phone", risk = Risk.VOICE_ID) { _, _ ->
     val p = pin()
     if (!Keyguard.unlock(context, p)) return@SimpleTool ToolResult.fail("Boss, I couldn't request an unlock. Please unlock the phone yourself.")
-    val keyguard = context.getSystemService(KeyguardManager::class.java)
-    pollUntil(20, 100) { !keyguard.isKeyguardLocked }   // PIN check can take a moment on MIUI
-    if (!keyguard.isKeyguardLocked) ToolResult.ok("Boss, unlocked.")
+    pollUntil(20, 100) { !context.isLocked() }   // PIN check can take a moment on MIUI
+    if (!context.isLocked()) ToolResult.ok("Boss, unlocked.")
     else ToolResult.fail("Boss, the phone is still locked.")
 }
 

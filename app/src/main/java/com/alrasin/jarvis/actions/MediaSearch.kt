@@ -54,8 +54,7 @@ internal suspend fun playSearch(context: Context, query: String, requestedApp: S
     val opened = context.launch(Intent(Intent.ACTION_VIEW, Uri.parse(uri)).setPackage(app.pkg)) ||
         context.launch(Intent(Intent.ACTION_SEARCH).setPackage(app.pkg).putExtra(SearchManager.QUERY, query))
     if (!opened) return ToolResult.fail("I couldn't open ${app.label} search.")
-    val service = JarvisAccessibilityService.instance
-        ?: return ToolResult.fail("I opened ${app.label} search. Enable Jimi accessibility so I can select the first result.")
+    val service = requireScreen { return ToolResult.fail("I opened ${app.label} search. Enable Jimi accessibility so I can select the first result.") }
     if (pollUntil(24, 250, delayFirst = true) { service.clickFirstMediaResult(app.pkg) }) {
         return ToolResult.ok("I selected the first result for $query in ${app.label}. Playback requested, Boss.")
     }

@@ -2,7 +2,6 @@ package com.alrasin.jarvis.service
 
 import android.Manifest
 import android.annotation.SuppressLint
-import android.app.KeyguardManager
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
@@ -23,6 +22,7 @@ import com.alrasin.jarvis.brain.ModelBrain
 import com.alrasin.jarvis.brain.Persona
 import com.alrasin.jarvis.core.JarvisLog
 import com.alrasin.jarvis.core.backgroundWork
+import com.alrasin.jarvis.core.isLocked
 import com.alrasin.jarvis.data.Settings
 import com.alrasin.jarvis.data.WakeEvent
 import com.alrasin.jarvis.data.WakeEventDao
@@ -512,7 +512,7 @@ class JarvisCoreService : LifecycleService() {
                     if (epoch != speechEpoch) return@launch
                     _heard.value = text
                 }
-                val locked = getSystemService(KeyguardManager::class.java).isKeyguardLocked
+                val locked = isLocked()
                 val input = Assistant.Input(text, raw, source, locked, voiceOk(locked, audio), wakeId = wakeId, audioPath = audioPath)
                 var r = try {
                     // adb test hook: source "offline_test" times the on-phone path with the cloud skipped

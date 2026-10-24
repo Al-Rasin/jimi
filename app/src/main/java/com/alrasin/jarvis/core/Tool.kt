@@ -1,5 +1,6 @@
 package com.alrasin.jarvis.core
 
+import android.app.KeyguardManager
 import android.content.Context
 
 /** ARCHITECTURE §4. VOICE_ID = needs speaker verification when the phone is locked. */
@@ -44,6 +45,9 @@ class ToolContext(
     val heard: String,
     val locked: Boolean,
 )
+
+/** Is the screen locked right now (ROADMAP §L.3). Replaces the repeated KeyguardManager lookup. */
+fun Context.isLocked(): Boolean = getSystemService(KeyguardManager::class.java).isKeyguardLocked
 
 interface Tool {
     /** snake_case, stable — used in training data. Never rename. */

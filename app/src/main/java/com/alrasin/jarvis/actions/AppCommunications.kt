@@ -68,8 +68,7 @@ internal class AppCommunications(private val context: Context, private val conta
             val mime = if (video) "vnd.android.cursor.item/vnd.com.whatsapp.video.call" else "vnd.android.cursor.item/vnd.com.whatsapp.voip.call"
             if (openContactRow(person, pkg, mime)) return ToolResult.ok("Boss, I requested a $label ${if (video) "video" else "voice"} call to ${person.name}.")
         }
-        val service = JarvisAccessibilityService.instance
-            ?: return ToolResult.fail("Enable Jimi accessibility in Android settings so I can place the $label call.")
+        val service = requireScreen { return ToolResult.fail("Enable Jimi accessibility in Android settings so I can place the $label call.") }
         openConversation(person, app, pkg, service)?.let { return ToolResult.fail(it) }
         val labels = if (video) listOf("Video call", "Start video call") else listOf("Voice call", "Audio call", "Start audio call", "Call")
         val ids = if (app == "whatsapp") listOf("$pkg:id/${if (video) "video_call" else "menuitem_conversation_call"}") else emptyList()
@@ -81,8 +80,7 @@ internal class AppCommunications(private val context: Context, private val conta
     suspend fun message(person: Contacts.Contact, app: String, text: String): ToolResult {
         val label = if (app == "whatsapp") "WhatsApp" else "Messenger"
         val pkg = packageFor(app) ?: return ToolResult.fail("$label is not installed.")
-        val service = JarvisAccessibilityService.instance
-            ?: return ToolResult.fail("Enable Jimi accessibility in Android settings so I can send the $label message.")
+        val service = requireScreen { return ToolResult.fail("Enable Jimi accessibility in Android settings so I can send the $label message.") }
         openConversation(person, app, pkg, service, text)?.let { return ToolResult.fail(it) }
         if (!service.replaceText(pkg, text) || service.editableText(pkg) != text)
             return ToolResult.fail("I couldn't enter the exact message in ${person.name}'s $label chat. Nothing was sent.")
@@ -97,8 +95,7 @@ internal class AppCommunications(private val context: Context, private val conta
     suspend fun messageSelf(app: String, text: String): ToolResult {
         val label = if (app == "whatsapp") "WhatsApp" else "Messenger"
         val pkg = packageFor(app) ?: return ToolResult.fail("$label is not installed.")
-        val service = JarvisAccessibilityService.instance
-            ?: return ToolResult.fail("Enable Jimi accessibility in Android settings so I can send the $label message.")
+        val service = requireScreen { return ToolResult.fail("Enable Jimi accessibility in Android settings so I can send the $label message.") }
         val uri = if (app == "whatsapp") {
             val number = SelfAccount.whatsappNumber()?.let(CommsAddress::international)
                 ?: return ToolResult.fail("I couldn't find your own WhatsApp number.")

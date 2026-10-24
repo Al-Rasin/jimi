@@ -1,7 +1,6 @@
 package com.alrasin.jarvis.agent
 
 import android.accessibilityservice.AccessibilityService
-import android.app.KeyguardManager
 import android.content.Context
 import android.content.Intent
 import android.graphics.Rect
@@ -10,6 +9,7 @@ import android.provider.Settings
 import android.view.accessibility.AccessibilityNodeInfo
 import com.alrasin.jarvis.actions.AppList
 import com.alrasin.jarvis.actions.JarvisAccessibilityService
+import com.alrasin.jarvis.core.isLocked
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.delay
@@ -20,7 +20,7 @@ class AccessibilityAgentScreen(private val context: Context) : AgentScreen {
     private val apps = AppList(context)
 
     override suspend fun snapshot(): ScreenSnapshot = withContext(Dispatchers.Main.immediate) {
-        if (isLocked()) return@withContext ScreenSnapshot("", emptyList())
+        if (context.isLocked()) return@withContext ScreenSnapshot("", emptyList())
         val root = JarvisAccessibilityService.instance?.agentRoot()
             ?: return@withContext ScreenSnapshot("", emptyList())
         try { capture(root) } finally { root.recycle() }
@@ -31,7 +31,7 @@ class AccessibilityAgentScreen(private val context: Context) : AgentScreen {
         val result = withContext(Dispatchers.Main.immediate) {
             val actionContext = currentCoroutineContext()
             actionContext.ensureActive()
-            if (isLocked()) return@withContext false
+            if (context.isLocked()) return@withContext false
             val service = JarvisAccessibilityService.instance ?: return@withContext false
             if (action is AgentAction.OpenApp) {
                 actionContext.ensureActive()
@@ -172,7 +172,4 @@ class AccessibilityAgentScreen(private val context: Context) : AgentScreen {
         context.startActivity(intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
         true
     }.getOrDefault(false)
-
-    private fun isLocked(): Boolean =
-        (context.getSystemService(Context.KEYGUARD_SERVICE) as KeyguardManager).isKeyguardLocked
 }
