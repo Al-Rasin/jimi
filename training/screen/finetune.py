@@ -104,7 +104,7 @@ def run_training(a, adapter):
         {"fine_tune_type": "lora", "num_layers": len(model.layers), "lora_parameters": lora}, indent=2))
     train_set = Sized(ChatRows(a.data / "train.jsonl", tok))
     valid_set = Sized(ChatRows(a.data / "valid.jsonl", tok))
-    warm = min(50, a.iters // 5)
+    warm = max(1, min(50, a.iters // 5))
     sched = optim.join_schedules([optim.linear_schedule(1e-6, a.lr, warm),
                                   optim.cosine_decay(a.lr, a.iters - warm, 1e-6)], [warm])
     args = TrainingArgs(batch_size=a.batch, iters=a.iters, val_batches=a.val_batches,
