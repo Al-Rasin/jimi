@@ -21,5 +21,6 @@ object AgentRouting {
 
     fun acceptsSingleTool(text: String, tool: String): Boolean = !needsMultiStep(text) || tool !in partialTools
 
-    private val partialTools = setOf("open_app", "toggle", "read_screen", "tap", "type_text", "scroll", "go_back", "go_home", "open_recents", "send_whatsapp", "send_sms", "read_messages")
+    private val partialTools = setOf("open_app", "toggle", "read_screen", "tap", "type_text", "scroll", "go_back", "go_home", "open_recents", "send_whatsapp", "send_sms", "read_messages",
+        "search_in_app", "open_result", "tap_named", "go_tab", "read_list", "toggle_named")
 }

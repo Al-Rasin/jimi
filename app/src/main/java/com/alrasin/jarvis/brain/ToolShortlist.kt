@@ -46,16 +46,19 @@ object ToolShortlist {
         "notification" to listOf("read_notifications", "notification_summary", "clear_notifications"),
         "notifications" to listOf("read_notifications", "notification_summary", "clear_notifications"),
         "missed" to listOf("notification_summary", "read_messages"),
-        "open" to listOf("open_app", "open_url"), "launch" to listOf("open_app"), "start" to listOf("open_app"),
+        "open" to listOf("open_app", "open_url", "open_result"), "launch" to listOf("open_app"), "start" to listOf("open_app"),
         "app" to listOf("open_app", "close_app"), "close" to listOf("close_app"), "kill" to listOf("close_app"),
-        "website" to listOf("open_url"), "site" to listOf("open_url"), "search" to listOf("web_search"), "google" to listOf("web_search"),
+        "website" to listOf("open_url"), "site" to listOf("open_url"), "search" to listOf("web_search", "search_in_app"), "google" to listOf("web_search"),
         "who" to listOf("wiki_lookup", "web_search"), "what" to listOf("wiki_lookup", "web_search"), "news" to listOf("news"),
         "headlines" to listOf("news"), "screenshot" to listOf("take_screenshot"), "capture" to listOf("take_screenshot"),
         "screen" to listOf("read_screen", "take_screenshot", "set_brightness"), "lock" to listOf("lock_phone"),
         "unlock" to listOf("unlock_phone"), "home" to listOf("go_home"), "back" to listOf("go_back"), "recent" to listOf("open_recents"),
         "remember" to listOf("remember_fact", "recall_facts"), "forget" to listOf("forget_fact"),
-        "know" to listOf("recall_facts"), "scroll" to listOf("scroll"), "tap" to listOf("tap"), "click" to listOf("tap"),
-        "press" to listOf("tap"), "type" to listOf("type_text"),
+        "know" to listOf("recall_facts"), "scroll" to listOf("scroll"), "tap" to listOf("tap", "tap_named"), "click" to listOf("tap", "tap_named"),
+        "press" to listOf("tap", "tap_named"), "type" to listOf("type_text"),
+        "result" to listOf("open_result"), "results" to listOf("open_result", "read_list"), "tab" to listOf("go_tab"),
+        "list" to listOf("read_list"), "switch" to listOf("toggle_named"), "toggle" to listOf("toggle_named"),
+        "option" to listOf("toggle_named"),
     )
 
     private val STOP = setOf(

@@ -1,5 +1,6 @@
 package com.alrasin.jarvis.actions
 
+import com.alrasin.jarvis.agent.Skills
 import com.alrasin.jarvis.brain.Persona
 import com.alrasin.jarvis.core.JarvisLog
 import com.alrasin.jarvis.core.SmokeSession
@@ -43,7 +44,7 @@ class ToolExecutor @Inject constructor(private val registry: ToolRegistry) {
     /** ROADMAP "Unlock for every screen task": unlock with the saved PIN only after the owner's voice matched,
      * never for payment/banking apps, then lock again in [execute] once the task is done. */
     private suspend fun unlockFirst(call: ToolCall, ctx: ToolContext, voiceOk: Boolean?): ToolResult? {
-        val isPaymentApp = call.tool in setOf("open_app", "app_go") &&
+        val isPaymentApp = call.tool in setOf("open_app", "app_go", "search_in_app") &&
             call.arg("app")?.let { registry.apps.find(it)?.pkg }?.let(PhoneProfile::isPaymentPackage) == true
         return when (unlockNeed(call, ctx.locked, voiceOk, isPaymentApp)) {
             Unlock.NONE -> null
@@ -79,7 +80,8 @@ internal enum class Unlock { NONE, UNLOCK, VOICE_ID_OFF, VOICE_MISMATCH, PAYMENT
 
 /** Tools that drive another app's screen and so cannot work behind the lock screen. */
 internal fun needsScreen(call: ToolCall): Boolean = when (call.tool) {
-    "send_whatsapp", "open_app", "app_go", "read_screen", "tap", "type_text", "scroll" -> true
+    "send_whatsapp", "open_app", "app_go", "read_screen", "tap", "type_text", "scroll",
+    "search_in_app", "open_result", "tap_named", "go_tab", "read_list", "toggle_named" -> true
     "send_sms" -> call.arg("app").equals("messenger", ignoreCase = true)
     "call" -> call.arg("app")?.lowercase() in setOf("whatsapp", "messenger")
     else -> false
@@ -119,9 +121,11 @@ internal class ToolSafetyGate {
         val risk = when {
             declaredRisk != Risk.SAFE -> declaredRisk
             call.tool in setOf("delete_reminder", "forget_fact", "cancel_alarm") -> Risk.CONFIRM
+            call.tool in setOf("tap_named", "toggle_named", "open_result") &&
+                Skills.isRisky(call.arg("name") ?: call.arg("query").orEmpty()) -> Risk.CONFIRM
             (locked || lockdown) && call.tool in setOf(
                 "read_messages", "read_chat", "read_notes", "list_reminders", "recall_facts",
-                "read_screen", "read_notifications", "notification_summary",
+                "read_screen", "read_list", "read_notifications", "notification_summary",
             ) -> Risk.VOICE_ID
             else -> Risk.SAFE
         }
@@ -169,6 +173,8 @@ internal class ToolSafetyGate {
             "list_reminders" -> "Read your pending reminders"
             "recall_facts" -> "Read what I remember about you"
             "read_screen" -> "Read your screen"
+            "read_list" -> "Read the list on your screen"
+            "tap_named", "toggle_named", "open_result" -> "Tap \"${arg("name") ?: arg("query") ?: "that"}\""
             "read_notifications" -> "Read your notifications"
             "notification_summary" -> "Summarize your recent notifications"
             "undo_notification_clear" -> "Restore your last cleared notifications as copies"

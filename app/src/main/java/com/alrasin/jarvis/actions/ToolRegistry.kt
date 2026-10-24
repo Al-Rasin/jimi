@@ -3,6 +3,7 @@ package com.alrasin.jarvis.actions
 import android.content.Context
 import com.alrasin.jarvis.agent.appmap.Planner
 import com.alrasin.jarvis.agent.appmap.mapTools
+import com.alrasin.jarvis.agent.skillTools
 import com.alrasin.jarvis.core.Secrets
 import com.alrasin.jarvis.core.Tool
 import com.alrasin.jarvis.data.MemoryDao
@@ -53,6 +54,7 @@ class ToolRegistry @Inject constructor(
         add(phoneProfileTool(profile))
         add(settingTool(SettingsPages(context)))
         addAll(mapTools(planner, apps))
+        addAll(skillTools(context, planner, apps))
     }
 
     private val byName = all.associateBy { it.name }.also {

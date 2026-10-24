@@ -181,6 +181,12 @@ class Planner @Inject constructor(
         return App(app.pkg, app.label, appCards.card(app.pkg))
     }
 
+    /** The app for a known package (e.g. the one on screen now). */
+    fun forPackage(pkg: String, apps: AppList): App {
+        val card = appCards.card(pkg)
+        return App(pkg, card?.name ?: apps.all().firstOrNull { it.pkg == pkg }?.label ?: pkg, card)
+    }
+
     suspend fun abilities(name: String, apps: AppList): ToolResult {
         val app = resolve(name, apps) ?: return ToolResult.fail("I can't find an app called $name.")
         return ToolResult.ok(MapPlan.abilities(app.name, app.card, graph(app.pkg)))
@@ -265,7 +271,7 @@ class Planner @Inject constructor(
         return g.screens.filter { it.name == launch }.map { it.id }.toSet()
     }
 
-    private suspend fun openIfNeeded(service: JarvisAccessibilityService, pkg: String, apps: AppList): Boolean {
+    internal suspend fun openIfNeeded(service: JarvisAccessibilityService, pkg: String, apps: AppList): Boolean {
         if (service.appPackage() == pkg) return true
         if (!context.openApp(apps, pkg)) return false
         val open = pollUntil(OPEN_TRIES, OPEN_PAUSE_MS) { service.appPackage() == pkg }

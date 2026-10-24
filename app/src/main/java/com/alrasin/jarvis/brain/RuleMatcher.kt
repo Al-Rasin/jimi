@@ -68,7 +68,7 @@ object RuleMatcher {
         if (t.isEmpty()) return null
         val actionText = input.lowercase().trim().replace(Regex("\\s+"), " ")
             .replace(Regex("^(?:(?:hey |ok |okay )?(?:jarvis|jimi|jimmy)[, ]+|(?:please|pls|can you|could you|would you|will you|i want you to|i want to|i would like to|just|hey|ok|okay) )+"), "")
-        return talk(t) ?: comms(actionText) ?: media(actionText.trimEnd('.', '!', '?')) ?: appMap(t)
+        return talk(t) ?: comms(actionText) ?: media(actionText.trimEnd('.', '!', '?')) ?: appMap(t) ?: skills(t)
             ?: knowledge(t)?.takeIf { it.tool == "web_search" || it.tool == "wiki_lookup" }
             ?: toggle(t) ?: time(normalize(input, keepClockColon = true), now) ?: notes(t, now) ?: media(t) ?: system(t) ?: screen(t)
             ?: notifications(t) ?: noisyTool(t, now) ?: knowledge(t) ?: memory(t) ?: apps(t)
@@ -480,6 +480,30 @@ object RuleMatcher {
             val app = it.groupValues[2]
             if (appNameMatches?.invoke(app) == true) return call("app_go", "app" to app, "target" to it.groupValues[1])
         }
+        return null
+    }
+
+    /** General skills for any app (ROADMAP §H.4). Plain "tap X" stays on the old tap tool. */
+    private fun skills(t: String): ToolCall? {
+        Regex("^(?:search|find|look up)(?: for)? (.+?) (?:in|on|inside) (?:the )?(.+?)(?: app)?$").find(t)?.let {
+            val app = it.groupValues[2]
+            val web = app.matches(re("google|(?:the )?(?:web|internet)|online"))
+            if (!web && appNameMatches?.invoke(app) == true) return call("search_in_app", "query" to it.groupValues[1], "app" to app)
+        }
+        if (t.matches(re("open (?:the )?(?:first|top) (?:result|one|item)"))) return call("open_result")
+        Regex("^open (?:the )?(?:first |top )?result (?:for |about |called |named )?(.+)$").find(t)
+            ?.let { return call("open_result", "query" to it.groupValues[1]) }
+        Regex("^(?:go to|open|switch to|show(?: me)?) (?:the )?(.+?) tab$").find(t)?.let { return call("go_tab", "name" to it.groupValues[1]) }
+        if (t.matches(re("read (?:the |this |me the )?(?:list|rows|items|results|search results)(?: on (?:the )?screen)?|what (?:is|are) in (?:the |this )?list"))) {
+            return call("read_list")
+        }
+        Regex("^(?:turn|switch) (on|off) (?:the )?(.+?) (?:switch|toggle|option|checkbox)$").find(t)
+            ?.let { return call("toggle_named", "name" to it.groupValues[2], "state" to it.groupValues[1]) }
+        Regex("^(?:turn|switch) (?:the )?(.+?) (?:switch|toggle|option|checkbox) (on|off)$").find(t)
+            ?.let { return call("toggle_named", "name" to it.groupValues[1], "state" to it.groupValues[2]) }
+        Regex("^(?:flip|toggle) (?:the )?(.+?)(?: switch| toggle| option| checkbox)?$").find(t)
+            ?.takeIf { t.matches(re(".+ (?:switch|toggle|option|checkbox)")) }
+            ?.let { return call("toggle_named", "name" to it.groupValues[1]) }
         return null
     }
 
