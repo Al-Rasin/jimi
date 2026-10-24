@@ -43,7 +43,7 @@ class ToolExecutor @Inject constructor(private val registry: ToolRegistry) {
     /** ROADMAP "Unlock for every screen task": unlock with the saved PIN only after the owner's voice matched,
      * never for payment/banking apps, then lock again in [execute] once the task is done. */
     private suspend fun unlockFirst(call: ToolCall, ctx: ToolContext, voiceOk: Boolean?): ToolResult? {
-        val isPaymentApp = call.tool == "open_app" &&
+        val isPaymentApp = call.tool in setOf("open_app", "app_go") &&
             call.arg("app")?.let { registry.apps.find(it)?.pkg }?.let(PhoneProfile::isPaymentPackage) == true
         return when (unlockNeed(call, ctx.locked, voiceOk, isPaymentApp)) {
             Unlock.NONE -> null
@@ -79,7 +79,7 @@ internal enum class Unlock { NONE, UNLOCK, VOICE_ID_OFF, VOICE_MISMATCH, PAYMENT
 
 /** Tools that drive another app's screen and so cannot work behind the lock screen. */
 internal fun needsScreen(call: ToolCall): Boolean = when (call.tool) {
-    "send_whatsapp", "open_app", "read_screen", "tap", "type_text", "scroll" -> true
+    "send_whatsapp", "open_app", "app_go", "read_screen", "tap", "type_text", "scroll" -> true
     "send_sms" -> call.arg("app").equals("messenger", ignoreCase = true)
     "call" -> call.arg("app")?.lowercase() in setOf("whatsapp", "messenger")
     else -> false

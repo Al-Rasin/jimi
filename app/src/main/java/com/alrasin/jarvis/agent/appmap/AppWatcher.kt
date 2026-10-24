@@ -12,6 +12,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
+import java.util.concurrent.ConcurrentHashMap
 
 /**
  * Accessibility glue for [AppLearner] (ROADMAP §J.2). Window change or user click → wait for the
@@ -20,7 +21,7 @@ import kotlinx.coroutines.launch
 class AppWatcher(private val service: AccessibilityService, private val learner: AppLearner) {
     private val main = Handler(Looper.getMainLooper())
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
-    private val windowClass = HashMap<String, String>()
+    private val windowClass = ConcurrentHashMap<String, String>()
     private val snapshot = Runnable { snapshot() }
 
     fun onEvent(event: AccessibilityEvent) {
@@ -38,6 +39,18 @@ class AppWatcher(private val service: AccessibilityService, private val learner:
             }
         }
     }
+
+    /** Fingerprint of the screen shown now, built like the learner's (for the map planner, §J.4). */
+    fun liveScreen(): LiveScreen? {
+        val root = service.rootInActiveWindow ?: return null
+        val pkg = root.packageName?.toString() ?: return null
+        val nodes = ArrayList<ScreenStructure.RawNode>()
+        collect(root, parentClass = "", inList = false, nodes)
+        val parts = ScreenStructure.parts(ScreenStructure.elements(nodes))
+        return LiveScreen(pkg, AppFingerprint.compute(windowClass[pkg] ?: pkg, parts))
+    }
+
+    data class LiveScreen(val pkg: String, val fingerprint: String)
 
     fun stop() {
         main.removeCallbacks(snapshot)

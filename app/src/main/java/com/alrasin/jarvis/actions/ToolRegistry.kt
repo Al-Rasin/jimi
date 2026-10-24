@@ -1,6 +1,8 @@
 package com.alrasin.jarvis.actions
 
 import android.content.Context
+import com.alrasin.jarvis.agent.appmap.Planner
+import com.alrasin.jarvis.agent.appmap.mapTools
 import com.alrasin.jarvis.core.Secrets
 import com.alrasin.jarvis.core.Tool
 import com.alrasin.jarvis.data.MemoryDao
@@ -28,6 +30,7 @@ class ToolRegistry @Inject constructor(
     notifications: NotificationDao,
     settings: Settings,
     secrets: Secrets,
+    planner: Planner,
 ) {
     val apps = AppList(context)
     val contacts = Contacts(context)
@@ -48,6 +51,7 @@ class ToolRegistry @Inject constructor(
         add(myLocationTool(location))
         add(phoneProfileTool(profile))
         add(settingTool(SettingsPages(context)))
+        addAll(mapTools(planner, apps))
     }
 
     private val byName = all.associateBy { it.name }.also {

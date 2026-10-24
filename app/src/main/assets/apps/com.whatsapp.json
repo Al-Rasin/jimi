@@ -8,7 +8,7 @@
     "whats app",
     "wa"
   ],
-  "cardVersion": 1,
+  "cardVersion": 2,
   "minVersion": 0,
   "maxVersion": 0,
   "verified": false,
@@ -119,10 +119,226 @@
               "type": "text",
               "value": "More options"
             }
-          ]
+          ],
+          "to": "menu"
         }
       ],
       "launch": true
+    },
+    {
+      "name": "menu",
+      "elements": [
+        {
+          "label": "New group",
+          "role": "button",
+          "selectors": [
+            {
+              "type": "text",
+              "value": "New group"
+            },
+            {
+              "type": "desc",
+              "value": "New group"
+            }
+          ]
+        },
+        {
+          "label": "Linked devices",
+          "role": "button",
+          "selectors": [
+            {
+              "type": "text",
+              "value": "Linked devices"
+            },
+            {
+              "type": "desc",
+              "value": "Linked devices"
+            }
+          ]
+        },
+        {
+          "label": "Starred",
+          "role": "button",
+          "selectors": [
+            {
+              "type": "text",
+              "value": "Starred"
+            },
+            {
+              "type": "desc",
+              "value": "Starred"
+            }
+          ]
+        },
+        {
+          "label": "Settings",
+          "role": "button",
+          "selectors": [
+            {
+              "type": "text",
+              "value": "Settings"
+            },
+            {
+              "type": "desc",
+              "value": "Settings"
+            }
+          ],
+          "to": "settings"
+        }
+      ]
+    },
+    {
+      "name": "settings",
+      "elements": [
+        {
+          "label": "Navigate up",
+          "role": "button",
+          "selectors": [
+            {
+              "type": "text",
+              "value": "Navigate up"
+            },
+            {
+              "type": "desc",
+              "value": "Navigate up"
+            }
+          ],
+          "to": "chats"
+        },
+        {
+          "label": "Account",
+          "role": "button",
+          "selectors": [
+            {
+              "type": "text",
+              "value": "Account"
+            },
+            {
+              "type": "desc",
+              "value": "Account"
+            }
+          ]
+        },
+        {
+          "label": "Privacy",
+          "role": "button",
+          "selectors": [
+            {
+              "type": "text",
+              "value": "Privacy"
+            },
+            {
+              "type": "desc",
+              "value": "Privacy"
+            }
+          ],
+          "to": "privacy"
+        },
+        {
+          "label": "Notifications",
+          "role": "button",
+          "selectors": [
+            {
+              "type": "text",
+              "value": "Notifications"
+            },
+            {
+              "type": "desc",
+              "value": "Notifications"
+            }
+          ]
+        },
+        {
+          "label": "Storage and data",
+          "role": "button",
+          "selectors": [
+            {
+              "type": "text",
+              "value": "Storage and data"
+            },
+            {
+              "type": "desc",
+              "value": "Storage and data"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "privacy",
+      "elements": [
+        {
+          "label": "Navigate up",
+          "role": "button",
+          "selectors": [
+            {
+              "type": "text",
+              "value": "Navigate up"
+            },
+            {
+              "type": "desc",
+              "value": "Navigate up"
+            }
+          ],
+          "to": "settings"
+        },
+        {
+          "label": "Last seen and online",
+          "role": "button",
+          "selectors": [
+            {
+              "type": "text",
+              "value": "Last seen and online"
+            },
+            {
+              "type": "desc",
+              "value": "Last seen and online"
+            }
+          ]
+        },
+        {
+          "label": "Profile photo",
+          "role": "button",
+          "selectors": [
+            {
+              "type": "text",
+              "value": "Profile photo"
+            },
+            {
+              "type": "desc",
+              "value": "Profile photo"
+            }
+          ]
+        },
+        {
+          "label": "Read receipts",
+          "role": "button",
+          "selectors": [
+            {
+              "type": "text",
+              "value": "Read receipts"
+            },
+            {
+              "type": "desc",
+              "value": "Read receipts"
+            }
+          ]
+        },
+        {
+          "label": "Blocked contacts",
+          "role": "button",
+          "selectors": [
+            {
+              "type": "text",
+              "value": "Blocked contacts"
+            },
+            {
+              "type": "desc",
+              "value": "Blocked contacts"
+            }
+          ]
+        }
+      ]
     },
     {
       "name": "updates",

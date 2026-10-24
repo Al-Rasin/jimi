@@ -68,7 +68,7 @@ object RuleMatcher {
         if (t.isEmpty()) return null
         val actionText = input.lowercase().trim().replace(Regex("\\s+"), " ")
             .replace(Regex("^(?:(?:hey |ok |okay )?(?:jarvis|jimi|jimmy)[, ]+|(?:please|pls|can you|could you|would you|will you|i want you to|i want to|i would like to|just|hey|ok|okay) )+"), "")
-        return talk(t) ?: comms(actionText) ?: media(actionText.trimEnd('.', '!', '?'))
+        return talk(t) ?: comms(actionText) ?: media(actionText.trimEnd('.', '!', '?')) ?: appMap(t)
             ?: knowledge(t)?.takeIf { it.tool == "web_search" || it.tool == "wiki_lookup" }
             ?: toggle(t) ?: time(normalize(input, keepClockColon = true), now) ?: notes(t, now) ?: media(t) ?: system(t) ?: screen(t)
             ?: notifications(t) ?: noisyTool(t, now) ?: knowledge(t) ?: memory(t) ?: apps(t)
@@ -414,6 +414,20 @@ object RuleMatcher {
             return call("remember_fact", "text" to it.groupValues[1])
         }
         Regex("^forget(?: that| about)? (.+)$").find(t)?.let { return call("forget_fact", "text" to it.groupValues[1]) }
+        return null
+    }
+
+    /** App map (ROADMAP §J.4): "open privacy settings in whatsapp", "what can you do in youtube". */
+    private fun appMap(t: String): ToolCall? {
+        // polite() already dropped "can you": "what can you do in x" arrives as "what do in x"
+        Regex("^what (?:(?:can|could) you )?do (?:in|on|with|inside) (?:the )?(.+?)(?: app)?$").find(t)?.let {
+            val app = it.groupValues[1]
+            return if (appNameMatches?.invoke(app) == true) call("app_abilities", "app" to app) else null
+        }
+        Regex("^(?:open|go to|show(?: me)?|take me to|navigate to) (?:the |my )?(.+?) (?:in|on|inside) (?:the )?(.+?)(?: app)?$").find(t)?.let {
+            val app = it.groupValues[2]
+            if (appNameMatches?.invoke(app) == true) return call("app_go", "app" to app, "target" to it.groupValues[1])
+        }
         return null
     }
 

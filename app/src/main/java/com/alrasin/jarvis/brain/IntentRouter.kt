@@ -94,7 +94,7 @@ object IntentRouter {
         if (nickname.matches(normalized) || metaphor.matches(normalized)) return Decision(Route.CHAT, 0.98f, "conversational expression")
         if (explanation.matches(normalized) || definition.matches(normalized) || creative.matches(normalized)) return Decision(Route.CHAT, 0.96f, "explanation or creative request")
         if (greeting.matches(normalized)) return Decision(Route.CHAT, 0.98f, "conversation")
-        if (capabilityQuestion.containsMatchIn(normalized)) return Decision(Route.CHAT, 0.98f, "capability question")
+        if (capabilityQuestion.containsMatchIn(normalized) && ruleCall?.tool != "app_abilities") return Decision(Route.CHAT, 0.98f, "capability question")
 
         val launchApp = when (ruleCall?.tool) {
             "open_app" -> ruleCall.arg("app")
