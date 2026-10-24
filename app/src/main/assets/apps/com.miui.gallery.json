@@ -1,0 +1,134 @@
+{
+  "packages": [
+    "com.miui.gallery"
+  ],
+  "name": "Gallery",
+  "aliases": [
+    "gallery",
+    "photos",
+    "pictures"
+  ],
+  "cardVersion": 1,
+  "minVersion": 0,
+  "maxVersion": 0,
+  "verified": false,
+  "summary": "MIUI photo gallery: photos, albums, videos.",
+  "screens": [
+    {
+      "name": "photos",
+      "elements": [
+        {
+          "label": "Photos",
+          "role": "tab",
+          "selectors": [
+            {
+              "type": "desc",
+              "value": "Photos"
+            },
+            {
+              "type": "text",
+              "value": "Photos"
+            }
+          ],
+          "to": "photos"
+        },
+        {
+          "label": "Albums",
+          "role": "tab",
+          "selectors": [
+            {
+              "type": "desc",
+              "value": "Albums"
+            },
+            {
+              "type": "text",
+              "value": "Albums"
+            }
+          ],
+          "to": "albums"
+        },
+        {
+          "label": "Search",
+          "role": "button",
+          "selectors": [
+            {
+              "type": "desc",
+              "value": "Search"
+            },
+            {
+              "type": "text",
+              "value": "Search"
+            }
+          ]
+        }
+      ],
+      "launch": true
+    },
+    {
+      "name": "albums",
+      "elements": [
+        {
+          "label": "Photos",
+          "role": "tab",
+          "selectors": [
+            {
+              "type": "desc",
+              "value": "Photos"
+            },
+            {
+              "type": "text",
+              "value": "Photos"
+            }
+          ],
+          "to": "photos"
+        },
+        {
+          "label": "Albums",
+          "role": "tab",
+          "selectors": [
+            {
+              "type": "desc",
+              "value": "Albums"
+            },
+            {
+              "type": "text",
+              "value": "Albums"
+            }
+          ],
+          "to": "albums"
+        }
+      ]
+    }
+  ],
+  "tasks": [
+    {
+      "name": "open albums",
+      "say": [
+        "show my albums"
+      ],
+      "params": [],
+      "steps": [
+        {
+          "do": "open",
+          "expect": "photos"
+        },
+        {
+          "do": "tab",
+          "target": "Albums",
+          "expect": "albums"
+        }
+      ]
+    }
+  ],
+  "risky": [
+    "Delete",
+    "Share",
+    "Hide"
+  ],
+  "cannot": [
+    {
+      "what": "open hidden album",
+      "why": "needs your password"
+    }
+  ]
+}

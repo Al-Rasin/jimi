@@ -1,0 +1,213 @@
+{
+  "packages": [
+    "com.android.vending"
+  ],
+  "name": "Play Store",
+  "aliases": [
+    "play store",
+    "google play",
+    "app store"
+  ],
+  "cardVersion": 1,
+  "minVersion": 0,
+  "maxVersion": 0,
+  "verified": false,
+  "summary": "Google Play: find, install and update apps.",
+  "screens": [
+    {
+      "name": "home",
+      "elements": [
+        {
+          "label": "Games",
+          "role": "tab",
+          "selectors": [
+            {
+              "type": "desc",
+              "value": "Games"
+            },
+            {
+              "type": "text",
+              "value": "Games"
+            }
+          ],
+          "to": "home"
+        },
+        {
+          "label": "Apps",
+          "role": "tab",
+          "selectors": [
+            {
+              "type": "desc",
+              "value": "Apps"
+            },
+            {
+              "type": "text",
+              "value": "Apps"
+            }
+          ],
+          "to": "home"
+        },
+        {
+          "label": "Search apps & games",
+          "role": "button",
+          "selectors": [
+            {
+              "type": "desc",
+              "value": "Search apps & games"
+            },
+            {
+              "type": "text",
+              "value": "Search apps & games"
+            }
+          ],
+          "to": "search"
+        }
+      ],
+      "launch": true
+    },
+    {
+      "name": "search",
+      "elements": [
+        {
+          "label": "Search apps & games",
+          "role": "field",
+          "selectors": [
+            {
+              "type": "hint",
+              "value": "Search apps & games"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "app",
+      "elements": [
+        {
+          "label": "Install",
+          "role": "button",
+          "selectors": [
+            {
+              "type": "desc",
+              "value": "Install"
+            },
+            {
+              "type": "text",
+              "value": "Install"
+            }
+          ]
+        },
+        {
+          "label": "Open",
+          "role": "button",
+          "selectors": [
+            {
+              "type": "desc",
+              "value": "Open"
+            },
+            {
+              "type": "text",
+              "value": "Open"
+            }
+          ]
+        },
+        {
+          "label": "Update",
+          "role": "button",
+          "selectors": [
+            {
+              "type": "desc",
+              "value": "Update"
+            },
+            {
+              "type": "text",
+              "value": "Update"
+            }
+          ]
+        },
+        {
+          "label": "Uninstall",
+          "role": "button",
+          "selectors": [
+            {
+              "type": "desc",
+              "value": "Uninstall"
+            },
+            {
+              "type": "text",
+              "value": "Uninstall"
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "deepLinks": [
+    {
+      "task": "search",
+      "uri": "market://search?q={query}"
+    },
+    {
+      "task": "app page",
+      "uri": "market://details?id={query}"
+    }
+  ],
+  "search": {
+    "deepLink": "search"
+  },
+  "tasks": [
+    {
+      "name": "search apps",
+      "say": [
+        "search {query} on play store"
+      ],
+      "params": [
+        "query"
+      ],
+      "steps": [
+        {
+          "do": "link",
+          "target": "search",
+          "expect": "search"
+        }
+      ]
+    },
+    {
+      "name": "install an app",
+      "say": [
+        "install {query}"
+      ],
+      "params": [
+        "query"
+      ],
+      "steps": [
+        {
+          "do": "link",
+          "target": "search"
+        },
+        {
+          "do": "tap",
+          "target": "{first result}",
+          "expect": "app"
+        },
+        {
+          "do": "tap",
+          "target": "Install"
+        }
+      ],
+      "risky": true
+    }
+  ],
+  "risky": [
+    "Install",
+    "Uninstall",
+    "Buy",
+    "Subscribe"
+  ],
+  "cannot": [
+    {
+      "what": "pay or buy",
+      "why": "money needs you to confirm in the app"
+    }
+  ]
+}

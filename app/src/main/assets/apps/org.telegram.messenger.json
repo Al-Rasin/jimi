@@ -1,0 +1,243 @@
+{
+  "packages": [
+    "org.telegram.messenger",
+    "org.telegram.messenger.web"
+  ],
+  "name": "Telegram",
+  "aliases": [
+    "telegram",
+    "tg"
+  ],
+  "cardVersion": 1,
+  "minVersion": 0,
+  "maxVersion": 0,
+  "verified": false,
+  "summary": "Chat app: messages, channels, groups, calls.",
+  "screens": [
+    {
+      "name": "chats",
+      "elements": [
+        {
+          "label": "Open navigation menu",
+          "role": "drawer",
+          "selectors": [
+            {
+              "type": "desc",
+              "value": "Open navigation menu"
+            }
+          ],
+          "to": "drawer"
+        },
+        {
+          "label": "Search",
+          "role": "button",
+          "selectors": [
+            {
+              "type": "desc",
+              "value": "Search"
+            }
+          ],
+          "to": "search"
+        },
+        {
+          "label": "New Message",
+          "role": "button",
+          "selectors": [
+            {
+              "type": "desc",
+              "value": "New Message"
+            },
+            {
+              "type": "text",
+              "value": "New Message"
+            }
+          ]
+        }
+      ],
+      "launch": true
+    },
+    {
+      "name": "drawer",
+      "elements": [
+        {
+          "label": "Contacts",
+          "role": "drawer",
+          "selectors": [
+            {
+              "type": "desc",
+              "value": "Contacts"
+            },
+            {
+              "type": "text",
+              "value": "Contacts"
+            }
+          ]
+        },
+        {
+          "label": "Calls",
+          "role": "drawer",
+          "selectors": [
+            {
+              "type": "desc",
+              "value": "Calls"
+            },
+            {
+              "type": "text",
+              "value": "Calls"
+            }
+          ]
+        },
+        {
+          "label": "Saved Messages",
+          "role": "drawer",
+          "selectors": [
+            {
+              "type": "desc",
+              "value": "Saved Messages"
+            },
+            {
+              "type": "text",
+              "value": "Saved Messages"
+            }
+          ]
+        },
+        {
+          "label": "Settings",
+          "role": "drawer",
+          "selectors": [
+            {
+              "type": "desc",
+              "value": "Settings"
+            },
+            {
+              "type": "text",
+              "value": "Settings"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "search",
+      "elements": [
+        {
+          "label": "Search",
+          "role": "field",
+          "selectors": [
+            {
+              "type": "hint",
+              "value": "Search"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "chat",
+      "elements": [
+        {
+          "label": "Message",
+          "role": "field",
+          "selectors": [
+            {
+              "type": "hint",
+              "value": "Message"
+            }
+          ]
+        },
+        {
+          "label": "Send",
+          "role": "button",
+          "selectors": [
+            {
+              "type": "desc",
+              "value": "Send"
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "deepLinks": [
+    {
+      "task": "open user or channel",
+      "uri": "tg://resolve?domain={user}"
+    }
+  ],
+  "search": {
+    "screen": "chats",
+    "selectors": [
+      {
+        "type": "desc",
+        "value": "Search"
+      }
+    ]
+  },
+  "tasks": [
+    {
+      "name": "open a channel",
+      "say": [
+        "open {user} on telegram"
+      ],
+      "params": [
+        "user"
+      ],
+      "steps": [
+        {
+          "do": "link",
+          "target": "open user or channel",
+          "expect": "chat"
+        }
+      ]
+    },
+    {
+      "name": "send a message",
+      "say": [
+        "send {text} to {contact} on telegram"
+      ],
+      "params": [
+        "contact",
+        "text"
+      ],
+      "steps": [
+        {
+          "do": "open",
+          "expect": "chats"
+        },
+        {
+          "do": "search",
+          "text": "{contact}",
+          "expect": "search"
+        },
+        {
+          "do": "tap",
+          "target": "{contact}",
+          "expect": "chat"
+        },
+        {
+          "do": "type",
+          "target": "Message",
+          "text": "{text}"
+        },
+        {
+          "do": "tap",
+          "target": "Send"
+        }
+      ],
+      "risky": true
+    }
+  ],
+  "risky": [
+    "Send",
+    "Delete",
+    "Block",
+    "Leave",
+    "Call"
+  ],
+  "cannot": [
+    {
+      "what": "log in or sign up",
+      "why": "needs your password or OTP"
+    }
+  ]
+}

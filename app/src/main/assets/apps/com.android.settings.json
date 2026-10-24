@@ -1,0 +1,411 @@
+{
+  "packages": [
+    "com.android.settings"
+  ],
+  "name": "Settings",
+  "aliases": [
+    "settings",
+    "miui settings",
+    "phone settings"
+  ],
+  "cardVersion": 1,
+  "minVersion": 0,
+  "maxVersion": 0,
+  "verified": false,
+  "summary": "Phone settings: Wi-Fi, Bluetooth, display, sound, battery, apps, about phone.",
+  "screens": [
+    {
+      "name": "settings",
+      "elements": [
+        {
+          "label": "Search settings",
+          "role": "field",
+          "selectors": [
+            {
+              "type": "text",
+              "value": "Search settings"
+            },
+            {
+              "type": "hint",
+              "value": "Search settings"
+            }
+          ],
+          "to": "search"
+        },
+        {
+          "label": "Wi-Fi",
+          "role": "button",
+          "selectors": [
+            {
+              "type": "desc",
+              "value": "Wi-Fi"
+            },
+            {
+              "type": "text",
+              "value": "Wi-Fi"
+            }
+          ],
+          "to": "wifi"
+        },
+        {
+          "label": "Bluetooth",
+          "role": "button",
+          "selectors": [
+            {
+              "type": "desc",
+              "value": "Bluetooth"
+            },
+            {
+              "type": "text",
+              "value": "Bluetooth"
+            }
+          ],
+          "to": "bluetooth"
+        },
+        {
+          "label": "Display",
+          "role": "button",
+          "selectors": [
+            {
+              "type": "desc",
+              "value": "Display"
+            },
+            {
+              "type": "text",
+              "value": "Display"
+            }
+          ],
+          "to": "display"
+        },
+        {
+          "label": "Sound & vibration",
+          "role": "button",
+          "selectors": [
+            {
+              "type": "desc",
+              "value": "Sound & vibration"
+            },
+            {
+              "type": "text",
+              "value": "Sound & vibration"
+            }
+          ],
+          "to": "sound"
+        },
+        {
+          "label": "Battery",
+          "role": "button",
+          "selectors": [
+            {
+              "type": "desc",
+              "value": "Battery"
+            },
+            {
+              "type": "text",
+              "value": "Battery"
+            }
+          ],
+          "to": "battery"
+        },
+        {
+          "label": "Apps",
+          "role": "button",
+          "selectors": [
+            {
+              "type": "desc",
+              "value": "Apps"
+            },
+            {
+              "type": "text",
+              "value": "Apps"
+            }
+          ],
+          "to": "apps"
+        },
+        {
+          "label": "About phone",
+          "role": "button",
+          "selectors": [
+            {
+              "type": "desc",
+              "value": "About phone"
+            },
+            {
+              "type": "text",
+              "value": "About phone"
+            }
+          ],
+          "to": "about"
+        }
+      ],
+      "launch": true
+    },
+    {
+      "name": "search",
+      "elements": [
+        {
+          "label": "Search settings",
+          "role": "field",
+          "selectors": [
+            {
+              "type": "hint",
+              "value": "Search settings"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "wifi",
+      "elements": [
+        {
+          "label": "Wi-Fi",
+          "role": "switch",
+          "selectors": [
+            {
+              "type": "desc",
+              "value": "Wi-Fi"
+            },
+            {
+              "type": "text",
+              "value": "Wi-Fi"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "bluetooth",
+      "elements": [
+        {
+          "label": "Bluetooth",
+          "role": "switch",
+          "selectors": [
+            {
+              "type": "desc",
+              "value": "Bluetooth"
+            },
+            {
+              "type": "text",
+              "value": "Bluetooth"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "display",
+      "elements": [
+        {
+          "label": "Dark mode",
+          "role": "switch",
+          "selectors": [
+            {
+              "type": "desc",
+              "value": "Dark mode"
+            },
+            {
+              "type": "text",
+              "value": "Dark mode"
+            }
+          ]
+        },
+        {
+          "label": "Brightness level",
+          "role": "button",
+          "selectors": [
+            {
+              "type": "desc",
+              "value": "Brightness level"
+            },
+            {
+              "type": "text",
+              "value": "Brightness level"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "sound",
+      "elements": [
+        {
+          "label": "Do not disturb",
+          "role": "button",
+          "selectors": [
+            {
+              "type": "desc",
+              "value": "Do not disturb"
+            },
+            {
+              "type": "text",
+              "value": "Do not disturb"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "battery",
+      "elements": [
+        {
+          "label": "Battery saver",
+          "role": "button",
+          "selectors": [
+            {
+              "type": "desc",
+              "value": "Battery saver"
+            },
+            {
+              "type": "text",
+              "value": "Battery saver"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "apps",
+      "elements": [
+        {
+          "label": "Manage apps",
+          "role": "button",
+          "selectors": [
+            {
+              "type": "desc",
+              "value": "Manage apps"
+            },
+            {
+              "type": "text",
+              "value": "Manage apps"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "about",
+      "elements": [
+        {
+          "label": "MIUI version",
+          "role": "button",
+          "selectors": [
+            {
+              "type": "desc",
+              "value": "MIUI version"
+            },
+            {
+              "type": "text",
+              "value": "MIUI version"
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "deepLinks": [
+    {
+      "task": "wifi",
+      "uri": "",
+      "action": "android.settings.WIFI_SETTINGS"
+    },
+    {
+      "task": "bluetooth",
+      "uri": "",
+      "action": "android.settings.BLUETOOTH_SETTINGS"
+    },
+    {
+      "task": "display",
+      "uri": "",
+      "action": "android.settings.DISPLAY_SETTINGS"
+    },
+    {
+      "task": "battery",
+      "uri": "",
+      "action": "android.intent.action.POWER_USAGE_SUMMARY"
+    }
+  ],
+  "search": {
+    "screen": "settings",
+    "selectors": [
+      {
+        "type": "hint",
+        "value": "Search settings"
+      },
+      {
+        "type": "text",
+        "value": "Search settings"
+      }
+    ]
+  },
+  "tasks": [
+    {
+      "name": "find a setting",
+      "say": [
+        "find {query} in settings",
+        "open {query} setting"
+      ],
+      "params": [
+        "query"
+      ],
+      "steps": [
+        {
+          "do": "open",
+          "expect": "settings"
+        },
+        {
+          "do": "search",
+          "text": "{query}",
+          "expect": "search"
+        }
+      ]
+    },
+    {
+      "name": "open wi-fi",
+      "say": [
+        "open wifi settings"
+      ],
+      "params": [],
+      "steps": [
+        {
+          "do": "link",
+          "target": "wifi",
+          "expect": "wifi"
+        }
+      ]
+    },
+    {
+      "name": "open bluetooth",
+      "say": [
+        "open bluetooth settings"
+      ],
+      "params": [],
+      "steps": [
+        {
+          "do": "link",
+          "target": "bluetooth",
+          "expect": "bluetooth"
+        }
+      ]
+    }
+  ],
+  "risky": [
+    "Factory reset",
+    "Erase all data",
+    "Reset",
+    "Uninstall",
+    "Clear data",
+    "Force stop",
+    "Forget"
+  ],
+  "cannot": [
+    {
+      "what": "factory reset the phone",
+      "why": "it erases everything"
+    },
+    {
+      "what": "change the lock PIN",
+      "why": "security needs you"
+    }
+  ]
+}

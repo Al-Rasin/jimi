@@ -1,0 +1,156 @@
+{
+  "packages": [
+    "com.android.deskclock",
+    "com.google.android.deskclock",
+    "com.miui.clock"
+  ],
+  "name": "Clock",
+  "aliases": [
+    "clock",
+    "alarm",
+    "timer",
+    "stopwatch"
+  ],
+  "cardVersion": 1,
+  "minVersion": 0,
+  "maxVersion": 0,
+  "verified": false,
+  "summary": "Clock: alarms, world clock, stopwatch, timer.",
+  "screens": [
+    {
+      "name": "clock",
+      "elements": [
+        {
+          "label": "Alarm",
+          "role": "tab",
+          "selectors": [
+            {
+              "type": "desc",
+              "value": "Alarm"
+            },
+            {
+              "type": "text",
+              "value": "Alarm"
+            }
+          ],
+          "to": "clock"
+        },
+        {
+          "label": "Clock",
+          "role": "tab",
+          "selectors": [
+            {
+              "type": "desc",
+              "value": "Clock"
+            },
+            {
+              "type": "text",
+              "value": "Clock"
+            }
+          ],
+          "to": "clock"
+        },
+        {
+          "label": "Stopwatch",
+          "role": "tab",
+          "selectors": [
+            {
+              "type": "desc",
+              "value": "Stopwatch"
+            },
+            {
+              "type": "text",
+              "value": "Stopwatch"
+            }
+          ],
+          "to": "clock"
+        },
+        {
+          "label": "Timer",
+          "role": "tab",
+          "selectors": [
+            {
+              "type": "desc",
+              "value": "Timer"
+            },
+            {
+              "type": "text",
+              "value": "Timer"
+            }
+          ],
+          "to": "clock"
+        },
+        {
+          "label": "Add alarm",
+          "role": "button",
+          "selectors": [
+            {
+              "type": "desc",
+              "value": "Add alarm"
+            },
+            {
+              "type": "text",
+              "value": "Add alarm"
+            }
+          ]
+        }
+      ],
+      "launch": true
+    }
+  ],
+  "deepLinks": [
+    {
+      "task": "set alarm",
+      "uri": "",
+      "action": "android.intent.action.SET_ALARM"
+    },
+    {
+      "task": "set timer",
+      "uri": "",
+      "action": "android.intent.action.SET_TIMER"
+    },
+    {
+      "task": "show alarms",
+      "uri": "",
+      "action": "android.intent.action.SHOW_ALARMS"
+    }
+  ],
+  "tasks": [
+    {
+      "name": "show alarms",
+      "say": [
+        "show my alarms"
+      ],
+      "params": [],
+      "steps": [
+        {
+          "do": "link",
+          "target": "show alarms",
+          "expect": "clock"
+        }
+      ]
+    },
+    {
+      "name": "open stopwatch",
+      "say": [
+        "open stopwatch"
+      ],
+      "params": [],
+      "steps": [
+        {
+          "do": "open",
+          "expect": "clock"
+        },
+        {
+          "do": "tab",
+          "target": "Stopwatch",
+          "expect": "clock"
+        }
+      ]
+    }
+  ],
+  "risky": [
+    "Delete"
+  ],
+  "cannot": []
+}

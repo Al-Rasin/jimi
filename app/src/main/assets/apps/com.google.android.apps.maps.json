@@ -1,0 +1,250 @@
+{
+  "packages": [
+    "com.google.android.apps.maps"
+  ],
+  "name": "Maps",
+  "aliases": [
+    "maps",
+    "google maps",
+    "map"
+  ],
+  "cardVersion": 1,
+  "minVersion": 0,
+  "maxVersion": 0,
+  "verified": false,
+  "summary": "Google Maps: find places, directions, navigation.",
+  "screens": [
+    {
+      "name": "explore",
+      "elements": [
+        {
+          "label": "Explore",
+          "role": "tab",
+          "selectors": [
+            {
+              "type": "desc",
+              "value": "Explore"
+            },
+            {
+              "type": "text",
+              "value": "Explore"
+            }
+          ],
+          "to": "explore"
+        },
+        {
+          "label": "You",
+          "role": "tab",
+          "selectors": [
+            {
+              "type": "desc",
+              "value": "You"
+            },
+            {
+              "type": "text",
+              "value": "You"
+            }
+          ],
+          "to": "you"
+        },
+        {
+          "label": "Contribute",
+          "role": "tab",
+          "selectors": [
+            {
+              "type": "desc",
+              "value": "Contribute"
+            },
+            {
+              "type": "text",
+              "value": "Contribute"
+            }
+          ],
+          "to": "explore"
+        },
+        {
+          "label": "Search here",
+          "role": "field",
+          "selectors": [
+            {
+              "type": "hint",
+              "value": "Search here"
+            }
+          ]
+        }
+      ],
+      "launch": true
+    },
+    {
+      "name": "you",
+      "elements": [
+        {
+          "label": "Explore",
+          "role": "tab",
+          "selectors": [
+            {
+              "type": "desc",
+              "value": "Explore"
+            },
+            {
+              "type": "text",
+              "value": "Explore"
+            }
+          ],
+          "to": "explore"
+        },
+        {
+          "label": "You",
+          "role": "tab",
+          "selectors": [
+            {
+              "type": "desc",
+              "value": "You"
+            },
+            {
+              "type": "text",
+              "value": "You"
+            }
+          ],
+          "to": "you"
+        }
+      ]
+    },
+    {
+      "name": "place",
+      "elements": [
+        {
+          "label": "Directions",
+          "role": "button",
+          "selectors": [
+            {
+              "type": "desc",
+              "value": "Directions"
+            },
+            {
+              "type": "text",
+              "value": "Directions"
+            }
+          ],
+          "to": "directions"
+        },
+        {
+          "label": "Start",
+          "role": "button",
+          "selectors": [
+            {
+              "type": "desc",
+              "value": "Start"
+            },
+            {
+              "type": "text",
+              "value": "Start"
+            }
+          ]
+        },
+        {
+          "label": "Save",
+          "role": "button",
+          "selectors": [
+            {
+              "type": "desc",
+              "value": "Save"
+            },
+            {
+              "type": "text",
+              "value": "Save"
+            }
+          ]
+        },
+        {
+          "label": "Share",
+          "role": "button",
+          "selectors": [
+            {
+              "type": "desc",
+              "value": "Share"
+            },
+            {
+              "type": "text",
+              "value": "Share"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "directions",
+      "elements": [
+        {
+          "label": "Start",
+          "role": "button",
+          "selectors": [
+            {
+              "type": "desc",
+              "value": "Start"
+            },
+            {
+              "type": "text",
+              "value": "Start"
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "deepLinks": [
+    {
+      "task": "find place",
+      "uri": "geo:0,0?q={query}"
+    },
+    {
+      "task": "navigate",
+      "uri": "google.navigation:q={query}"
+    }
+  ],
+  "search": {
+    "deepLink": "find place"
+  },
+  "tasks": [
+    {
+      "name": "find a place",
+      "say": [
+        "find {query} on map",
+        "where is {query}"
+      ],
+      "params": [
+        "query"
+      ],
+      "steps": [
+        {
+          "do": "link",
+          "target": "find place",
+          "expect": "place"
+        }
+      ]
+    },
+    {
+      "name": "navigate",
+      "say": [
+        "navigate to {query}",
+        "directions to {query}"
+      ],
+      "params": [
+        "query"
+      ],
+      "steps": [
+        {
+          "do": "link",
+          "target": "navigate",
+          "expect": "directions"
+        }
+      ]
+    }
+  ],
+  "risky": [
+    "Share location",
+    "Share",
+    "Delete"
+  ],
+  "cannot": []
+}

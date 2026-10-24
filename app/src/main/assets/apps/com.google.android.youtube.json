@@ -1,0 +1,328 @@
+{
+  "packages": [
+    "com.google.android.youtube"
+  ],
+  "name": "YouTube",
+  "aliases": [
+    "youtube",
+    "yt"
+  ],
+  "cardVersion": 1,
+  "minVersion": 0,
+  "maxVersion": 0,
+  "verified": false,
+  "summary": "Video app: search and play videos, shorts, subscriptions, your library.",
+  "screens": [
+    {
+      "name": "home",
+      "elements": [
+        {
+          "label": "Home",
+          "role": "tab",
+          "selectors": [
+            {
+              "type": "desc",
+              "value": "Home"
+            },
+            {
+              "type": "text",
+              "value": "Home"
+            }
+          ],
+          "to": "home"
+        },
+        {
+          "label": "Shorts",
+          "role": "tab",
+          "selectors": [
+            {
+              "type": "desc",
+              "value": "Shorts"
+            },
+            {
+              "type": "text",
+              "value": "Shorts"
+            }
+          ],
+          "to": "shorts"
+        },
+        {
+          "label": "Subscriptions",
+          "role": "tab",
+          "selectors": [
+            {
+              "type": "desc",
+              "value": "Subscriptions"
+            },
+            {
+              "type": "text",
+              "value": "Subscriptions"
+            }
+          ],
+          "to": "subscriptions"
+        },
+        {
+          "label": "You",
+          "role": "tab",
+          "selectors": [
+            {
+              "type": "desc",
+              "value": "You"
+            },
+            {
+              "type": "text",
+              "value": "You"
+            }
+          ],
+          "to": "you"
+        },
+        {
+          "label": "Search",
+          "role": "button",
+          "selectors": [
+            {
+              "type": "desc",
+              "value": "Search"
+            },
+            {
+              "type": "text",
+              "value": "Search"
+            }
+          ],
+          "to": "search"
+        }
+      ],
+      "launch": true
+    },
+    {
+      "name": "shorts",
+      "elements": [
+        {
+          "label": "Home",
+          "role": "tab",
+          "selectors": [
+            {
+              "type": "desc",
+              "value": "Home"
+            },
+            {
+              "type": "text",
+              "value": "Home"
+            }
+          ],
+          "to": "home"
+        },
+        {
+          "label": "Shorts",
+          "role": "tab",
+          "selectors": [
+            {
+              "type": "desc",
+              "value": "Shorts"
+            },
+            {
+              "type": "text",
+              "value": "Shorts"
+            }
+          ],
+          "to": "shorts"
+        }
+      ]
+    },
+    {
+      "name": "subscriptions",
+      "elements": [
+        {
+          "label": "Home",
+          "role": "tab",
+          "selectors": [
+            {
+              "type": "desc",
+              "value": "Home"
+            },
+            {
+              "type": "text",
+              "value": "Home"
+            }
+          ],
+          "to": "home"
+        },
+        {
+          "label": "Subscriptions",
+          "role": "tab",
+          "selectors": [
+            {
+              "type": "desc",
+              "value": "Subscriptions"
+            },
+            {
+              "type": "text",
+              "value": "Subscriptions"
+            }
+          ],
+          "to": "subscriptions"
+        }
+      ]
+    },
+    {
+      "name": "you",
+      "elements": [
+        {
+          "label": "Home",
+          "role": "tab",
+          "selectors": [
+            {
+              "type": "desc",
+              "value": "Home"
+            },
+            {
+              "type": "text",
+              "value": "Home"
+            }
+          ],
+          "to": "home"
+        },
+        {
+          "label": "You",
+          "role": "tab",
+          "selectors": [
+            {
+              "type": "desc",
+              "value": "You"
+            },
+            {
+              "type": "text",
+              "value": "You"
+            }
+          ],
+          "to": "you"
+        },
+        {
+          "label": "History",
+          "role": "button",
+          "selectors": [
+            {
+              "type": "desc",
+              "value": "History"
+            },
+            {
+              "type": "text",
+              "value": "History"
+            }
+          ]
+        },
+        {
+          "label": "Watch later",
+          "role": "button",
+          "selectors": [
+            {
+              "type": "desc",
+              "value": "Watch later"
+            },
+            {
+              "type": "text",
+              "value": "Watch later"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "search",
+      "elements": [
+        {
+          "label": "Search YouTube",
+          "role": "field",
+          "selectors": [
+            {
+              "type": "hint",
+              "value": "Search YouTube"
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "deepLinks": [
+    {
+      "task": "search",
+      "uri": "https://www.youtube.com/results?search_query={query}"
+    }
+  ],
+  "search": {
+    "deepLink": "search"
+  },
+  "tasks": [
+    {
+      "name": "search videos",
+      "say": [
+        "search {query} on youtube",
+        "youtube {query}"
+      ],
+      "params": [
+        "query"
+      ],
+      "steps": [
+        {
+          "do": "link",
+          "target": "search",
+          "expect": "search"
+        }
+      ]
+    },
+    {
+      "name": "play a video",
+      "say": [
+        "play {query} on youtube"
+      ],
+      "params": [
+        "query"
+      ],
+      "steps": [
+        {
+          "do": "link",
+          "target": "search"
+        },
+        {
+          "do": "tap",
+          "target": "{first result}"
+        }
+      ]
+    },
+    {
+      "name": "open subscriptions",
+      "say": [
+        "youtube subscriptions"
+      ],
+      "params": [],
+      "steps": [
+        {
+          "do": "open",
+          "expect": "home"
+        },
+        {
+          "do": "tab",
+          "target": "Subscriptions",
+          "expect": "subscriptions"
+        }
+      ]
+    }
+  ],
+  "risky": [
+    "Subscribe",
+    "Unsubscribe",
+    "Delete",
+    "Buy",
+    "Join"
+  ],
+  "cannot": [
+    {
+      "what": "log in or sign up",
+      "why": "needs your password or OTP"
+    },
+    {
+      "what": "pay or buy",
+      "why": "money needs you to confirm in the app"
+    }
+  ]
+}

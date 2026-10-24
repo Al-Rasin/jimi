@@ -1,0 +1,235 @@
+{
+  "packages": [
+    "com.google.android.keep"
+  ],
+  "name": "Google Keep",
+  "aliases": [
+    "keep",
+    "google keep",
+    "notes"
+  ],
+  "cardVersion": 1,
+  "minVersion": 0,
+  "maxVersion": 0,
+  "verified": false,
+  "summary": "Notes app: notes, lists, reminders.",
+  "screens": [
+    {
+      "name": "notes",
+      "elements": [
+        {
+          "label": "Search your notes",
+          "role": "field",
+          "selectors": [
+            {
+              "type": "hint",
+              "value": "Search your notes"
+            }
+          ]
+        },
+        {
+          "label": "New text note",
+          "role": "button",
+          "selectors": [
+            {
+              "type": "desc",
+              "value": "New text note"
+            }
+          ],
+          "to": "note"
+        },
+        {
+          "label": "New list",
+          "role": "button",
+          "selectors": [
+            {
+              "type": "desc",
+              "value": "New list"
+            }
+          ],
+          "to": "note"
+        },
+        {
+          "label": "Open navigation drawer",
+          "role": "drawer",
+          "selectors": [
+            {
+              "type": "desc",
+              "value": "Open navigation drawer"
+            }
+          ],
+          "to": "drawer"
+        }
+      ],
+      "launch": true
+    },
+    {
+      "name": "drawer",
+      "elements": [
+        {
+          "label": "Notes",
+          "role": "drawer",
+          "selectors": [
+            {
+              "type": "desc",
+              "value": "Notes"
+            },
+            {
+              "type": "text",
+              "value": "Notes"
+            }
+          ],
+          "to": "notes"
+        },
+        {
+          "label": "Reminders",
+          "role": "drawer",
+          "selectors": [
+            {
+              "type": "desc",
+              "value": "Reminders"
+            },
+            {
+              "type": "text",
+              "value": "Reminders"
+            }
+          ]
+        },
+        {
+          "label": "Archive",
+          "role": "drawer",
+          "selectors": [
+            {
+              "type": "desc",
+              "value": "Archive"
+            },
+            {
+              "type": "text",
+              "value": "Archive"
+            }
+          ]
+        },
+        {
+          "label": "Deleted",
+          "role": "drawer",
+          "selectors": [
+            {
+              "type": "desc",
+              "value": "Deleted"
+            },
+            {
+              "type": "text",
+              "value": "Deleted"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "note",
+      "elements": [
+        {
+          "label": "Title",
+          "role": "field",
+          "selectors": [
+            {
+              "type": "hint",
+              "value": "Title"
+            }
+          ]
+        },
+        {
+          "label": "Note",
+          "role": "field",
+          "selectors": [
+            {
+              "type": "hint",
+              "value": "Note"
+            }
+          ]
+        },
+        {
+          "label": "Navigate up",
+          "role": "button",
+          "selectors": [
+            {
+              "type": "desc",
+              "value": "Navigate up"
+            }
+          ],
+          "to": "notes"
+        }
+      ]
+    }
+  ],
+  "search": {
+    "screen": "notes",
+    "selectors": [
+      {
+        "type": "hint",
+        "value": "Search your notes"
+      },
+      {
+        "type": "text",
+        "value": "Search your notes"
+      }
+    ]
+  },
+  "tasks": [
+    {
+      "name": "write a note",
+      "say": [
+        "write a note {text}",
+        "keep note {text}"
+      ],
+      "params": [
+        "text"
+      ],
+      "steps": [
+        {
+          "do": "open",
+          "expect": "notes"
+        },
+        {
+          "do": "tap",
+          "target": "New text note",
+          "expect": "note"
+        },
+        {
+          "do": "type",
+          "target": "Note",
+          "text": "{text}"
+        },
+        {
+          "do": "back",
+          "expect": "notes"
+        }
+      ]
+    },
+    {
+      "name": "search notes",
+      "say": [
+        "find {query} in keep"
+      ],
+      "params": [
+        "query"
+      ],
+      "steps": [
+        {
+          "do": "open",
+          "expect": "notes"
+        },
+        {
+          "do": "search",
+          "text": "{query}"
+        }
+      ]
+    }
+  ],
+  "risky": [
+    "Delete",
+    "Delete forever",
+    "Empty trash"
+  ],
+  "cannot": []
+}

@@ -1,0 +1,262 @@
+{
+  "packages": [
+    "com.duokan.phone.remotecontroller"
+  ],
+  "name": "Mi Remote",
+  "aliases": [
+    "mi remote",
+    "remote",
+    "tv remote",
+    "ir remote"
+  ],
+  "cardVersion": 1,
+  "minVersion": 0,
+  "maxVersion": 0,
+  "verified": false,
+  "summary": "IR remote: control TV, AC, fan, set-top box from the phone.",
+  "screens": [
+    {
+      "name": "remotes",
+      "elements": [
+        {
+          "label": "Add remote",
+          "role": "button",
+          "selectors": [
+            {
+              "type": "desc",
+              "value": "Add remote"
+            },
+            {
+              "type": "text",
+              "value": "Add remote"
+            }
+          ],
+          "to": "add"
+        },
+        {
+          "label": "Search",
+          "role": "button",
+          "selectors": [
+            {
+              "type": "desc",
+              "value": "Search"
+            },
+            {
+              "type": "text",
+              "value": "Search"
+            }
+          ]
+        }
+      ],
+      "launch": true
+    },
+    {
+      "name": "add",
+      "elements": [
+        {
+          "label": "TV",
+          "role": "button",
+          "selectors": [
+            {
+              "type": "desc",
+              "value": "TV"
+            },
+            {
+              "type": "text",
+              "value": "TV"
+            }
+          ]
+        },
+        {
+          "label": "Air conditioner",
+          "role": "button",
+          "selectors": [
+            {
+              "type": "desc",
+              "value": "Air conditioner"
+            },
+            {
+              "type": "text",
+              "value": "Air conditioner"
+            }
+          ]
+        },
+        {
+          "label": "Fan",
+          "role": "button",
+          "selectors": [
+            {
+              "type": "desc",
+              "value": "Fan"
+            },
+            {
+              "type": "text",
+              "value": "Fan"
+            }
+          ]
+        },
+        {
+          "label": "Set-top box",
+          "role": "button",
+          "selectors": [
+            {
+              "type": "desc",
+              "value": "Set-top box"
+            },
+            {
+              "type": "text",
+              "value": "Set-top box"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "remote",
+      "elements": [
+        {
+          "label": "Power",
+          "role": "button",
+          "selectors": [
+            {
+              "type": "desc",
+              "value": "Power"
+            },
+            {
+              "type": "text",
+              "value": "Power"
+            }
+          ]
+        },
+        {
+          "label": "Volume up",
+          "role": "button",
+          "selectors": [
+            {
+              "type": "desc",
+              "value": "Volume up"
+            },
+            {
+              "type": "text",
+              "value": "Volume up"
+            }
+          ]
+        },
+        {
+          "label": "Volume down",
+          "role": "button",
+          "selectors": [
+            {
+              "type": "desc",
+              "value": "Volume down"
+            },
+            {
+              "type": "text",
+              "value": "Volume down"
+            }
+          ]
+        },
+        {
+          "label": "Channel up",
+          "role": "button",
+          "selectors": [
+            {
+              "type": "desc",
+              "value": "Channel up"
+            },
+            {
+              "type": "text",
+              "value": "Channel up"
+            }
+          ]
+        },
+        {
+          "label": "Channel down",
+          "role": "button",
+          "selectors": [
+            {
+              "type": "desc",
+              "value": "Channel down"
+            },
+            {
+              "type": "text",
+              "value": "Channel down"
+            }
+          ]
+        },
+        {
+          "label": "Mute",
+          "role": "button",
+          "selectors": [
+            {
+              "type": "desc",
+              "value": "Mute"
+            },
+            {
+              "type": "text",
+              "value": "Mute"
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "tasks": [
+    {
+      "name": "turn tv on or off",
+      "say": [
+        "turn on the tv",
+        "turn off the tv"
+      ],
+      "params": [],
+      "steps": [
+        {
+          "do": "open",
+          "expect": "remotes"
+        },
+        {
+          "do": "tap",
+          "target": "TV",
+          "expect": "remote"
+        },
+        {
+          "do": "tap",
+          "target": "Power"
+        }
+      ]
+    },
+    {
+      "name": "tv volume",
+      "say": [
+        "tv volume up",
+        "tv volume down"
+      ],
+      "params": [],
+      "steps": [
+        {
+          "do": "open",
+          "expect": "remotes"
+        },
+        {
+          "do": "tap",
+          "target": "TV",
+          "expect": "remote"
+        },
+        {
+          "do": "tap",
+          "target": "Volume up"
+        }
+      ]
+    }
+  ],
+  "risky": [
+    "Delete",
+    "Remove"
+  ],
+  "cannot": [
+    {
+      "what": "learn a new remote",
+      "why": "you must point the remote and press buttons"
+    }
+  ]
+}

@@ -1,0 +1,246 @@
+{
+  "packages": [
+    "com.google.android.gm"
+  ],
+  "name": "Gmail",
+  "aliases": [
+    "gmail",
+    "email",
+    "mail"
+  ],
+  "cardVersion": 1,
+  "minVersion": 0,
+  "maxVersion": 0,
+  "verified": false,
+  "summary": "Email app: read, search and write emails.",
+  "screens": [
+    {
+      "name": "inbox",
+      "elements": [
+        {
+          "label": "Open navigation drawer",
+          "role": "drawer",
+          "selectors": [
+            {
+              "type": "desc",
+              "value": "Open navigation drawer"
+            }
+          ],
+          "to": "drawer"
+        },
+        {
+          "label": "Search in mail",
+          "role": "field",
+          "selectors": [
+            {
+              "type": "hint",
+              "value": "Search in mail"
+            }
+          ]
+        },
+        {
+          "label": "Compose",
+          "role": "button",
+          "selectors": [
+            {
+              "type": "desc",
+              "value": "Compose"
+            },
+            {
+              "type": "text",
+              "value": "Compose"
+            }
+          ],
+          "to": "compose"
+        }
+      ],
+      "launch": true
+    },
+    {
+      "name": "drawer",
+      "elements": [
+        {
+          "label": "Inbox",
+          "role": "drawer",
+          "selectors": [
+            {
+              "type": "desc",
+              "value": "Inbox"
+            },
+            {
+              "type": "text",
+              "value": "Inbox"
+            }
+          ],
+          "to": "inbox"
+        },
+        {
+          "label": "Sent",
+          "role": "drawer",
+          "selectors": [
+            {
+              "type": "desc",
+              "value": "Sent"
+            },
+            {
+              "type": "text",
+              "value": "Sent"
+            }
+          ]
+        },
+        {
+          "label": "Drafts",
+          "role": "drawer",
+          "selectors": [
+            {
+              "type": "desc",
+              "value": "Drafts"
+            },
+            {
+              "type": "text",
+              "value": "Drafts"
+            }
+          ]
+        },
+        {
+          "label": "Spam",
+          "role": "drawer",
+          "selectors": [
+            {
+              "type": "desc",
+              "value": "Spam"
+            },
+            {
+              "type": "text",
+              "value": "Spam"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "compose",
+      "elements": [
+        {
+          "label": "To",
+          "role": "field",
+          "selectors": [
+            {
+              "type": "hint",
+              "value": "To"
+            }
+          ]
+        },
+        {
+          "label": "Subject",
+          "role": "field",
+          "selectors": [
+            {
+              "type": "hint",
+              "value": "Subject"
+            }
+          ]
+        },
+        {
+          "label": "Compose email",
+          "role": "field",
+          "selectors": [
+            {
+              "type": "hint",
+              "value": "Compose email"
+            }
+          ]
+        },
+        {
+          "label": "Send",
+          "role": "button",
+          "selectors": [
+            {
+              "type": "desc",
+              "value": "Send"
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "deepLinks": [
+    {
+      "task": "write email",
+      "uri": "mailto:{contact}?subject={query}&body={text}",
+      "action": "android.intent.action.SENDTO"
+    }
+  ],
+  "search": {
+    "screen": "inbox",
+    "selectors": [
+      {
+        "type": "hint",
+        "value": "Search in mail"
+      },
+      {
+        "type": "text",
+        "value": "Search in mail"
+      }
+    ]
+  },
+  "tasks": [
+    {
+      "name": "search mail",
+      "say": [
+        "search {query} in gmail"
+      ],
+      "params": [
+        "query"
+      ],
+      "steps": [
+        {
+          "do": "open",
+          "expect": "inbox"
+        },
+        {
+          "do": "search",
+          "text": "{query}"
+        },
+        {
+          "do": "enter"
+        }
+      ]
+    },
+    {
+      "name": "write an email",
+      "say": [
+        "email {contact} about {query}"
+      ],
+      "params": [
+        "contact",
+        "query",
+        "text"
+      ],
+      "steps": [
+        {
+          "do": "link",
+          "target": "write email",
+          "expect": "compose"
+        },
+        {
+          "do": "tap",
+          "target": "Send"
+        }
+      ],
+      "risky": true
+    }
+  ],
+  "risky": [
+    "Send",
+    "Delete",
+    "Archive",
+    "Report spam"
+  ],
+  "cannot": [
+    {
+      "what": "log in or sign up",
+      "why": "needs your password or OTP"
+    }
+  ]
+}

@@ -1,0 +1,222 @@
+{
+  "packages": [
+    "com.google.android.dialer",
+    "com.android.contacts",
+    "com.android.dialer"
+  ],
+  "name": "Phone",
+  "aliases": [
+    "phone",
+    "dialer",
+    "contacts",
+    "call app"
+  ],
+  "cardVersion": 1,
+  "minVersion": 0,
+  "maxVersion": 0,
+  "verified": false,
+  "summary": "Phone app: call numbers and contacts, call log, contacts list.",
+  "screens": [
+    {
+      "name": "dialer",
+      "elements": [
+        {
+          "label": "Recents",
+          "role": "tab",
+          "selectors": [
+            {
+              "type": "desc",
+              "value": "Recents"
+            },
+            {
+              "type": "text",
+              "value": "Recents"
+            }
+          ],
+          "to": "dialer"
+        },
+        {
+          "label": "Contacts",
+          "role": "tab",
+          "selectors": [
+            {
+              "type": "desc",
+              "value": "Contacts"
+            },
+            {
+              "type": "text",
+              "value": "Contacts"
+            }
+          ],
+          "to": "contacts"
+        },
+        {
+          "label": "Dial pad",
+          "role": "button",
+          "selectors": [
+            {
+              "type": "desc",
+              "value": "Dial pad"
+            },
+            {
+              "type": "text",
+              "value": "Dial pad"
+            }
+          ],
+          "to": "keypad"
+        },
+        {
+          "label": "Search",
+          "role": "button",
+          "selectors": [
+            {
+              "type": "desc",
+              "value": "Search"
+            },
+            {
+              "type": "text",
+              "value": "Search"
+            }
+          ]
+        }
+      ],
+      "launch": true
+    },
+    {
+      "name": "contacts",
+      "elements": [
+        {
+          "label": "Recents",
+          "role": "tab",
+          "selectors": [
+            {
+              "type": "desc",
+              "value": "Recents"
+            },
+            {
+              "type": "text",
+              "value": "Recents"
+            }
+          ],
+          "to": "dialer"
+        },
+        {
+          "label": "Contacts",
+          "role": "tab",
+          "selectors": [
+            {
+              "type": "desc",
+              "value": "Contacts"
+            },
+            {
+              "type": "text",
+              "value": "Contacts"
+            }
+          ],
+          "to": "contacts"
+        },
+        {
+          "label": "Search",
+          "role": "button",
+          "selectors": [
+            {
+              "type": "desc",
+              "value": "Search"
+            },
+            {
+              "type": "text",
+              "value": "Search"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "keypad",
+      "elements": [
+        {
+          "label": "Call",
+          "role": "button",
+          "selectors": [
+            {
+              "type": "desc",
+              "value": "Call"
+            },
+            {
+              "type": "text",
+              "value": "Call"
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "deepLinks": [
+    {
+      "task": "dial number",
+      "uri": "tel:{number}",
+      "action": "android.intent.action.DIAL"
+    }
+  ],
+  "search": {
+    "screen": "contacts",
+    "selectors": [
+      {
+        "type": "desc",
+        "value": "Search"
+      },
+      {
+        "type": "text",
+        "value": "Search"
+      }
+    ]
+  },
+  "tasks": [
+    {
+      "name": "call a number",
+      "say": [
+        "call {number}"
+      ],
+      "params": [
+        "number"
+      ],
+      "steps": [
+        {
+          "do": "link",
+          "target": "dial number",
+          "expect": "keypad"
+        },
+        {
+          "do": "tap",
+          "target": "Call"
+        }
+      ],
+      "risky": true
+    },
+    {
+      "name": "show call log",
+      "say": [
+        "show recent calls"
+      ],
+      "params": [],
+      "steps": [
+        {
+          "do": "open",
+          "expect": "dialer"
+        },
+        {
+          "do": "tab",
+          "target": "Recents",
+          "expect": "dialer"
+        }
+      ]
+    }
+  ],
+  "risky": [
+    "Call",
+    "Delete",
+    "Block",
+    "Block number"
+  ],
+  "cannot": []
+}

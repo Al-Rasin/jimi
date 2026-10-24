@@ -1,0 +1,147 @@
+{
+  "packages": [
+    "com.bKash.customerapp"
+  ],
+  "name": "bKash",
+  "aliases": [
+    "bkash",
+    "bikash"
+  ],
+  "cardVersion": 1,
+  "minVersion": 0,
+  "maxVersion": 0,
+  "verified": false,
+  "readOnly": true,
+  "summary": "Mobile money app. Jimi only opens it and reads; never taps or pays.",
+  "screens": [
+    {
+      "name": "home",
+      "elements": [
+        {
+          "label": "Send Money",
+          "role": "button",
+          "selectors": [
+            {
+              "type": "desc",
+              "value": "Send Money"
+            },
+            {
+              "type": "text",
+              "value": "Send Money"
+            }
+          ]
+        },
+        {
+          "label": "Mobile Recharge",
+          "role": "button",
+          "selectors": [
+            {
+              "type": "desc",
+              "value": "Mobile Recharge"
+            },
+            {
+              "type": "text",
+              "value": "Mobile Recharge"
+            }
+          ]
+        },
+        {
+          "label": "Cash Out",
+          "role": "button",
+          "selectors": [
+            {
+              "type": "desc",
+              "value": "Cash Out"
+            },
+            {
+              "type": "text",
+              "value": "Cash Out"
+            }
+          ]
+        },
+        {
+          "label": "Payment",
+          "role": "button",
+          "selectors": [
+            {
+              "type": "desc",
+              "value": "Payment"
+            },
+            {
+              "type": "text",
+              "value": "Payment"
+            }
+          ]
+        },
+        {
+          "label": "Add Money",
+          "role": "button",
+          "selectors": [
+            {
+              "type": "desc",
+              "value": "Add Money"
+            },
+            {
+              "type": "text",
+              "value": "Add Money"
+            }
+          ]
+        },
+        {
+          "label": "Pay Bill",
+          "role": "button",
+          "selectors": [
+            {
+              "type": "desc",
+              "value": "Pay Bill"
+            },
+            {
+              "type": "text",
+              "value": "Pay Bill"
+            }
+          ]
+        },
+        {
+          "label": "Tap for Balance",
+          "role": "button",
+          "selectors": [
+            {
+              "type": "desc",
+              "value": "Tap for Balance"
+            },
+            {
+              "type": "text",
+              "value": "Tap for Balance"
+            }
+          ]
+        }
+      ],
+      "launch": true
+    }
+  ],
+  "tasks": [],
+  "risky": [
+    "Send Money",
+    "Mobile Recharge",
+    "Cash Out",
+    "Payment",
+    "Add Money",
+    "Pay Bill",
+    "Tap for Balance",
+    "Confirm"
+  ],
+  "cannot": [
+    {
+      "what": "send money, cash out, recharge or pay",
+      "why": "needs your bKash PIN — you must do it"
+    },
+    {
+      "what": "check balance",
+      "why": "needs your PIN"
+    },
+    {
+      "what": "log in or sign up",
+      "why": "needs your password or OTP"
+    }
+  ]
+}

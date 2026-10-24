@@ -1,0 +1,146 @@
+{
+  "packages": [
+    "com.android.chrome"
+  ],
+  "name": "Chrome",
+  "aliases": [
+    "chrome",
+    "browser",
+    "google chrome"
+  ],
+  "cardVersion": 1,
+  "minVersion": 0,
+  "maxVersion": 0,
+  "verified": false,
+  "summary": "Web browser: open websites, search the web, tabs, bookmarks.",
+  "screens": [
+    {
+      "name": "browser",
+      "elements": [
+        {
+          "label": "Search or type web address",
+          "role": "field",
+          "selectors": [
+            {
+              "type": "id",
+              "value": "com.android.chrome:id/search_box_text"
+            },
+            {
+              "type": "id",
+              "value": "com.android.chrome:id/url_bar"
+            },
+            {
+              "type": "hint",
+              "value": "Search or type web address"
+            }
+          ]
+        },
+        {
+          "label": "Switch or close tabs",
+          "role": "button",
+          "selectors": [
+            {
+              "type": "desc",
+              "value": "Switch or close tabs"
+            }
+          ],
+          "to": "tabs"
+        },
+        {
+          "label": "More options",
+          "role": "menu",
+          "selectors": [
+            {
+              "type": "desc",
+              "value": "More options"
+            },
+            {
+              "type": "text",
+              "value": "More options"
+            }
+          ]
+        }
+      ],
+      "launch": true
+    },
+    {
+      "name": "tabs",
+      "elements": [
+        {
+          "label": "New tab",
+          "role": "button",
+          "selectors": [
+            {
+              "type": "desc",
+              "value": "New tab"
+            },
+            {
+              "type": "text",
+              "value": "New tab"
+            }
+          ],
+          "to": "browser"
+        }
+      ]
+    }
+  ],
+  "deepLinks": [
+    {
+      "task": "open website",
+      "uri": "https://{query}"
+    },
+    {
+      "task": "search web",
+      "uri": "https://www.google.com/search?q={query}"
+    }
+  ],
+  "search": {
+    "deepLink": "search web"
+  },
+  "tasks": [
+    {
+      "name": "open a website",
+      "say": [
+        "open {query} in chrome"
+      ],
+      "params": [
+        "query"
+      ],
+      "steps": [
+        {
+          "do": "link",
+          "target": "open website",
+          "expect": "browser"
+        }
+      ]
+    },
+    {
+      "name": "search the web",
+      "say": [
+        "google {query}",
+        "search {query} in chrome"
+      ],
+      "params": [
+        "query"
+      ],
+      "steps": [
+        {
+          "do": "link",
+          "target": "search web",
+          "expect": "browser"
+        }
+      ]
+    }
+  ],
+  "risky": [
+    "Delete",
+    "Clear data",
+    "Download"
+  ],
+  "cannot": [
+    {
+      "what": "type saved passwords",
+      "why": "passwords stay with you"
+    }
+  ]
+}

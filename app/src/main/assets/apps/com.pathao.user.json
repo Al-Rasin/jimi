@@ -1,0 +1,125 @@
+{
+  "packages": [
+    "com.pathao.user"
+  ],
+  "name": "Pathao",
+  "aliases": [
+    "pathao"
+  ],
+  "cardVersion": 1,
+  "minVersion": 0,
+  "maxVersion": 0,
+  "verified": false,
+  "summary": "Bangladesh ride and delivery app: bike/car rides, food, parcels.",
+  "screens": [
+    {
+      "name": "home",
+      "elements": [
+        {
+          "label": "Bike",
+          "role": "button",
+          "selectors": [
+            {
+              "type": "desc",
+              "value": "Bike"
+            },
+            {
+              "type": "text",
+              "value": "Bike"
+            }
+          ]
+        },
+        {
+          "label": "Car",
+          "role": "button",
+          "selectors": [
+            {
+              "type": "desc",
+              "value": "Car"
+            },
+            {
+              "type": "text",
+              "value": "Car"
+            }
+          ]
+        },
+        {
+          "label": "Food",
+          "role": "button",
+          "selectors": [
+            {
+              "type": "desc",
+              "value": "Food"
+            },
+            {
+              "type": "text",
+              "value": "Food"
+            }
+          ]
+        },
+        {
+          "label": "Parcel",
+          "role": "button",
+          "selectors": [
+            {
+              "type": "desc",
+              "value": "Parcel"
+            },
+            {
+              "type": "text",
+              "value": "Parcel"
+            }
+          ]
+        },
+        {
+          "label": "Where to?",
+          "role": "field",
+          "selectors": [
+            {
+              "type": "hint",
+              "value": "Where to?"
+            }
+          ]
+        }
+      ],
+      "launch": true
+    }
+  ],
+  "tasks": [
+    {
+      "name": "open rides",
+      "say": [
+        "open pathao"
+      ],
+      "params": [],
+      "steps": [
+        {
+          "do": "open",
+          "expect": "home"
+        }
+      ]
+    }
+  ],
+  "risky": [
+    "Request",
+    "Confirm",
+    "Book",
+    "Pay",
+    "Place order",
+    "Cancel ride"
+  ],
+  "cannot": [
+    {
+      "what": "book a ride or order food",
+      "why": "it costs money, confirm in the app yourself"
+    },
+    {
+      "what": "pay or buy",
+      "why": "money needs you to confirm in the app"
+    },
+    {
+      "what": "log in or sign up",
+      "why": "needs your password or OTP"
+    }
+  ]
+}

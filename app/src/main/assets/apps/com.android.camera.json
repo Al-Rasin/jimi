@@ -1,0 +1,135 @@
+{
+  "packages": [
+    "com.android.camera"
+  ],
+  "name": "Camera",
+  "aliases": [
+    "camera"
+  ],
+  "cardVersion": 1,
+  "minVersion": 0,
+  "maxVersion": 0,
+  "verified": false,
+  "summary": "MIUI camera: photo, video, portrait, front camera.",
+  "screens": [
+    {
+      "name": "camera",
+      "elements": [
+        {
+          "label": "Shutter",
+          "role": "button",
+          "selectors": [
+            {
+              "type": "desc",
+              "value": "Shutter"
+            }
+          ]
+        },
+        {
+          "label": "Switch camera",
+          "role": "button",
+          "selectors": [
+            {
+              "type": "desc",
+              "value": "Switch camera"
+            }
+          ]
+        },
+        {
+          "label": "Photo",
+          "role": "tab",
+          "selectors": [
+            {
+              "type": "desc",
+              "value": "Photo"
+            },
+            {
+              "type": "text",
+              "value": "Photo"
+            }
+          ]
+        },
+        {
+          "label": "Video",
+          "role": "tab",
+          "selectors": [
+            {
+              "type": "desc",
+              "value": "Video"
+            },
+            {
+              "type": "text",
+              "value": "Video"
+            }
+          ]
+        },
+        {
+          "label": "Portrait",
+          "role": "tab",
+          "selectors": [
+            {
+              "type": "desc",
+              "value": "Portrait"
+            },
+            {
+              "type": "text",
+              "value": "Portrait"
+            }
+          ]
+        }
+      ],
+      "launch": true
+    }
+  ],
+  "deepLinks": [
+    {
+      "task": "take photo",
+      "uri": "",
+      "action": "android.media.action.STILL_IMAGE_CAMERA"
+    },
+    {
+      "task": "record video",
+      "uri": "",
+      "action": "android.media.action.VIDEO_CAMERA"
+    }
+  ],
+  "tasks": [
+    {
+      "name": "take a photo",
+      "say": [
+        "take a photo",
+        "take a picture"
+      ],
+      "params": [],
+      "steps": [
+        {
+          "do": "link",
+          "target": "take photo",
+          "expect": "camera"
+        },
+        {
+          "do": "tap",
+          "target": "Shutter"
+        }
+      ]
+    },
+    {
+      "name": "switch to video",
+      "say": [
+        "record a video"
+      ],
+      "params": [],
+      "steps": [
+        {
+          "do": "link",
+          "target": "record video",
+          "expect": "camera"
+        }
+      ]
+    }
+  ],
+  "risky": [
+    "Delete"
+  ],
+  "cannot": []
+}

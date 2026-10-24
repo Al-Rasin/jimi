@@ -1,0 +1,311 @@
+{
+  "packages": [
+    "com.instagram.android"
+  ],
+  "name": "Instagram",
+  "aliases": [
+    "instagram",
+    "insta",
+    "ig"
+  ],
+  "cardVersion": 1,
+  "minVersion": 0,
+  "maxVersion": 0,
+  "verified": false,
+  "summary": "Photo and reels app: feed, reels, search, profile, direct messages.",
+  "screens": [
+    {
+      "name": "home",
+      "elements": [
+        {
+          "label": "Home",
+          "role": "tab",
+          "selectors": [
+            {
+              "type": "desc",
+              "value": "Home"
+            },
+            {
+              "type": "text",
+              "value": "Home"
+            }
+          ],
+          "to": "home"
+        },
+        {
+          "label": "Search and explore",
+          "role": "tab",
+          "selectors": [
+            {
+              "type": "desc",
+              "value": "Search and explore"
+            },
+            {
+              "type": "text",
+              "value": "Search and explore"
+            }
+          ],
+          "to": "search"
+        },
+        {
+          "label": "Reels",
+          "role": "tab",
+          "selectors": [
+            {
+              "type": "desc",
+              "value": "Reels"
+            },
+            {
+              "type": "text",
+              "value": "Reels"
+            }
+          ],
+          "to": "reels"
+        },
+        {
+          "label": "Profile",
+          "role": "tab",
+          "selectors": [
+            {
+              "type": "desc",
+              "value": "Profile"
+            },
+            {
+              "type": "text",
+              "value": "Profile"
+            }
+          ],
+          "to": "profile"
+        },
+        {
+          "label": "Messenger",
+          "role": "button",
+          "selectors": [
+            {
+              "type": "desc",
+              "value": "Messenger"
+            }
+          ],
+          "to": "direct"
+        }
+      ],
+      "launch": true
+    },
+    {
+      "name": "search",
+      "elements": [
+        {
+          "label": "Home",
+          "role": "tab",
+          "selectors": [
+            {
+              "type": "desc",
+              "value": "Home"
+            },
+            {
+              "type": "text",
+              "value": "Home"
+            }
+          ],
+          "to": "home"
+        },
+        {
+          "label": "Search",
+          "role": "field",
+          "selectors": [
+            {
+              "type": "hint",
+              "value": "Search"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "reels",
+      "elements": [
+        {
+          "label": "Home",
+          "role": "tab",
+          "selectors": [
+            {
+              "type": "desc",
+              "value": "Home"
+            },
+            {
+              "type": "text",
+              "value": "Home"
+            }
+          ],
+          "to": "home"
+        },
+        {
+          "label": "Reels",
+          "role": "tab",
+          "selectors": [
+            {
+              "type": "desc",
+              "value": "Reels"
+            },
+            {
+              "type": "text",
+              "value": "Reels"
+            }
+          ],
+          "to": "reels"
+        }
+      ]
+    },
+    {
+      "name": "profile",
+      "elements": [
+        {
+          "label": "Home",
+          "role": "tab",
+          "selectors": [
+            {
+              "type": "desc",
+              "value": "Home"
+            },
+            {
+              "type": "text",
+              "value": "Home"
+            }
+          ],
+          "to": "home"
+        },
+        {
+          "label": "Profile",
+          "role": "tab",
+          "selectors": [
+            {
+              "type": "desc",
+              "value": "Profile"
+            },
+            {
+              "type": "text",
+              "value": "Profile"
+            }
+          ],
+          "to": "profile"
+        },
+        {
+          "label": "Edit profile",
+          "role": "button",
+          "selectors": [
+            {
+              "type": "desc",
+              "value": "Edit profile"
+            },
+            {
+              "type": "text",
+              "value": "Edit profile"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "direct",
+      "elements": [
+        {
+          "label": "Search",
+          "role": "field",
+          "selectors": [
+            {
+              "type": "hint",
+              "value": "Search"
+            }
+          ]
+        },
+        {
+          "label": "New message",
+          "role": "button",
+          "selectors": [
+            {
+              "type": "desc",
+              "value": "New message"
+            },
+            {
+              "type": "text",
+              "value": "New message"
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "deepLinks": [
+    {
+      "task": "open profile",
+      "uri": "instagram://user?username={user}"
+    }
+  ],
+  "search": {
+    "screen": "search",
+    "selectors": [
+      {
+        "type": "hint",
+        "value": "Search"
+      },
+      {
+        "type": "text",
+        "value": "Search"
+      }
+    ]
+  },
+  "tasks": [
+    {
+      "name": "open a profile",
+      "say": [
+        "open {user} on instagram"
+      ],
+      "params": [
+        "user"
+      ],
+      "steps": [
+        {
+          "do": "link",
+          "target": "open profile"
+        }
+      ]
+    },
+    {
+      "name": "watch reels",
+      "say": [
+        "show reels"
+      ],
+      "params": [],
+      "steps": [
+        {
+          "do": "open",
+          "expect": "home"
+        },
+        {
+          "do": "tab",
+          "target": "Reels",
+          "expect": "reels"
+        }
+      ]
+    }
+  ],
+  "risky": [
+    "Follow",
+    "Unfollow",
+    "Share",
+    "Post",
+    "Send",
+    "Delete",
+    "Block"
+  ],
+  "cannot": [
+    {
+      "what": "log in or sign up",
+      "why": "needs your password or OTP"
+    },
+    {
+      "what": "post photos or stories",
+      "why": "posting is public, do it yourself"
+    }
+  ]
+}

@@ -1,0 +1,592 @@
+{
+  "packages": [
+    "com.whatsapp"
+  ],
+  "name": "WhatsApp",
+  "aliases": [
+    "whatsapp",
+    "whats app",
+    "wa"
+  ],
+  "cardVersion": 1,
+  "minVersion": 0,
+  "maxVersion": 0,
+  "verified": false,
+  "summary": "Chat app: messages, voice and video calls, status updates, groups.",
+  "screens": [
+    {
+      "name": "chats",
+      "elements": [
+        {
+          "label": "Chats",
+          "role": "tab",
+          "selectors": [
+            {
+              "type": "desc",
+              "value": "Chats"
+            },
+            {
+              "type": "text",
+              "value": "Chats"
+            }
+          ],
+          "to": "chats"
+        },
+        {
+          "label": "Updates",
+          "role": "tab",
+          "selectors": [
+            {
+              "type": "desc",
+              "value": "Updates"
+            },
+            {
+              "type": "text",
+              "value": "Updates"
+            }
+          ],
+          "to": "updates"
+        },
+        {
+          "label": "Communities",
+          "role": "tab",
+          "selectors": [
+            {
+              "type": "desc",
+              "value": "Communities"
+            },
+            {
+              "type": "text",
+              "value": "Communities"
+            }
+          ],
+          "to": "communities"
+        },
+        {
+          "label": "Calls",
+          "role": "tab",
+          "selectors": [
+            {
+              "type": "desc",
+              "value": "Calls"
+            },
+            {
+              "type": "text",
+              "value": "Calls"
+            }
+          ],
+          "to": "calls"
+        },
+        {
+          "label": "Search",
+          "role": "button",
+          "selectors": [
+            {
+              "type": "desc",
+              "value": "Search"
+            },
+            {
+              "type": "text",
+              "value": "Search"
+            }
+          ],
+          "to": "search"
+        },
+        {
+          "label": "New chat",
+          "role": "button",
+          "selectors": [
+            {
+              "type": "desc",
+              "value": "New chat"
+            },
+            {
+              "type": "text",
+              "value": "New chat"
+            }
+          ],
+          "to": "new chat"
+        },
+        {
+          "label": "More options",
+          "role": "menu",
+          "selectors": [
+            {
+              "type": "desc",
+              "value": "More options"
+            },
+            {
+              "type": "text",
+              "value": "More options"
+            }
+          ]
+        }
+      ],
+      "launch": true
+    },
+    {
+      "name": "updates",
+      "elements": [
+        {
+          "label": "Chats",
+          "role": "tab",
+          "selectors": [
+            {
+              "type": "desc",
+              "value": "Chats"
+            },
+            {
+              "type": "text",
+              "value": "Chats"
+            }
+          ],
+          "to": "chats"
+        },
+        {
+          "label": "Updates",
+          "role": "tab",
+          "selectors": [
+            {
+              "type": "desc",
+              "value": "Updates"
+            },
+            {
+              "type": "text",
+              "value": "Updates"
+            }
+          ],
+          "to": "updates"
+        },
+        {
+          "label": "Calls",
+          "role": "tab",
+          "selectors": [
+            {
+              "type": "desc",
+              "value": "Calls"
+            },
+            {
+              "type": "text",
+              "value": "Calls"
+            }
+          ],
+          "to": "calls"
+        },
+        {
+          "label": "Add status",
+          "role": "button",
+          "selectors": [
+            {
+              "type": "desc",
+              "value": "Add status"
+            },
+            {
+              "type": "text",
+              "value": "Add status"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "communities",
+      "elements": [
+        {
+          "label": "Chats",
+          "role": "tab",
+          "selectors": [
+            {
+              "type": "desc",
+              "value": "Chats"
+            },
+            {
+              "type": "text",
+              "value": "Chats"
+            }
+          ],
+          "to": "chats"
+        },
+        {
+          "label": "Communities",
+          "role": "tab",
+          "selectors": [
+            {
+              "type": "desc",
+              "value": "Communities"
+            },
+            {
+              "type": "text",
+              "value": "Communities"
+            }
+          ],
+          "to": "communities"
+        },
+        {
+          "label": "New community",
+          "role": "button",
+          "selectors": [
+            {
+              "type": "desc",
+              "value": "New community"
+            },
+            {
+              "type": "text",
+              "value": "New community"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "calls",
+      "elements": [
+        {
+          "label": "Chats",
+          "role": "tab",
+          "selectors": [
+            {
+              "type": "desc",
+              "value": "Chats"
+            },
+            {
+              "type": "text",
+              "value": "Chats"
+            }
+          ],
+          "to": "chats"
+        },
+        {
+          "label": "Updates",
+          "role": "tab",
+          "selectors": [
+            {
+              "type": "desc",
+              "value": "Updates"
+            },
+            {
+              "type": "text",
+              "value": "Updates"
+            }
+          ],
+          "to": "updates"
+        },
+        {
+          "label": "Calls",
+          "role": "tab",
+          "selectors": [
+            {
+              "type": "desc",
+              "value": "Calls"
+            },
+            {
+              "type": "text",
+              "value": "Calls"
+            }
+          ],
+          "to": "calls"
+        },
+        {
+          "label": "New call",
+          "role": "button",
+          "selectors": [
+            {
+              "type": "desc",
+              "value": "New call"
+            },
+            {
+              "type": "text",
+              "value": "New call"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "search",
+      "elements": [
+        {
+          "label": "Ask Meta AI or Search",
+          "role": "field",
+          "selectors": [
+            {
+              "type": "hint",
+              "value": "Ask Meta AI or Search"
+            }
+          ]
+        },
+        {
+          "label": "Navigate up",
+          "role": "button",
+          "selectors": [
+            {
+              "type": "desc",
+              "value": "Navigate up"
+            }
+          ],
+          "to": "chats"
+        }
+      ]
+    },
+    {
+      "name": "new chat",
+      "elements": [
+        {
+          "label": "New group",
+          "role": "button",
+          "selectors": [
+            {
+              "type": "desc",
+              "value": "New group"
+            },
+            {
+              "type": "text",
+              "value": "New group"
+            }
+          ]
+        },
+        {
+          "label": "New contact",
+          "role": "button",
+          "selectors": [
+            {
+              "type": "desc",
+              "value": "New contact"
+            },
+            {
+              "type": "text",
+              "value": "New contact"
+            }
+          ]
+        },
+        {
+          "label": "Search",
+          "role": "button",
+          "selectors": [
+            {
+              "type": "desc",
+              "value": "Search"
+            },
+            {
+              "type": "text",
+              "value": "Search"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "chat",
+      "elements": [
+        {
+          "label": "Message",
+          "role": "field",
+          "selectors": [
+            {
+              "type": "id",
+              "value": "com.whatsapp:id/entry"
+            },
+            {
+              "type": "hint",
+              "value": "Message"
+            }
+          ]
+        },
+        {
+          "label": "Send",
+          "role": "button",
+          "selectors": [
+            {
+              "type": "id",
+              "value": "com.whatsapp:id/send"
+            },
+            {
+              "type": "desc",
+              "value": "Send"
+            }
+          ]
+        },
+        {
+          "label": "Voice call",
+          "role": "button",
+          "selectors": [
+            {
+              "type": "desc",
+              "value": "Voice call"
+            },
+            {
+              "type": "text",
+              "value": "Voice call"
+            }
+          ]
+        },
+        {
+          "label": "Video call",
+          "role": "button",
+          "selectors": [
+            {
+              "type": "desc",
+              "value": "Video call"
+            },
+            {
+              "type": "text",
+              "value": "Video call"
+            }
+          ]
+        },
+        {
+          "label": "Attach",
+          "role": "button",
+          "selectors": [
+            {
+              "type": "desc",
+              "value": "Attach"
+            },
+            {
+              "type": "text",
+              "value": "Attach"
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "deepLinks": [
+    {
+      "task": "send message to number",
+      "uri": "https://wa.me/{number}?text={text}"
+    }
+  ],
+  "search": {
+    "screen": "chats",
+    "selectors": [
+      {
+        "type": "desc",
+        "value": "Search"
+      }
+    ]
+  },
+  "tasks": [
+    {
+      "name": "send a message",
+      "say": [
+        "send {text} to {contact} on whatsapp",
+        "whatsapp {contact} {text}"
+      ],
+      "params": [
+        "contact",
+        "text"
+      ],
+      "steps": [
+        {
+          "do": "open",
+          "expect": "chats"
+        },
+        {
+          "do": "search",
+          "text": "{contact}",
+          "expect": "search"
+        },
+        {
+          "do": "tap",
+          "target": "{contact}",
+          "expect": "chat"
+        },
+        {
+          "do": "type",
+          "target": "Message",
+          "text": "{text}"
+        },
+        {
+          "do": "tap",
+          "target": "Send",
+          "expect": "chat"
+        }
+      ],
+      "risky": true
+    },
+    {
+      "name": "call someone",
+      "say": [
+        "whatsapp call {contact}"
+      ],
+      "params": [
+        "contact"
+      ],
+      "steps": [
+        {
+          "do": "open",
+          "expect": "chats"
+        },
+        {
+          "do": "search",
+          "text": "{contact}"
+        },
+        {
+          "do": "tap",
+          "target": "{contact}",
+          "expect": "chat"
+        },
+        {
+          "do": "tap",
+          "target": "Voice call"
+        }
+      ],
+      "risky": true
+    },
+    {
+      "name": "open calls",
+      "say": [
+        "show whatsapp calls"
+      ],
+      "params": [],
+      "steps": [
+        {
+          "do": "open",
+          "expect": "chats"
+        },
+        {
+          "do": "tab",
+          "target": "Calls",
+          "expect": "calls"
+        }
+      ]
+    },
+    {
+      "name": "open status",
+      "say": [
+        "show whatsapp status"
+      ],
+      "params": [],
+      "steps": [
+        {
+          "do": "open",
+          "expect": "chats"
+        },
+        {
+          "do": "tab",
+          "target": "Updates",
+          "expect": "updates"
+        }
+      ]
+    }
+  ],
+  "risky": [
+    "Send",
+    "Voice call",
+    "Video call",
+    "Delete",
+    "Block",
+    "Exit group",
+    "Clear chat"
+  ],
+  "cannot": [
+    {
+      "what": "log in or sign up",
+      "why": "needs your password or OTP"
+    },
+    {
+      "what": "read disappearing view-once media",
+      "why": "WhatsApp hides it"
+    }
+  ]
+}

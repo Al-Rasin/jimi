@@ -1,0 +1,299 @@
+{
+  "packages": [
+    "com.facebook.orca"
+  ],
+  "name": "Messenger",
+  "aliases": [
+    "messenger",
+    "facebook messenger"
+  ],
+  "cardVersion": 1,
+  "minVersion": 0,
+  "maxVersion": 0,
+  "verified": false,
+  "summary": "Facebook chat app: messages, calls, stories.",
+  "screens": [
+    {
+      "name": "chats",
+      "elements": [
+        {
+          "label": "Chats",
+          "role": "tab",
+          "selectors": [
+            {
+              "type": "desc",
+              "value": "Chats"
+            },
+            {
+              "type": "text",
+              "value": "Chats"
+            }
+          ],
+          "to": "chats"
+        },
+        {
+          "label": "Stories",
+          "role": "tab",
+          "selectors": [
+            {
+              "type": "desc",
+              "value": "Stories"
+            },
+            {
+              "type": "text",
+              "value": "Stories"
+            }
+          ],
+          "to": "stories"
+        },
+        {
+          "label": "Menu",
+          "role": "tab",
+          "selectors": [
+            {
+              "type": "desc",
+              "value": "Menu"
+            },
+            {
+              "type": "text",
+              "value": "Menu"
+            }
+          ],
+          "to": "menu"
+        },
+        {
+          "label": "Search",
+          "role": "button",
+          "selectors": [
+            {
+              "type": "desc",
+              "value": "Search"
+            },
+            {
+              "type": "text",
+              "value": "Search"
+            }
+          ],
+          "to": "search"
+        },
+        {
+          "label": "New message",
+          "role": "button",
+          "selectors": [
+            {
+              "type": "desc",
+              "value": "New message"
+            },
+            {
+              "type": "text",
+              "value": "New message"
+            }
+          ]
+        }
+      ],
+      "launch": true
+    },
+    {
+      "name": "stories",
+      "elements": [
+        {
+          "label": "Chats",
+          "role": "tab",
+          "selectors": [
+            {
+              "type": "desc",
+              "value": "Chats"
+            },
+            {
+              "type": "text",
+              "value": "Chats"
+            }
+          ],
+          "to": "chats"
+        },
+        {
+          "label": "Stories",
+          "role": "tab",
+          "selectors": [
+            {
+              "type": "desc",
+              "value": "Stories"
+            },
+            {
+              "type": "text",
+              "value": "Stories"
+            }
+          ],
+          "to": "stories"
+        }
+      ]
+    },
+    {
+      "name": "menu",
+      "elements": [
+        {
+          "label": "Chats",
+          "role": "tab",
+          "selectors": [
+            {
+              "type": "desc",
+              "value": "Chats"
+            },
+            {
+              "type": "text",
+              "value": "Chats"
+            }
+          ],
+          "to": "chats"
+        },
+        {
+          "label": "Settings",
+          "role": "button",
+          "selectors": [
+            {
+              "type": "desc",
+              "value": "Settings"
+            },
+            {
+              "type": "text",
+              "value": "Settings"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "search",
+      "elements": [
+        {
+          "label": "Search",
+          "role": "field",
+          "selectors": [
+            {
+              "type": "hint",
+              "value": "Search"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "chat",
+      "elements": [
+        {
+          "label": "Message",
+          "role": "field",
+          "selectors": [
+            {
+              "type": "hint",
+              "value": "Message"
+            }
+          ]
+        },
+        {
+          "label": "Send",
+          "role": "button",
+          "selectors": [
+            {
+              "type": "desc",
+              "value": "Send"
+            }
+          ]
+        },
+        {
+          "label": "Audio call",
+          "role": "button",
+          "selectors": [
+            {
+              "type": "desc",
+              "value": "Audio call"
+            },
+            {
+              "type": "text",
+              "value": "Audio call"
+            }
+          ]
+        },
+        {
+          "label": "Video call",
+          "role": "button",
+          "selectors": [
+            {
+              "type": "desc",
+              "value": "Video call"
+            },
+            {
+              "type": "text",
+              "value": "Video call"
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "search": {
+    "screen": "chats",
+    "selectors": [
+      {
+        "type": "desc",
+        "value": "Search"
+      },
+      {
+        "type": "text",
+        "value": "Search"
+      }
+    ]
+  },
+  "tasks": [
+    {
+      "name": "send a message",
+      "say": [
+        "send {text} to {contact} on messenger"
+      ],
+      "params": [
+        "contact",
+        "text"
+      ],
+      "steps": [
+        {
+          "do": "open",
+          "expect": "chats"
+        },
+        {
+          "do": "search",
+          "text": "{contact}",
+          "expect": "search"
+        },
+        {
+          "do": "tap",
+          "target": "{contact}",
+          "expect": "chat"
+        },
+        {
+          "do": "type",
+          "target": "Message",
+          "text": "{text}"
+        },
+        {
+          "do": "tap",
+          "target": "Send"
+        }
+      ],
+      "risky": true
+    }
+  ],
+  "risky": [
+    "Send",
+    "Audio call",
+    "Video call",
+    "Delete",
+    "Block",
+    "Unsend"
+  ],
+  "cannot": [
+    {
+      "what": "log in or sign up",
+      "why": "needs your password or OTP"
+    }
+  ]
+}

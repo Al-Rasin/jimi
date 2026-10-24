@@ -1,0 +1,387 @@
+{
+  "packages": [
+    "com.facebook.katana"
+  ],
+  "name": "Facebook",
+  "aliases": [
+    "facebook",
+    "fb"
+  ],
+  "cardVersion": 1,
+  "minVersion": 0,
+  "maxVersion": 0,
+  "verified": false,
+  "summary": "Social app: news feed, friends, videos, marketplace, notifications.",
+  "screens": [
+    {
+      "name": "home",
+      "elements": [
+        {
+          "label": "Home",
+          "role": "tab",
+          "selectors": [
+            {
+              "type": "desc",
+              "value": "Home"
+            },
+            {
+              "type": "text",
+              "value": "Home"
+            }
+          ],
+          "to": "home"
+        },
+        {
+          "label": "Video",
+          "role": "tab",
+          "selectors": [
+            {
+              "type": "desc",
+              "value": "Video"
+            },
+            {
+              "type": "text",
+              "value": "Video"
+            }
+          ],
+          "to": "video"
+        },
+        {
+          "label": "Friends",
+          "role": "tab",
+          "selectors": [
+            {
+              "type": "desc",
+              "value": "Friends"
+            },
+            {
+              "type": "text",
+              "value": "Friends"
+            }
+          ],
+          "to": "friends"
+        },
+        {
+          "label": "Marketplace",
+          "role": "tab",
+          "selectors": [
+            {
+              "type": "desc",
+              "value": "Marketplace"
+            },
+            {
+              "type": "text",
+              "value": "Marketplace"
+            }
+          ],
+          "to": "marketplace"
+        },
+        {
+          "label": "Notifications",
+          "role": "tab",
+          "selectors": [
+            {
+              "type": "desc",
+              "value": "Notifications"
+            },
+            {
+              "type": "text",
+              "value": "Notifications"
+            }
+          ],
+          "to": "notifications"
+        },
+        {
+          "label": "Menu",
+          "role": "tab",
+          "selectors": [
+            {
+              "type": "desc",
+              "value": "Menu"
+            },
+            {
+              "type": "text",
+              "value": "Menu"
+            }
+          ],
+          "to": "menu"
+        },
+        {
+          "label": "Search",
+          "role": "button",
+          "selectors": [
+            {
+              "type": "desc",
+              "value": "Search"
+            },
+            {
+              "type": "text",
+              "value": "Search"
+            }
+          ],
+          "to": "search"
+        }
+      ],
+      "launch": true
+    },
+    {
+      "name": "video",
+      "elements": [
+        {
+          "label": "Home",
+          "role": "tab",
+          "selectors": [
+            {
+              "type": "desc",
+              "value": "Home"
+            },
+            {
+              "type": "text",
+              "value": "Home"
+            }
+          ],
+          "to": "home"
+        },
+        {
+          "label": "Video",
+          "role": "tab",
+          "selectors": [
+            {
+              "type": "desc",
+              "value": "Video"
+            },
+            {
+              "type": "text",
+              "value": "Video"
+            }
+          ],
+          "to": "video"
+        }
+      ]
+    },
+    {
+      "name": "friends",
+      "elements": [
+        {
+          "label": "Home",
+          "role": "tab",
+          "selectors": [
+            {
+              "type": "desc",
+              "value": "Home"
+            },
+            {
+              "type": "text",
+              "value": "Home"
+            }
+          ],
+          "to": "home"
+        },
+        {
+          "label": "Friends",
+          "role": "tab",
+          "selectors": [
+            {
+              "type": "desc",
+              "value": "Friends"
+            },
+            {
+              "type": "text",
+              "value": "Friends"
+            }
+          ],
+          "to": "friends"
+        }
+      ]
+    },
+    {
+      "name": "marketplace",
+      "elements": [
+        {
+          "label": "Home",
+          "role": "tab",
+          "selectors": [
+            {
+              "type": "desc",
+              "value": "Home"
+            },
+            {
+              "type": "text",
+              "value": "Home"
+            }
+          ],
+          "to": "home"
+        },
+        {
+          "label": "Marketplace",
+          "role": "tab",
+          "selectors": [
+            {
+              "type": "desc",
+              "value": "Marketplace"
+            },
+            {
+              "type": "text",
+              "value": "Marketplace"
+            }
+          ],
+          "to": "marketplace"
+        }
+      ]
+    },
+    {
+      "name": "notifications",
+      "elements": [
+        {
+          "label": "Home",
+          "role": "tab",
+          "selectors": [
+            {
+              "type": "desc",
+              "value": "Home"
+            },
+            {
+              "type": "text",
+              "value": "Home"
+            }
+          ],
+          "to": "home"
+        },
+        {
+          "label": "Notifications",
+          "role": "tab",
+          "selectors": [
+            {
+              "type": "desc",
+              "value": "Notifications"
+            },
+            {
+              "type": "text",
+              "value": "Notifications"
+            }
+          ],
+          "to": "notifications"
+        }
+      ]
+    },
+    {
+      "name": "menu",
+      "elements": [
+        {
+          "label": "Home",
+          "role": "tab",
+          "selectors": [
+            {
+              "type": "desc",
+              "value": "Home"
+            },
+            {
+              "type": "text",
+              "value": "Home"
+            }
+          ],
+          "to": "home"
+        },
+        {
+          "label": "Settings & privacy",
+          "role": "button",
+          "selectors": [
+            {
+              "type": "desc",
+              "value": "Settings & privacy"
+            },
+            {
+              "type": "text",
+              "value": "Settings & privacy"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "search",
+      "elements": [
+        {
+          "label": "Search",
+          "role": "field",
+          "selectors": [
+            {
+              "type": "hint",
+              "value": "Search"
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "search": {
+    "screen": "home",
+    "selectors": [
+      {
+        "type": "desc",
+        "value": "Search"
+      }
+    ]
+  },
+  "tasks": [
+    {
+      "name": "search",
+      "say": [
+        "search {query} on facebook"
+      ],
+      "params": [
+        "query"
+      ],
+      "steps": [
+        {
+          "do": "open",
+          "expect": "home"
+        },
+        {
+          "do": "search",
+          "text": "{query}",
+          "expect": "search"
+        },
+        {
+          "do": "enter"
+        }
+      ]
+    },
+    {
+      "name": "open notifications",
+      "say": [
+        "facebook notifications"
+      ],
+      "params": [],
+      "steps": [
+        {
+          "do": "open",
+          "expect": "home"
+        },
+        {
+          "do": "tab",
+          "target": "Notifications",
+          "expect": "notifications"
+        }
+      ]
+    }
+  ],
+  "risky": [
+    "Post",
+    "Share",
+    "Delete",
+    "Unfriend",
+    "Block",
+    "Send"
+  ],
+  "cannot": [
+    {
+      "what": "log in or sign up",
+      "why": "needs your password or OTP"
+    },
+    {
+      "what": "write or publish a post",
+      "why": "posting is public, do it yourself"
+    }
+  ]
+}

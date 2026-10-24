@@ -1,0 +1,172 @@
+{
+  "packages": [
+    "com.google.android.apps.messaging",
+    "com.android.mms"
+  ],
+  "name": "Messages",
+  "aliases": [
+    "messages",
+    "sms",
+    "text messages"
+  ],
+  "cardVersion": 1,
+  "minVersion": 0,
+  "maxVersion": 0,
+  "verified": false,
+  "summary": "SMS app: read and send text messages.",
+  "screens": [
+    {
+      "name": "conversations",
+      "elements": [
+        {
+          "label": "Start chat",
+          "role": "button",
+          "selectors": [
+            {
+              "type": "desc",
+              "value": "Start chat"
+            },
+            {
+              "type": "text",
+              "value": "Start chat"
+            }
+          ],
+          "to": "new"
+        },
+        {
+          "label": "Search",
+          "role": "button",
+          "selectors": [
+            {
+              "type": "desc",
+              "value": "Search"
+            },
+            {
+              "type": "text",
+              "value": "Search"
+            }
+          ],
+          "to": "search"
+        },
+        {
+          "label": "More options",
+          "role": "menu",
+          "selectors": [
+            {
+              "type": "desc",
+              "value": "More options"
+            },
+            {
+              "type": "text",
+              "value": "More options"
+            }
+          ]
+        }
+      ],
+      "launch": true
+    },
+    {
+      "name": "search",
+      "elements": [
+        {
+          "label": "Search",
+          "role": "field",
+          "selectors": [
+            {
+              "type": "hint",
+              "value": "Search"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "new",
+      "elements": [
+        {
+          "label": "Type name, phone number or email",
+          "role": "field",
+          "selectors": [
+            {
+              "type": "hint",
+              "value": "Type name, phone number or email"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "chat",
+      "elements": [
+        {
+          "label": "Text message",
+          "role": "field",
+          "selectors": [
+            {
+              "type": "hint",
+              "value": "Text message"
+            }
+          ]
+        },
+        {
+          "label": "Send SMS",
+          "role": "button",
+          "selectors": [
+            {
+              "type": "desc",
+              "value": "Send SMS"
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "deepLinks": [
+    {
+      "task": "send sms",
+      "uri": "smsto:{number}?body={text}",
+      "action": "android.intent.action.SENDTO"
+    }
+  ],
+  "search": {
+    "screen": "conversations",
+    "selectors": [
+      {
+        "type": "desc",
+        "value": "Search"
+      }
+    ]
+  },
+  "tasks": [
+    {
+      "name": "send an sms",
+      "say": [
+        "text {contact} {text}",
+        "send sms to {contact}"
+      ],
+      "params": [
+        "contact",
+        "text"
+      ],
+      "steps": [
+        {
+          "do": "link",
+          "target": "send sms",
+          "expect": "chat"
+        },
+        {
+          "do": "tap",
+          "target": "Send SMS"
+        }
+      ],
+      "risky": true
+    }
+  ],
+  "risky": [
+    "Send SMS",
+    "Send",
+    "Delete",
+    "Block"
+  ],
+  "cannot": []
+}

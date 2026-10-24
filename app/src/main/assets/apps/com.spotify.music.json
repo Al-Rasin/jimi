@@ -1,0 +1,227 @@
+{
+  "packages": [
+    "com.spotify.music"
+  ],
+  "name": "Spotify",
+  "aliases": [
+    "spotify"
+  ],
+  "cardVersion": 1,
+  "minVersion": 0,
+  "maxVersion": 0,
+  "verified": false,
+  "summary": "Music app: search and play songs, playlists, podcasts, your library.",
+  "screens": [
+    {
+      "name": "home",
+      "elements": [
+        {
+          "label": "Home",
+          "role": "tab",
+          "selectors": [
+            {
+              "type": "desc",
+              "value": "Home"
+            },
+            {
+              "type": "text",
+              "value": "Home"
+            }
+          ],
+          "to": "home"
+        },
+        {
+          "label": "Search",
+          "role": "tab",
+          "selectors": [
+            {
+              "type": "desc",
+              "value": "Search"
+            },
+            {
+              "type": "text",
+              "value": "Search"
+            }
+          ],
+          "to": "search"
+        },
+        {
+          "label": "Your Library",
+          "role": "tab",
+          "selectors": [
+            {
+              "type": "desc",
+              "value": "Your Library"
+            },
+            {
+              "type": "text",
+              "value": "Your Library"
+            }
+          ],
+          "to": "library"
+        }
+      ],
+      "launch": true
+    },
+    {
+      "name": "search",
+      "elements": [
+        {
+          "label": "Home",
+          "role": "tab",
+          "selectors": [
+            {
+              "type": "desc",
+              "value": "Home"
+            },
+            {
+              "type": "text",
+              "value": "Home"
+            }
+          ],
+          "to": "home"
+        },
+        {
+          "label": "Search",
+          "role": "tab",
+          "selectors": [
+            {
+              "type": "desc",
+              "value": "Search"
+            },
+            {
+              "type": "text",
+              "value": "Search"
+            }
+          ],
+          "to": "search"
+        },
+        {
+          "label": "What do you want to listen to?",
+          "role": "field",
+          "selectors": [
+            {
+              "type": "hint",
+              "value": "What do you want to listen to?"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "library",
+      "elements": [
+        {
+          "label": "Home",
+          "role": "tab",
+          "selectors": [
+            {
+              "type": "desc",
+              "value": "Home"
+            },
+            {
+              "type": "text",
+              "value": "Home"
+            }
+          ],
+          "to": "home"
+        },
+        {
+          "label": "Your Library",
+          "role": "tab",
+          "selectors": [
+            {
+              "type": "desc",
+              "value": "Your Library"
+            },
+            {
+              "type": "text",
+              "value": "Your Library"
+            }
+          ],
+          "to": "library"
+        }
+      ]
+    }
+  ],
+  "deepLinks": [
+    {
+      "task": "search",
+      "uri": "spotify:search:{query}"
+    }
+  ],
+  "search": {
+    "deepLink": "search"
+  },
+  "tasks": [
+    {
+      "name": "search music",
+      "say": [
+        "search {query} on spotify"
+      ],
+      "params": [
+        "query"
+      ],
+      "steps": [
+        {
+          "do": "link",
+          "target": "search",
+          "expect": "search"
+        }
+      ]
+    },
+    {
+      "name": "play a song",
+      "say": [
+        "play {query} on spotify"
+      ],
+      "params": [
+        "query"
+      ],
+      "steps": [
+        {
+          "do": "link",
+          "target": "search"
+        },
+        {
+          "do": "tap",
+          "target": "{first result}"
+        }
+      ]
+    },
+    {
+      "name": "open library",
+      "say": [
+        "my spotify library"
+      ],
+      "params": [],
+      "steps": [
+        {
+          "do": "open",
+          "expect": "home"
+        },
+        {
+          "do": "tab",
+          "target": "Your Library",
+          "expect": "library"
+        }
+      ]
+    }
+  ],
+  "risky": [
+    "Premium",
+    "Buy",
+    "Delete",
+    "Remove"
+  ],
+  "cannot": [
+    {
+      "what": "log in or sign up",
+      "why": "needs your password or OTP"
+    },
+    {
+      "what": "pay or buy",
+      "why": "money needs you to confirm in the app"
+    }
+  ]
+}
