@@ -3,11 +3,15 @@ package com.alrasin.jarvis.actions
 import android.accessibilityservice.AccessibilityService
 import android.graphics.Bitmap
 import android.graphics.Rect
-import android.os.Bundle
 import android.view.Display
 import android.view.accessibility.AccessibilityEvent
 import android.view.accessibility.AccessibilityNodeInfo
 import android.view.accessibility.AccessibilityWindowInfo
+import com.alrasin.jarvis.actions.a11y.findAll
+import com.alrasin.jarvis.actions.a11y.findFirst
+import com.alrasin.jarvis.actions.a11y.label
+import com.alrasin.jarvis.actions.a11y.scroll
+import com.alrasin.jarvis.actions.a11y.replaceNodeText
 import com.alrasin.jarvis.core.JarvisLog
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlin.coroutines.resume
@@ -30,15 +34,11 @@ class JarvisAccessibilityService : AccessibilityService() {
     /** Visible text on screen, top to bottom. */
     fun screenText(max: Int = 4000): String {
         val root = rootInActiveWindow ?: return ""
-        val out = ArrayList<String>()
-        fun walk(n: AccessibilityNodeInfo?) {
-            if (n == null || !n.isVisibleToUser) return
+        val out = root.findAll { it.isVisibleToUser }.mapNotNull { n ->
             val t = n.text?.toString()?.trim().orEmpty()
             val d = n.contentDescription?.toString()?.trim().orEmpty()
-            if (t.isNotEmpty()) out.add(t) else if (d.isNotEmpty() && n.isClickable) out.add(d)
-            for (i in 0 until n.childCount) walk(n.getChild(i))
+            if (t.isNotEmpty()) t else if (d.isNotEmpty() && n.isClickable) d else null
         }
-        walk(root)
         return out.distinct().joinToString("\n").take(max)
     }
 
@@ -92,12 +92,7 @@ class JarvisAccessibilityService : AccessibilityService() {
         .filter { !it.isEditable && it.text?.toString()?.trim().equals(label, true) }
         .mapNotNull { clickableParent(it, packageName) }.distinct().singleOrNull()
 
-    private fun switchIn(node: AccessibilityNodeInfo?): AccessibilityNodeInfo? {
-        if (node == null) return null
-        if (node.isCheckable) return node
-        for (i in 0 until node.childCount) switchIn(node.getChild(i))?.let { return it }
-        return null
-    }
+    private fun switchIn(node: AccessibilityNodeInfo?): AccessibilityNodeInfo? = node.findFirst { it.isCheckable }
 
     private fun clickableParent(node: AccessibilityNodeInfo, packageName: String): AccessibilityNodeInfo? {
         var current: AccessibilityNodeInfo? = node
@@ -159,10 +154,7 @@ class JarvisAccessibilityService : AccessibilityService() {
         it.performAction(AccessibilityNodeInfo.ACTION_CLICK) or it.performAction(AccessibilityNodeInfo.ACTION_FOCUS)
     } ?: false
 
-    fun replaceText(packageName: String, text: String): Boolean = editable(packageName)?.performAction(
-        AccessibilityNodeInfo.ACTION_SET_TEXT,
-        Bundle().apply { putCharSequence(AccessibilityNodeInfo.ACTION_ARGUMENT_SET_TEXT_CHARSEQUENCE, text) },
-    ) ?: false
+    fun replaceText(packageName: String, text: String): Boolean = editable(packageName)?.replaceNodeText(text) ?: false
 
     fun clickFirstMediaResult(packageName: String): Boolean {
         val candidates = visibleNodes(packageName).filter { node ->
@@ -190,26 +182,14 @@ class JarvisAccessibilityService : AccessibilityService() {
     /** Clicks the node whose text/description best matches [text]; climbs to a clickable parent. Root tap as fallback. */
     fun clickText(text: String): Boolean {
         val root = rootInActiveWindow ?: return false
-        val all = ArrayList<AccessibilityNodeInfo>()
-        fun walk(n: AccessibilityNodeInfo?) {
-            if (n == null || !n.isVisibleToUser) return
-            if (!n.text.isNullOrBlank() || !n.contentDescription.isNullOrBlank()) all.add(n)
-            for (i in 0 until n.childCount) walk(n.getChild(i))
-        }
-        walk(root)
-        val node = Fuzzy.best(text, all, { (it.text ?: it.contentDescription).toString() }, min = 0.55) ?: return false
+        val all = root.findAll { it.isVisibleToUser && (!it.text.isNullOrBlank() || !it.contentDescription.isNullOrBlank()) }
+        val node = Fuzzy.best(text, all, { it.label() }, min = 0.55) ?: return false
         return click(node)
     }
 
     fun clickByDescription(desc: String): Boolean {
         val root = rootInActiveWindow ?: return false
-        val found = ArrayList<AccessibilityNodeInfo>()
-        fun walk(n: AccessibilityNodeInfo?) {
-            if (n == null) return
-            if (n.contentDescription?.toString().equals(desc, ignoreCase = true)) found.add(n)
-            for (i in 0 until n.childCount) walk(n.getChild(i))
-        }
-        walk(root)
+        val found = root.findAll { it.contentDescription?.toString().equals(desc, ignoreCase = true) }
         return found.firstOrNull()?.let(::click) ?: false
     }
 
@@ -230,32 +210,17 @@ class JarvisAccessibilityService : AccessibilityService() {
         val root = rootInActiveWindow ?: return false
         var target = root.findFocus(AccessibilityNodeInfo.FOCUS_INPUT)
         if (target == null || !target.isEditable) {
-            fun find(n: AccessibilityNodeInfo?): AccessibilityNodeInfo? {
-                if (n == null) return null
-                if (n.isEditable && n.isVisibleToUser) return n
-                for (i in 0 until n.childCount) find(n.getChild(i))?.let { return it }
-                return null
-            }
-            target = find(root)
+            target = root.findFirst { it.isEditable && it.isVisibleToUser }
         }
         target ?: return false
         val old = target.text?.toString().takeUnless { target.isShowingHintText }.orEmpty()
-        val args = Bundle().apply {
-            putCharSequence(AccessibilityNodeInfo.ACTION_ARGUMENT_SET_TEXT_CHARSEQUENCE, if (old.isEmpty()) text else "$old $text")
-        }
-        return target.performAction(AccessibilityNodeInfo.ACTION_SET_TEXT, args)
+        return target.replaceNodeText(if (old.isEmpty()) text else "$old $text")
     }
 
     fun scroll(forward: Boolean): Boolean {
         val root = rootInActiveWindow ?: return false
-        fun find(n: AccessibilityNodeInfo?): AccessibilityNodeInfo? {
-            if (n == null) return null
-            if (n.isScrollable && n.isVisibleToUser) return n
-            for (i in 0 until n.childCount) find(n.getChild(i))?.let { return it }
-            return null
-        }
-        val s = find(root) ?: return false
-        return s.performAction(if (forward) AccessibilityNodeInfo.ACTION_SCROLL_FORWARD else AccessibilityNodeInfo.ACTION_SCROLL_BACKWARD)
+        val s = root.findFirst { it.isScrollable && it.isVisibleToUser } ?: return false
+        return s.scroll(forward)
     }
 
     /** What is on screen now, as a software bitmap, for the panel's blurred backdrop (D-050). Never saved. */
