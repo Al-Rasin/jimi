@@ -42,7 +42,8 @@ SETTINGS_ACTIONS = [
 ]
 SKIP_WORDS = ("reset", "erase", "factory", "delete", "format", "uninstall", "clear", "power off", "restart", "reboot",
               "shut down", "account", "sign in", "log in", "unlock", "password", "pin", "fingerprint", "face", "sim",
-              "phone number", "call", "message", "sms", "contact", "imei", "emergency", "feedback", "update")
+              "phone number", "call", "message", "sms", "contact", "imei", "emergency", "feedback", "update",
+              "shutter", "record", "recent photo", "gallery", "lens")
 SKIP_CLASSES = ("Switch", "CheckBox", "EditText", "RadioButton", "ToggleButton", "SeekBar")
 
 
@@ -73,13 +74,18 @@ def launch(app, action=None):
 
 
 def dump(path):
-    """Dump the current screen to [path]; returns False when it failed."""
-    sh("uiautomator dump /sdcard/jv_dump.xml")
-    data = adb("exec-out", "cat", "/sdcard/jv_dump.xml", out=True)
-    if b"<hierarchy" not in data:
-        return False
-    path.write_bytes(data)
-    return True
+    """Dump the current screen to [path]; returns False when it failed.
+    The old file is removed first: on animated screens uiautomator fails ("could not get idle state")
+    and would otherwise leave the previous app's dump in place."""
+    for _ in range(3):
+        sh("rm -f /sdcard/jv_dump.xml")
+        if "could not get idle state" not in sh("uiautomator dump /sdcard/jv_dump.xml 2>&1"):
+            data = adb("exec-out", "cat", "/sdcard/jv_dump.xml", out=True)
+            if b"<hierarchy" in data:
+                path.write_bytes(data)
+                return True
+        time.sleep(1.0)
+    return False
 
 
 def screen_hash(els):
@@ -130,17 +136,22 @@ def replay(app, action, taps, allowed):
     """Open the app and tap the recorded path; False if we left the allow-list."""
     launch(app, action)
     for x, y in taps:
-        if focused_package() not in allowed:
+        if focused_package(allowed) not in allowed:
             return False
         sh(f"input tap {x} {y}")
         time.sleep(1.0)
-    return focused_package() in allowed
+    return focused_package(allowed) in allowed
 
 
-def focused_package():
-    out = sh("dumpsys window | grep -m1 mCurrentFocus")
-    m = re.search(r" ([\w.]+)/", out)
-    return m[1] if m else None
+def focused_package(allowed=None, wait=4.0):
+    """Package of the focused window; polls up to [wait] s for one in [allowed] (slow app starts)."""
+    end = time.monotonic() + wait
+    while True:
+        m = re.search(r"mCurrentFocus=.* ([\w.]+)/", sh("dumpsys window | grep mCurrentFocus"))
+        pkg = m[1] if m else None
+        if allowed is None or pkg in allowed or time.monotonic() > end:
+            return pkg
+        time.sleep(0.5)
 
 
 def current_ok(path, allowed):
