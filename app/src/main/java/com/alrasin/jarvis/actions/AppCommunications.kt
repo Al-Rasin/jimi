@@ -14,12 +14,31 @@ import com.alrasin.jarvis.core.pollUntil
 import kotlinx.coroutines.delay
 import java.util.Locale
 
+/** A resolved chat app: its installed package and the name to say. */
+internal data class AppChat(val pkg: String, val label: String)
+
 internal class AppCommunications(private val context: Context, private val contacts: Contacts) {
     private fun packageFor(app: String): String? = when (app) {
         "whatsapp" -> listOf("com.whatsapp", "com.whatsapp.w4b")
         "messenger" -> listOf("com.facebook.orca")
         else -> emptyList()
     }.firstOrNull(context::isInstalled)
+
+    private fun chatLabel(app: String) = if (app == "whatsapp") "WhatsApp" else "Messenger"
+
+    private fun chat(app: String): AppChat? = packageFor(app)?.let { AppChat(it, chatLabel(app)) }
+
+    /** wa.me deep link that opens a chat with [text] pre-filled. */
+    private fun waUri(number: String, text: String): Uri =
+        Uri.parse("https://wa.me/$number").buildUpon().appendQueryParameter("text", text).build()
+
+    /** Taps Send/Send message in [chat]; null on success, a fail message otherwise. */
+    private suspend fun tapSend(service: JarvisAccessibilityService, app: String, chat: AppChat): String? {
+        val ids = if (app == "whatsapp") listOf("${chat.pkg}:id/send") else emptyList()
+        if (!pollUntil(20, 250) { service.clickExact(chat.pkg, labels = listOf("Send", "Send message"), ids = ids) })
+            return "The message is ready in ${chat.label}, but I couldn't identify Send. Nothing was sent."
+        return null
+    }
 
     private fun international(number: String): String? {
         CommsAddress.international(number)?.let { return it }
@@ -64,8 +83,7 @@ internal class AppCommunications(private val context: Context, private val conta
     }.getOrDefault(false)
 
     suspend fun call(person: Contacts.Contact, app: String, video: Boolean): ToolResult {
-        val label = if (app == "whatsapp") "WhatsApp" else "Messenger"
-        val pkg = packageFor(app) ?: return ToolResult.fail("$label is not installed.")
+        val (pkg, label) = chat(app) ?: return ToolResult.fail("${chatLabel(app)} is not installed.")
         if (app == "whatsapp") {
             val mime = if (video) "vnd.android.cursor.item/vnd.com.whatsapp.video.call" else "vnd.android.cursor.item/vnd.com.whatsapp.voip.call"
             if (openContactRow(person, pkg, mime)) return ToolResult.ok("Boss, I requested a $label ${if (video) "video" else "voice"} call to ${person.name}.")
@@ -80,28 +98,24 @@ internal class AppCommunications(private val context: Context, private val conta
     }
 
     suspend fun message(person: Contacts.Contact, app: String, text: String): ToolResult {
-        val label = if (app == "whatsapp") "WhatsApp" else "Messenger"
-        val pkg = packageFor(app) ?: return ToolResult.fail("$label is not installed.")
+        val (pkg, label) = chat(app) ?: return ToolResult.fail("${chatLabel(app)} is not installed.")
         val service = requireScreen { return ToolResult.fail("Enable Jimi accessibility in Android settings so I can send the $label message.") }
         openConversation(person, app, pkg, service, text)?.let { return ToolResult.fail(it) }
         if (!service.replaceText(pkg, text) || service.editableText(pkg) != text)
             return ToolResult.fail("I couldn't enter the exact message in ${person.name}'s $label chat. Nothing was sent.")
-        val ids = if (app == "whatsapp") listOf("$pkg:id/send") else emptyList()
         if (!conversationMatches(service, pkg, person)) return ToolResult.fail("The $label conversation changed. Nothing was sent.")
-        if (!pollUntil(20, 250) { service.clickExact(pkg, labels = listOf("Send", "Send message"), ids = ids) })
-            return ToolResult.fail("The message is ready in $label, but I couldn't identify Send. Nothing was sent.")
+        tapSend(service, app, AppChat(pkg, label))?.let { return ToolResult.fail(it) }
         return ToolResult.ok("Boss, I tapped send for ${person.name} in $label. Delivery isn't confirmed.")
     }
 
     /** "Message yourself" on WhatsApp, or the owner's own Messenger thread. */
     suspend fun messageSelf(app: String, text: String): ToolResult {
-        val label = if (app == "whatsapp") "WhatsApp" else "Messenger"
-        val pkg = packageFor(app) ?: return ToolResult.fail("$label is not installed.")
+        val (pkg, label) = chat(app) ?: return ToolResult.fail("${chatLabel(app)} is not installed.")
         val service = requireScreen { return ToolResult.fail("Enable Jimi accessibility in Android settings so I can send the $label message.") }
         val uri = if (app == "whatsapp") {
             val number = SelfAccount.whatsappNumber()?.let(CommsAddress::international)
                 ?: return ToolResult.fail("I couldn't find your own WhatsApp number.")
-            Uri.parse("https://wa.me/$number").buildUpon().appendQueryParameter("text", text).build()
+            waUri(number, text)
         } else {
             Uri.parse("fb-messenger://user/" + (SelfAccount.messengerId() ?: return ToolResult.fail("I couldn't find your Messenger account.")))
         }
@@ -114,20 +128,17 @@ internal class AppCommunications(private val context: Context, private val conta
         if (!service.replaceText(pkg, text) || !pollUntil(20, 250) { service.editableText(pkg) == text })
             return ToolResult.fail("I couldn't enter the exact message in your $label chat. Nothing was sent.")
         if (app == "whatsapp" && !service.isSelfChat(pkg)) return ToolResult.fail("The WhatsApp chat changed. Nothing was sent.")
-        val ids = if (app == "whatsapp") listOf("$pkg:id/send") else emptyList()
         // Messenger swaps the like button for Send only after the text is in.
-        if (!pollUntil(20, 250) { service.clickExact(pkg, labels = listOf("Send", "Send message"), ids = ids) })
-            return ToolResult.fail("The message is ready in $label, but I couldn't identify Send. Nothing was sent.")
+        tapSend(service, app, AppChat(pkg, label))?.let { return ToolResult.fail(it) }
         return ToolResult.ok("Boss, I sent it to your own $label chat.")
     }
 
     private suspend fun openConversation(person: Contacts.Contact, app: String, pkg: String, service: JarvisAccessibilityService, text: String = ""): String? {
-        val label = if (app == "whatsapp") "WhatsApp" else "Messenger"
+        val label = chatLabel(app)
         if (app == "whatsapp") {
             val number = international(person.number)
                 ?: return "Save ${person.name}'s number with its country code before using WhatsApp."
-            val uri = Uri.parse("https://wa.me/$number").buildUpon().appendQueryParameter("text", text).build()
-            if (!context.launch(Intent(Intent.ACTION_VIEW, uri).setPackage(pkg))) return "I couldn't open WhatsApp."
+            if (!context.launch(Intent(Intent.ACTION_VIEW, waUri(number, text)).setPackage(pkg))) return "I couldn't open WhatsApp."
         } else if (!openContactRow(person, pkg)) {
             val launch = context.packageManager.getLaunchIntentForPackage(pkg) ?: return "I couldn't open Messenger."
             if (!context.launch(launch) || !pollUntil(20, 250) { service.appPackage() == pkg }) return "I couldn't open Messenger. Unlock the phone and try again."
