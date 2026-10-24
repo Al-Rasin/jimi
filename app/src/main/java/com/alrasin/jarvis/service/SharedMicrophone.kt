@@ -40,7 +40,9 @@ internal class SharedMicrophone(
         val minimum = AudioRecord.getMinBufferSize(sampleRate, AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT)
         check(minimum > 0) { "Microphone does not support 16 kHz mono PCM" }
         val rec = AudioRecord.Builder()
-            .setAudioSource(MediaRecorder.AudioSource.VOICE_COMMUNICATION)
+            // Not VOICE_COMMUNICATION: Google's scam guard reads that as a live call and then blocks
+            // and nags about every accessibility service ("Can't complete action during call").
+            .setAudioSource(MediaRecorder.AudioSource.VOICE_RECOGNITION)
             .setAudioFormat(AudioFormat.Builder().setSampleRate(sampleRate)
                 .setChannelMask(AudioFormat.CHANNEL_IN_MONO).setEncoding(AudioFormat.ENCODING_PCM_16BIT).build())
             .setBufferSizeInBytes(maxOf(minimum, sampleRate * 2))
