@@ -2,14 +2,13 @@ package com.alrasin.jarvis.agent
 
 import android.accessibilityservice.AccessibilityService
 import android.content.Context
-import android.content.Intent
 import android.graphics.Rect
 import android.os.Bundle
-import android.provider.Settings
 import android.view.accessibility.AccessibilityNodeInfo
 import com.alrasin.jarvis.actions.AppList
 import com.alrasin.jarvis.actions.JarvisAccessibilityService
 import com.alrasin.jarvis.core.isLocked
+import com.alrasin.jarvis.core.openApp
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.delay
@@ -35,7 +34,7 @@ class AccessibilityAgentScreen(private val context: Context) : AgentScreen {
             val service = JarvisAccessibilityService.instance ?: return@withContext false
             if (action is AgentAction.OpenApp) {
                 actionContext.ensureActive()
-                return@withContext openApp(action.packageName) { actionContext.ensureActive() }
+                return@withContext context.openApp(apps, action.packageName) { actionContext.ensureActive() }
             }
             val root = service.agentRoot() ?: return@withContext false
             try {
@@ -158,18 +157,4 @@ class AccessibilityAgentScreen(private val context: Context) : AgentScreen {
         }
         return walk(root, 0)
     }
-
-    private fun openApp(name: String, beforeAction: () -> Unit): Boolean = runCatching {
-        val intent = if (name.lowercase() in setOf("settings", "phone settings", "com.android.settings")) {
-            Intent(Settings.ACTION_SETTINGS)
-        } else {
-            val matches = apps.all().filter { it.pkg == name || it.label.equals(name, ignoreCase = true) }
-            val app = matches.singleOrNull() ?: apps.find(name) ?: return false
-            if (app.pkg == context.packageName) return false
-            context.packageManager.getLaunchIntentForPackage(app.pkg) ?: return false
-        }
-        beforeAction()
-        context.startActivity(intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
-        true
-    }.getOrDefault(false)
 }

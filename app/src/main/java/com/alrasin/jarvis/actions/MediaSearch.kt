@@ -5,6 +5,8 @@ import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import com.alrasin.jarvis.core.ToolResult
+import com.alrasin.jarvis.core.isInstalled
+import com.alrasin.jarvis.core.launch
 import com.alrasin.jarvis.core.pollUntil
 import java.util.Locale
 

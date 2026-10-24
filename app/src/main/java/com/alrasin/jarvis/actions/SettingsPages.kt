@@ -6,7 +6,9 @@ import android.provider.Settings
 import com.alrasin.jarvis.core.JarvisLog
 import com.alrasin.jarvis.core.ToolResult
 import com.alrasin.jarvis.core.isLocked
+import com.alrasin.jarvis.core.launch
 import com.alrasin.jarvis.core.pollUntil
+import com.alrasin.jarvis.core.resolves
 import kotlinx.coroutines.delay
 
 /**
@@ -24,7 +26,7 @@ class SettingsPages(private val context: Context) {
             val name = f.name
             if (!name.startsWith("ACTION_") || !name.endsWith("_SETTINGS")) return@mapNotNull null
             val action = runCatching { f.get(null) as? String }.getOrNull() ?: return@mapNotNull null
-            if (Intent(action).resolveActivity(context.packageManager) == null) null else page(action, name)
+            if (!context.resolves(Intent(action))) null else page(action, name)
         }
     }
 

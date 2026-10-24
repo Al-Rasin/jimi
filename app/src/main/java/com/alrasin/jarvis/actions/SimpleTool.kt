@@ -1,7 +1,5 @@
 package com.alrasin.jarvis.actions
 
-import android.content.Context
-import android.content.Intent
 import com.alrasin.jarvis.core.ArgSpec
 import com.alrasin.jarvis.core.Risk
 import com.alrasin.jarvis.core.Tool
@@ -22,9 +20,3 @@ class SimpleTool(
 
 fun arg(name: String, description: String, required: Boolean = true, choices: List<String>? = null) =
     ArgSpec(name, description, required, choices)
-
-/** Starts an activity from the service (background start is allowed: overlay permission, granted by root at setup). */
-fun Context.launch(intent: Intent): Boolean = runCatching {
-    startActivity(intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
-    true
-}.getOrDefault(false)

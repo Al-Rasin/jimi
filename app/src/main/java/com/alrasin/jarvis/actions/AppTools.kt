@@ -5,6 +5,8 @@ import android.content.Intent
 import android.net.Uri
 import com.alrasin.jarvis.core.Tool
 import com.alrasin.jarvis.core.ToolResult
+import com.alrasin.jarvis.core.launch
+import com.alrasin.jarvis.core.openApp
 import com.alrasin.jarvis.brain.RuleMatcher
 
 /** Launchable apps, cached a few minutes (PLAN 4.3 Apps group). */
@@ -67,15 +69,8 @@ class AppList(private val context: Context) {
 fun appTools(context: Context, apps: AppList): List<Tool> = listOf(
     SimpleTool("open_app", "Open an app by name", listOf(arg("app", "app name, e.g. YouTube"))) { c, _ ->
         val name = c.arg("app") ?: return@SimpleTool ToolResult.fail("Which app?")
-        if (name in listOf("settings", "phone settings")) {
-            return@SimpleTool if (context.launch(Intent(android.provider.Settings.ACTION_SETTINGS)))
-                ToolResult.ok("Boss, I opened settings.")
-            else ToolResult.fail("Boss, I couldn't open settings.")
-        }
-        val app = apps.find(name) ?: return@SimpleTool ToolResult.fail("I can't find an app called $name.")
-        val intent = context.packageManager.getLaunchIntentForPackage(app.pkg)
-            ?: return@SimpleTool ToolResult.fail("${app.label} can't be opened.")
-        if (context.launch(intent)) ToolResult.ok("Boss, I opened ${app.label}.") else ToolResult.fail("Couldn't open ${app.label}.")
+        val label = if (name.lowercase() in setOf("settings", "phone settings")) "settings" else apps.find(name)?.label ?: name
+        if (context.openApp(apps, name)) ToolResult.ok("Boss, I opened $label.") else ToolResult.fail("I can't find or open $label.")
     },
     SimpleTool("close_app", "Close (force stop) an app", listOf(arg("app", "app name"))) { c, _ ->
         val name = c.arg("app") ?: return@SimpleTool ToolResult.fail("Which app?")
@@ -94,5 +89,3 @@ fun appTools(context: Context, apps: AppList): List<Tool> = listOf(
         else ToolResult.fail("No browser found.")
     },
 )
-
-fun Context.isInstalled(pkg: String) = runCatching { packageManager.getPackageInfo(pkg, 0); true }.getOrDefault(false)

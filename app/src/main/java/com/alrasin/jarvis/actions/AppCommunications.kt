@@ -8,6 +8,8 @@ import android.provider.ContactsContract
 import android.telephony.PhoneNumberUtils
 import android.telephony.TelephonyManager
 import com.alrasin.jarvis.core.ToolResult
+import com.alrasin.jarvis.core.isInstalled
+import com.alrasin.jarvis.core.launch
 import com.alrasin.jarvis.core.pollUntil
 import kotlinx.coroutines.delay
 import java.util.Locale

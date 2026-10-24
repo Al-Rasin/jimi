@@ -6,6 +6,7 @@ import android.content.Intent
 import android.content.pm.PackageManager
 import com.alrasin.jarvis.core.JarvisLog
 import com.alrasin.jarvis.core.isLocked
+import com.alrasin.jarvis.core.launch
 import com.alrasin.jarvis.core.pollUntil
 
 /**
