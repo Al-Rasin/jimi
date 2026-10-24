@@ -12,21 +12,35 @@ import com.alrasin.jarvis.actions.a11y.findFirst
 import com.alrasin.jarvis.actions.a11y.label
 import com.alrasin.jarvis.actions.a11y.scroll
 import com.alrasin.jarvis.actions.a11y.replaceNodeText
+import com.alrasin.jarvis.agent.appmap.AppLearner
+import com.alrasin.jarvis.agent.appmap.AppWatcher
 import com.alrasin.jarvis.core.JarvisLog
+import dagger.hilt.android.AndroidEntryPoint
+import javax.inject.Inject
 import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlin.coroutines.resume
 
 /** Screen reading and tapping (PLAN 4.5). Enabled by root at setup (Settings.Secure). */
+@AndroidEntryPoint
 class JarvisAccessibilityService : AccessibilityService() {
+    @Inject lateinit var appLearner: AppLearner
+    private var watcher: AppWatcher? = null
+
     override fun onServiceConnected() {
         instance = this
+        watcher = AppWatcher(this, appLearner)
         JarvisLog.i("accessibility connected")
     }
 
-    override fun onAccessibilityEvent(event: AccessibilityEvent?) = Unit
+    override fun onAccessibilityEvent(event: AccessibilityEvent?) {
+        if (event != null) watcher?.onEvent(event)
+    }
+
     override fun onInterrupt() = Unit
 
     override fun onDestroy() {
+        watcher?.stop()
+        watcher = null
         if (instance === this) instance = null
         super.onDestroy()
     }
