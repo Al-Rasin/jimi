@@ -46,7 +46,7 @@ def key_of(r):
 
 def label(a):
     t = TEACHERS[a.teacher]
-    out = DATA / f"labels_{t['name']}.jsonl"
+    out = a.labels_dir / f"labels_{t['name']}.jsonl"
     goals = [json.loads(l) for l in open(a.goals) if l.strip()]
     done = done_keys(out)
     todo = [g for g in goals if key_of(g) not in done]
@@ -72,7 +72,7 @@ def label(a):
 def merge(a):
     rows = {}
     for t in TEACHERS.values():
-        p = DATA / f"labels_{t['name']}.jsonl"
+        p = a.labels_dir / f"labels_{t['name']}.jsonl"
         rows[t["name"]] = {key_of(r): r for r in map(json.loads, filter(str.strip, open(p)))} if p.is_file() else {}
     na, nb = (rows[t["name"]] for t in TEACHERS.values())
     wanted = {key_of(json.loads(l)) for l in open(a.goals) if l.strip()}   # old labels of dropped goals stay out
@@ -100,6 +100,7 @@ def main():
     ap.add_argument("--port", type=int, default=8081)
     ap.add_argument("--limit", type=int, default=0)
     ap.add_argument("--raw", type=pathlib.Path, default=DATA / "raw")
+    ap.add_argument("--labels-dir", type=pathlib.Path, default=DATA, help="where labels_<teacher>.jsonl live")
     ap.add_argument("--goals", type=pathlib.Path, default=DATA / "goals.jsonl")
     ap.add_argument("--out", type=pathlib.Path, default=DATA / "labelled.jsonl")
     a = ap.parse_args()

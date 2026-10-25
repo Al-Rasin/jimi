@@ -1,0 +1,13 @@
+{
+  "id": "REPLACE_USERNAME/jarvis-screen-label",
+  "title": "Jarvis screen label",
+  "code_file": "kernel.py",
+  "language": "python",
+  "kernel_type": "script",
+  "is_private": true,
+  "enable_gpu": true,
+  "enable_internet": true,
+  "dataset_sources": ["REPLACE_USERNAME/jarvis-screen-teachers"],
+  "competition_sources": [],
+  "kernel_sources": []
+}
