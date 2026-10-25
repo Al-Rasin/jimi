@@ -75,11 +75,12 @@ def merge(a):
         p = DATA / f"labels_{t['name']}.jsonl"
         rows[t["name"]] = {key_of(r): r for r in map(json.loads, filter(str.strip, open(p)))} if p.is_file() else {}
     na, nb = (rows[t["name"]] for t in TEACHERS.values())
+    wanted = {key_of(json.loads(l)) for l in open(a.goals) if l.strip()}   # old labels of dropped goals stay out
     kept = total = 0
     with open(a.out, "w") as f:
         for k, ra in na.items():
             rb = nb.get(k)
-            if not rb or not ra["action"] or not rb["action"]:
+            if k not in wanted or not rb or not ra["action"] or not rb["action"]:
                 continue
             total += 1
             ka, kb = action_key(ra["action"]), action_key(rb["action"])

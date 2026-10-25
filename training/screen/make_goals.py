@@ -18,13 +18,15 @@ from prompt import elements, parse_elements  # noqa: E402
 ROOT = pathlib.Path(__file__).resolve().parents[2]
 DATA = ROOT / "training/data/screen"
 HELD_OUT = {"settings", "display", "home"}
+# "Open Back" taught the model to answer target 0 (the Back button) on unknown screens; "Go back" covers it.
+NAV_LABELS = {"back", "navigate up", "more options", "up"}
 
 
 def template_goals(path):
     _, _, _, els = parse_elements(path)
     goals = []
     for _, label, _, flags, _ in els:
-        if "click" in flags and label and not looks_private(label):
+        if "click" in flags and label and label.strip().lower() not in NAV_LABELS and not looks_private(label):
             goals += [f"Open {label}", f"Go to {label}"]
     goals.append("Go back")
     if any("scroll" in f for _, _, _, f, _ in els):

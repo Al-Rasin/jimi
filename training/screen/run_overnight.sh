@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # Overnight chain (ROADMAP #66). Run AFTER collect.py (needs the phone). Teachers run one at a time.
 #   bash training/screen/run_overnight.sh [--limit N]      # N = rows per teacher, for a short test
+# Env: LLM_GOALS=1 (teacher A also writes natural goals), ITERS (default 600), LR (default 2e-4).
 set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 cd "$ROOT"
@@ -31,8 +32,8 @@ start_server() {   # $1 = a|b|gguf path, $2 = port
 }
 
 echo "== $(date) start; log $LOG"
-python3 "$S/make_goals.py"
 start_server a 8081
+if [ "${LLM_GOALS:-0}" = 1 ]; then python3 "$S/make_goals.py" --llm-goals --port 8081; else python3 "$S/make_goals.py"; fi
 python3 "$S/label.py" --teacher a --port 8081 ${LIMIT_ARGS[@]+"${LIMIT_ARGS[@]}"}
 stop_server
 start_server b 8082
@@ -42,6 +43,7 @@ python3 "$S/label.py" --merge
 python3 "$S/make_dataset.py"
 GGUF="models/smollm2-135m-jarvis-screen-$DATE-Q8_0.gguf"
 "$PY" "$S/finetune.py" --out "training/outputs/screen/adapter-$DATE" --gguf "$GGUF" \
+  --iters "${ITERS:-600}" --lr "${LR:-2e-4}" \
   --stop-file training/outputs/screen/STOP --max-seconds 10800
 [ -f "$GGUF" ] || { echo "no gguf produced (converter missing?)"; exit 1; }
 start_server "$GGUF" 8083
