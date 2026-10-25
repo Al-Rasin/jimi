@@ -86,7 +86,9 @@ class JarvisNotificationListener : NotificationListenerService() {
         if (sbn.key == lastCallKey) return
         lastCallKey = sbn.key
         val who = n.extras.getCharSequence(Notification.EXTRA_TITLE)?.toString().orEmpty()
-        JarvisCoreService.say(this, CallText.ringing(who, app))
+        scope.launch {
+            if (settings.listeningEnabled.first()) JarvisCoreService.say(this@JarvisNotificationListener, CallText.ringing(who, app))
+        }
     }
 
     override fun onNotificationRemoved(sbn: StatusBarNotification) {

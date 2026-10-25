@@ -498,6 +498,7 @@ class JarvisCoreService : LifecycleService() {
             if (ringAnnounced) return
             ringAnnounced = true
             lifecycleScope.launch {
+                if (!settings.listeningEnabled.first()) return@launch   // Jimi is off: stay quiet
                 val name = withContext(Dispatchers.IO) { if (number.isBlank()) "" else registry.contacts.nameFor(number) }
                 announce(CallText.ringing(name))
             }
