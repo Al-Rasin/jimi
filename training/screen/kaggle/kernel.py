@@ -11,6 +11,7 @@ import sys
 import time
 from pathlib import Path
 
+N_GOALS = 8           # natural goals per screen (round 3 had 3; the eval misses were natural goals)
 CHUNK = 1500          # goals per vLLM call; rows are appended after each chunk
 MAX_LEN = 6144
 
@@ -88,14 +89,15 @@ def run_stage(stage):
 
     if stage == "4b":   # stage 1: natural goals, thinking off, temp 0.7
         t0 = time.time()
-        gp = ("Below is the UI of an Android screen. Write 3 short, natural things a user might ask a voice assistant "
-              "to do on this screen. One per line, no numbering, no extra text.\n\n")
+        gp = (f"Below is the UI of an Android screen. Write {N_GOALS} short, natural things a user might ask a voice "
+              "assistant to do on this screen. Mix: open a page, change a setting (e.g. 'Change the ...', 'Turn on ...'), "
+              "use a feature. Do not just repeat element names. One per line, no numbering, no extra text.\n\n")
         texts = generate(llm, tok, [[{"role": "user", "content": gp + s["elements"]}] for s in screens],
                          think=False, temperature=0.7, max_tokens=3000)
         rows, n_llm = [], 0
         for s, text in zip(screens, texts):
             text = strip_think(text)
-            llm_g = [l.strip(" -*\t") for l in text.splitlines() if 3 < len(l.strip()) < 80 and not looks_private(l)][:3]
+            llm_g = [l.strip(" -*\t") for l in text.splitlines() if 3 < len(l.strip()) < 80 and not looks_private(l)][:N_GOALS]
             n_llm += len(llm_g)
             rows += [{"screen": s["screen"], "goal": g} for g in dict.fromkeys(s["template_goals"] + llm_g)]
         random.Random(0).shuffle(rows)

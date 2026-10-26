@@ -9,6 +9,7 @@ Only element TEXT goes up (never xml/png). Output: training/data/screen/kaggle-u
 import argparse
 import json
 import pathlib
+import random
 import shutil
 import sys
 
@@ -27,6 +28,8 @@ def main():
     ap.add_argument("--mode", choices=["smoke", "real"], required=True)
     ap.add_argument("--run-id")
     ap.add_argument("--raw", type=pathlib.Path, default=DATA / "raw")
+    ap.add_argument("--max-templates", type=int, default=0,
+                    help="keep at most N template goals per screen (0 = all); big screens flooded round 3")
     a = ap.parse_args()
     run_id = a.run_id or a.mode
     out = DATA / f"kaggle-upload-{run_id}"
@@ -36,7 +39,10 @@ def main():
     for xml in sorted(a.raw.glob("*.xml")):
         if xml.stem in HELD_OUT or xml.name.startswith("."):
             continue
-        rows.append({"screen": xml.name, "elements": elements(xml), "template_goals": template_goals(xml)})
+        goals = template_goals(xml)
+        if a.max_templates and len(goals) > a.max_templates:
+            goals = random.Random(xml.name).sample(goals, a.max_templates)
+        rows.append({"screen": xml.name, "elements": elements(xml), "template_goals": goals})
     if a.mode == "smoke":
         rows = rows[:5]
     # privacy re-check on every label that will leave the machine
