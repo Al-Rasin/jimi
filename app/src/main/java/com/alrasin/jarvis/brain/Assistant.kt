@@ -84,6 +84,8 @@ class Assistant @Inject constructor(
     private val smokeContactChoice = PendingContactChoice()
     private val smokeConversation = ConversationContext()
     private var lastReply = ""
+    /** Last routing step, so a crash reply can say what failed (ROADMAP §M.3). */
+    private var stage = "start"
     private val history = ArrayDeque<Exchange>()
     /** Cloud answers only: safe to send back to the cloud as context (no tool data, D-035). */
     private val cloudHistory = ArrayDeque<Exchange>()
@@ -138,9 +140,10 @@ class Assistant @Inject constructor(
         smoke?.requestedCall = null
         smoke?.ok = false
         val text = input.heard.trim()
+        stage = "start"
         val r = if (text.isEmpty()) Reply(Persona.DIDNT_GET) else runCatching { route(text, input, speak) }
             .onFailure { if (it is CancellationException) throw it; JarvisLog.e("assistant failed", it) }
-            .getOrElse { smoke?.ok = false; smoke?.route = "error"; Reply("Sorry ${Persona.ADDRESS}, something went wrong.") }
+            .getOrElse { smoke?.ok = false; smoke?.route = "error"; Reply(ReplyText.routeFailed(stage)) }
         val id = if (smoke != null) 0L else turns.insert(
             ConversationTurn(
                 timeMs = System.currentTimeMillis(), source = input.source, heard = text, rawText = input.raw,
@@ -164,6 +167,7 @@ class Assistant @Inject constructor(
     private suspend fun route(text: String, input: Input, speak: (String) -> Unit): Reply {
         val smoke = coroutineContext[SmokeSession]
         fun trace(route: String, call: ToolCall? = null, ok: Boolean = true) {
+            stage = route
             smoke?.route = route
             smoke?.call = call
             smoke?.ok = ok
@@ -233,6 +237,11 @@ class Assistant @Inject constructor(
                 trace("confirm", call, false)
                 return Reply("That confirmation expired. Please repeat the request.", expectAnswer = true)
             }
+        }
+        if (input.source == "follow_up" && rule == null && smallTalk == null && followUp == null && ReplyText.isNoise(text)) {
+            trace("follow_up_noise", ok = false)
+            JarvisLog.i("follow-up noise dropped: $text")
+            return Reply("", endConversation = true)
         }
         smallTalk?.let { trace("smalltalk"); return Reply(it) }
         var query = text
@@ -304,6 +313,14 @@ class Assistant @Inject constructor(
         conversation.clear()
     }
 
+    /** Tool replies never speak a package name; use the app label or "that app". */
+    private fun plain(text: String) = ReplyText.withoutPackages(text) { pkg ->
+        runCatching {
+            val pm = context.packageManager
+            pm.getApplicationLabel(pm.getApplicationInfo(pkg, 0)).toString()
+        }.getOrNull()
+    }
+
     private fun monotonicMillis() = System.nanoTime() / 1_000_000
 
     private fun contextLine(): String {
@@ -360,6 +377,7 @@ class Assistant @Inject constructor(
             }
         }
         smoke?.call = call
+        stage = "tool:${call.tool}"
         val ctx = ToolContext(context, input.heard, input.locked)
         return when (val o = executor.execute(call, ctx, confirmed, input.voiceOk)) {
             is Outcome.NeedConfirm -> {
@@ -376,7 +394,7 @@ class Assistant @Inject constructor(
             is Outcome.Denied -> {
                 smoke?.ok = false
                 log(input.heard, call, source, ToolResult.fail(o.why))
-                Reply(o.why, tool = call.tool)
+                Reply(plain(o.why), tool = call.tool)
             }
             is Outcome.Done -> {
                 smoke?.ok = o.result.ok
@@ -397,7 +415,7 @@ class Assistant @Inject constructor(
                     val text = answer?.text ?: o.result.say
                     return Reply(text + if (sources.isBlank()) "" else "\n\n$sources", o.result.data, call.tool)
                 }
-                Reply(o.result.say, o.result.data, call.tool)
+                Reply(plain(o.result.say), o.result.data, call.tool)
             }
         }
     }

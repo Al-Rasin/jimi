@@ -73,7 +73,7 @@ class ToolExecutor @Inject constructor(private val registry: ToolRegistry) {
     private suspend fun run(tool: Tool, call: ToolCall, ctx: ToolContext): ToolResult =
         runCatching { tool.run(call, ctx) }
             .onFailure { JarvisLog.e("tool ${call.tool} failed", it) }
-            .getOrElse { ToolResult.fail("Sorry, that failed: ${it.message ?: it.javaClass.simpleName}") }
+            .getOrElse { ToolResult.fail("Sorry, ${call.tool.replace('_', ' ')} didn't work this time.") }   // cause is in the log
 }
 
 internal enum class Unlock { NONE, UNLOCK, VOICE_ID_OFF, VOICE_MISMATCH, PAYMENT_APP }

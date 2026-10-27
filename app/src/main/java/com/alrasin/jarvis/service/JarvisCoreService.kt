@@ -568,8 +568,10 @@ class JarvisCoreService : LifecycleService() {
                     _phase.value = PHASE_SPEAKING
                 }
                 JarvisLog.i("reply (${r.tool ?: "talk"}): ${r.text.length} characters, ${SystemClock.elapsedRealtime() - asked} ms after command")
-                if (!r.spokenAlready && r.tool != "panic") say(r.text, epoch)
-                Notifications.showReply(this@JarvisCoreService, text, r.text)
+                if (r.text.isNotBlank()) {   // blank = follow-up noise dropped quietly
+                    if (!r.spokenAlready && r.tool != "panic") say(r.text, epoch)
+                    Notifications.showReply(this@JarvisCoreService, text, r.text)
+                }
                 if (r.tool == "panic") synchronized(speechState) {
                     if (epoch != speechEpoch) return@launch
                     shutUp(cancelReply = false)

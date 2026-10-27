@@ -34,6 +34,8 @@ fun timeTools(context: Context): List<Tool> = listOf(
         val time = c.arg("time") ?: return@SimpleTool ToolResult.fail("For what time?")
         val plan = try {
             resolveAlarm(time, c.arg("date"), c.arg("repeat"), LocalDateTime.now())
+        } catch (e: NumberFormatException) {
+            return@SimpleTool ToolResult.fail("I couldn't read that alarm time. Say it like 7:30 AM.")
         } catch (e: IllegalArgumentException) {
             return@SimpleTool ToolResult.fail(e.message ?: "I couldn't resolve that alarm time.")
         }
