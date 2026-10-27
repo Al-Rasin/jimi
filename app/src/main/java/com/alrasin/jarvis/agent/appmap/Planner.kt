@@ -125,23 +125,29 @@ object MapPlan {
 
     /**
      * How well a live screen matches a known one, 0 = not it. Same window class → [AppFingerprint.sameScreen].
-     * Card screens without a window class ("card:") → share of their labels seen on the live screen.
+     * Card screens without a window class ("card:") → share of their labels seen on the live screen
+     * (its parts or any of [liveTexts]).
      */
-    fun matchScore(known: String, live: String): Double {
+    fun matchScore(known: String, live: String, liveTexts: Set<String> = emptySet()): Double {
         val kParts = parts(known)
         val lParts = parts(live)
         if (kParts.isEmpty()) return 0.0
         val cardOnly = known.substringBefore("::").startsWith("card:")
         if (!cardOnly && AppFingerprint.sameScreen(known, live)) return 1.0
-        val kLabels = kParts.map { it.substringAfter(':') }.toSet()
-        val lLabels = lParts.map { it.substringAfter(':') }.toSet()
+        val kLabels = kParts.map { alias(it.substringAfter(':')) }.toSet()
+        val lLabels = (lParts.map { it.substringAfter(':') } + liveTexts).map(::alias).toSet()
         val share = kLabels.count { it in lLabels }.toDouble() / kLabels.size
         return if (share >= CARD_MATCH) share else 0.0
     }
 
+    /** Apps name the same thing differently across versions ("Navigate up" vs "Back"). */
+    private fun alias(label: String) = LABEL_ALIASES[label] ?: label
+
+    private val LABEL_ALIASES = mapOf("back" to "navigate up", "profile picture" to "profile photo")
+
     /** Known screens the live screen looks like, best first. */
-    fun whereAmI(g: Graph, liveFingerprint: String): List<Long> =
-        g.screens.map { it.id to matchScore(it.fingerprint, liveFingerprint) }
+    fun whereAmI(g: Graph, liveFingerprint: String, liveTexts: Set<String> = emptySet()): List<Long> =
+        g.screens.map { it.id to matchScore(it.fingerprint, liveFingerprint, liveTexts) }
             .filter { it.second > 0 }.sortedByDescending { it.second }.map { it.first }
 
     /** Answer for "what can you do in X": the card if there is one, else the learned screen names. */
@@ -212,7 +218,10 @@ class Planner @Inject constructor(
         var replanned = false
         while (true) {
             val starts = startScreens(service, g, app)
-            val plan = when (val p = MapPlan.plan(g, target, starts)) {
+            // Learned screens are often not linked to card screens; try from the launch screen too.
+            val first = MapPlan.plan(g, target, starts)
+            val planned = if (first == MapPlan.Plan.NoPath) MapPlan.plan(g, target, starts + launchScreens(g, app)) else first
+            val plan = when (val p = planned) {
                 is MapPlan.Plan.Go -> p
                 is MapPlan.Plan.Ambiguous -> return ToolResult.fail("Which one: ${p.options.joinToString(" or ")}?")
                 MapPlan.Plan.NotFound -> return ToolResult.fail("I don't know \"$target\" in ${app.name}.")
@@ -254,7 +263,7 @@ class Planner @Inject constructor(
 
     private fun onScreen(service: JarvisAccessibilityService, s: AppScreen): Boolean {
         val live = service.liveScreen() ?: return false
-        return MapPlan.matchScore(s.fingerprint, live.fingerprint) > 0
+        return MapPlan.matchScore(s.fingerprint, live.fingerprint, live.texts) > 0
     }
 
     private suspend fun pause(): Boolean {
@@ -262,11 +271,15 @@ class Planner @Inject constructor(
         return true
     }
 
-    /** Where we are now; unknown screen → the card's launch screen (the app usually opens there). */
+    /** Every known screen the live one looks like; unknown screen → the card's launch screen (the app usually opens there). */
     private fun startScreens(service: JarvisAccessibilityService, g: MapPlan.Graph, app: App): Set<Long> {
         service.liveScreen()?.takeIf { it.pkg == app.pkg }?.let { live ->
-            MapPlan.whereAmI(g, live.fingerprint).firstOrNull()?.let { return setOf(it) }
+            MapPlan.whereAmI(g, live.fingerprint, live.texts).takeIf { it.isNotEmpty() }?.let { return it.toSet() }
         }
+        return launchScreens(g, app)
+    }
+
+    private fun launchScreens(g: MapPlan.Graph, app: App): Set<Long> {
         val launch = app.card?.screens?.firstOrNull { it.launch }?.name
         return g.screens.filter { it.name == launch }.map { it.id }.toSet()
     }

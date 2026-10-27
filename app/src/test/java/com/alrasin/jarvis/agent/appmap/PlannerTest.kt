@@ -111,6 +111,20 @@ class PlannerTest {
         assertEquals(0.0, MapPlan.matchScore(known, chatsLive), 0.0)
     }
 
+    @Test fun cardScreenMatchesPopupByVisibleTexts() {
+        val known = AppFingerprint.compute("card:com.whatsapp/menu", listOf("button:linked devices", "button:new group", "button:settings", "button:starred"))
+        val popup = AppFingerprint.compute("android.widget.FrameLayout", emptyList())
+        assertEquals(0.0, MapPlan.matchScore(known, popup), 0.0)
+        val texts = setOf("new group", "broadcast lists", "linked devices", "starred", "read all", "settings")
+        assertTrue(MapPlan.matchScore(known, popup, texts) > 0)
+    }
+
+    @Test fun cardScreenMatchesRenamedLabels() {
+        val known = AppFingerprint.compute("card:com.whatsapp/privacy", listOf("button:navigate up", "button:last seen and online", "button:profile photo", "button:read receipts", "button:blocked contacts"))
+        val live = AppFingerprint.compute("a.Privacy", listOf("button:back", "button:last seen and online", "button:profile picture", "button:read receipts"))
+        assertTrue(MapPlan.matchScore(known, live) >= 0.6)
+    }
+
     @Test fun learnedScreenMatchesByFingerprint() {
         val fp = AppFingerprint.compute("a.Main", listOf("button:a", "button:b", "button:c", "button:d", "button:e"))
         val g = MapPlan.Graph(listOf(AppScreen(7, "a", fp, "Main", 0)), emptyMap(), emptyList())

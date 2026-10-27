@@ -62,7 +62,7 @@ data class Recipe(
 object RecipeBook {
     data class Match(val recipe: Recipe, val params: Map<String, String>)
 
-    private val PARAM = Regex("\\{(\\w+)}")
+    private val PARAM = Regex("\\{(\\w+)\\}")
     private const val FIRST_RESULT = "{first result}"
 
     fun fromCard(card: AppCard, pkg: String): List<Recipe> = card.tasks.map { task ->
@@ -382,8 +382,8 @@ private class LiveRecipeScreen(
         val known = card?.screen(expect)
         val inApp = service.appPackage() == app.pkg
         if (card != null && known != null) {
-            val live = service.liveScreen()?.fingerprint.orEmpty()
-            if (MapPlan.matchScore(AppCard.fingerprint(card, known), live) > 0) return true
+            val live = service.liveScreen()
+            if (MapPlan.matchScore(AppCard.fingerprint(card, known), live?.fingerprint.orEmpty(), live?.texts.orEmpty()) > 0) return true
             // Unchecked card selectors can't judge the screen; being in the app is enough.
             if (!card.verified && inApp) return true
         } else if (card != null && inApp) {
@@ -397,7 +397,7 @@ private class LiveRecipeScreen(
     private fun link(task: String): Boolean {
         val link = app.card?.deepLinks?.firstOrNull { it.task == task } ?: return false
         val values = params + ("number" to (params["number"] ?: params["contact"].orEmpty()))
-        val uri = Regex("\\{(\\w+)}").replace(link.uri) { Uri.encode(values[it.groupValues[1]].orEmpty()) }
+        val uri = Regex("\\{(\\w+)\\}").replace(link.uri) { Uri.encode(values[it.groupValues[1]].orEmpty()) }
         val intent = if (uri.isBlank()) Intent(link.action) else Intent(link.action, Uri.parse(uri))
         return context.launch(Intent(intent).setPackage(app.pkg)) || context.launch(intent)
     }

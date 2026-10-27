@@ -47,10 +47,21 @@ class AppWatcher(private val service: AccessibilityService, private val learner:
         val nodes = ArrayList<ScreenStructure.RawNode>()
         collect(root, parentClass = "", inList = false, nodes)
         val parts = ScreenStructure.parts(ScreenStructure.elements(nodes))
-        return LiveScreen(pkg, AppFingerprint.compute(windowClass[pkg] ?: pkg, parts))
+        return LiveScreen(pkg, AppFingerprint.compute(windowClass[pkg] ?: pkg, parts), texts(pkg, root))
     }
 
-    data class LiveScreen(val pkg: String, val fingerprint: String)
+    /** [texts] = every visible label in all the app's windows, cleaned; card screens match on these. */
+    data class LiveScreen(val pkg: String, val fingerprint: String, val texts: Set<String> = emptySet())
+
+    /** Popup menus and tooltips are their own windows, often not the active one, so read every window of [pkg]. */
+    private fun texts(pkg: String, active: AccessibilityNodeInfo): Set<String> {
+        val roots = runCatching { service.windows }.getOrDefault(emptyList()).sortedByDescending { it.layer }
+            .mapNotNull { w -> w.root?.takeIf { it.packageName?.toString() == pkg } }.ifEmpty { listOf(active) }
+        val nodes = ArrayList<ScreenStructure.RawNode>()
+        roots.forEach { collect(it, parentClass = "", inList = false, nodes) }
+        return nodes.filterNot { it.editable || it.password }
+            .flatMap { listOf(it.desc, it.text) }.map(ScreenStructure::clean).filter { it.isNotEmpty() }.toSet()
+    }
 
     /** Raw nodes of [root] for the app explorer (§J.5). */
     fun liveNodes(root: AccessibilityNodeInfo): LiveNodes? {
