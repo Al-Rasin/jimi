@@ -19,6 +19,8 @@ import java.time.ZoneId
 import java.time.format.DateTimeFormatter
 import java.util.Calendar
 import java.util.Locale
+import kotlin.math.abs
+import kotlinx.coroutines.delay
 
 /** Alarms and timers through the phone's Clock app. */
 fun timeTools(context: Context): List<Tool> = listOf(
@@ -27,7 +29,7 @@ fun timeTools(context: Context): List<Tool> = listOf(
         listOf(
             arg("time", "24h time HH:mm, e.g. 07:30"),
             arg("label", "alarm name", required = false),
-            arg("repeat", "daily or a weekday name", required = false),
+            arg("repeat", "daily, weekdays, weekends or a weekday name", required = false),
             arg("date", "yyyy-MM-dd if not the next time", required = false),
         ),
     ) { c, _ ->
@@ -50,17 +52,17 @@ fun timeTools(context: Context): List<Tool> = listOf(
         if (days != null) i.putExtra(AlarmClock.EXTRA_DAYS, ArrayList(days))
         if (!context.launchClock(i)) return@SimpleTool ToolResult.fail("The clock app didn't take the alarm.")
         val expected = plan.at.atZone(ZoneId.systemDefault()).toInstant().toEpochMilli()
-        if (!awaitAlarmState(context) { next ->
-                if (next != null && !matchesAlarmMinute(next, expected)) {
-                    JarvisLog.i(if (next < expected) {
-                        "set_alarm: requested alarm cannot be seen past an earlier alarm"
-                    } else {
-                        "set_alarm: next alarm differs from requested time"
-                    })
-                }
-                matchesAlarmMinute(next, expected)
-            }) {
-            JarvisLog.e("set_alarm: Clock request sent, but the requested alarm could not be confirmed")
+        var seen: Long? = null
+        val check: (Long?) -> Boolean = { next -> seen = next; matchesAlarmMinute(next, expected) }
+        var verified = awaitAlarmState(context, check)
+        // An earlier alarm hides the new one; sending again would only make a copy.
+        if (!verified && seen.let { it == null || it > expected }) {
+            JarvisLog.i("set_alarm: not seen (next=$seen), sending once more")
+            if (context.launchClock(Intent(i))) verified = awaitAlarmState(context, check)
+        }
+        if (!verified) verified = clockHasAlarm(expected)
+        if (!verified) {
+            JarvisLog.e("set_alarm: Clock request sent, but the requested alarm could not be confirmed (next=$seen)")
             return@SimpleTool ToolResult.ok("I asked Clock to set ${plan.at.format(ALARM_DATE_FORMAT)}, but could not verify it. Please check Clock.")
         }
         val repeatReply = if (plan.days != null) " I requested${plan.repeatText.removePrefix(",")}." else ""
@@ -73,8 +75,15 @@ fun timeTools(context: Context): List<Tool> = listOf(
             .putExtra(AlarmClock.EXTRA_LENGTH, secs)
             .putExtra(AlarmClock.EXTRA_SKIP_UI, true)
         c.arg("label")?.let { i.putExtra(AlarmClock.EXTRA_MESSAGE, it) }
+        val end = System.currentTimeMillis() + secs * 1000L
         if (!context.launchClock(i)) return@SimpleTool ToolResult.fail("The clock app didn't take the timer.")
-        JarvisLog.i("set_timer: Clock request sent; Android does not expose timer confirmation")
+        // Clock schedules a running timer as an alarm clock, so the next alarm shows it unless an alarm comes first.
+        var seen: Long? = null
+        val verified = awaitAlarmState(context) { next -> seen = next; next != null && abs(next - end) <= TIMER_SLACK_MS }
+        JarvisLog.i("set_timer: verified=$verified next=$seen end=$end")
+        if (!verified && seen.let { it == null || it > end + TIMER_SLACK_MS }) {
+            return@SimpleTool ToolResult.ok("I asked Clock to start a ${speakDuration(secs)} timer, but could not verify it. Please check Clock.")
+        }
         timerSetResult(secs)
     },
     SimpleTool(
@@ -84,13 +93,16 @@ fun timeTools(context: Context): List<Tool> = listOf(
         c.arg("time")?.let { cancelOneAlarm(context, it) }?.let { return@SimpleTool it }
         val alarmsSent = context.launchClock(Intent(AlarmClock.ACTION_DISMISS_ALARM)
             .putExtra(AlarmClock.EXTRA_ALARM_SEARCH_MODE, AlarmClock.ALARM_SEARCH_MODE_ALL))
+        // MIUI Clock has no handler for DISMISS_TIMER; a running timer is stopped in its screen below.
         val timersSent = context.launchClock(Intent(AlarmClock.ACTION_DISMISS_TIMER))
-        if (!alarmsSent || !timersSent) {
-            JarvisLog.e("cancel_alarm: Clock accepted alarm request=$alarmsSent, timer request=$timersSent")
-            return@SimpleTool ToolResult.fail("The clock didn't accept every turn-off request. Check the Clock app.")
+        JarvisLog.i("cancel_alarm: Clock accepted alarm request=$alarmsSent, timer request=$timersSent")
+        var noNextAlarm = awaitAlarmState(context) { it == null }
+        if (!noNextAlarm && timerRunning()) {
+            stopTimerInClock(context)
+            noNextAlarm = awaitAlarmState(context) { it == null }
         }
-        val noNextAlarm = awaitAlarmState(context) { it == null }
-        JarvisLog.i("cancel_alarm: no next alarm confirmed=$noNextAlarm; timer dismissal cannot be verified")
+        JarvisLog.i("cancel_alarm: no next alarm confirmed=$noNextAlarm")
+        if (!alarmsSent && !noNextAlarm) return@SimpleTool ToolResult.fail("The clock didn't accept the turn-off request. Check the Clock app.")
         cancelAlarmResult(noNextAlarm)
     },
 )
@@ -128,6 +140,31 @@ private suspend fun awaitAlarmState(context: Context, matches: (Long?) -> Boolea
     return matched && !failed
 }
 
+private const val TIMER_SLACK_MS = 5_000L
+
+/** Second check when an earlier alarm hides the new one: an enabled row in the Clock alarm table (root only). */
+private suspend fun clockHasAlarm(at: Long): Boolean {
+    val out = RootShell.run("content query --uri content://com.android.deskclock/alarm --projection enabled:alarmtime", log = false).out
+    return Regex("enabled=1, alarmtime=(\\d+)").findAll(out).any { abs(it.groupValues[1].toLong() - at) < 60_000 }
+}
+
+/** A running Clock timer is a TIMER_ALERT alarm (root only; false without root). */
+private suspend fun timerRunning(): Boolean =
+    RootShell.run("dumpsys alarm | grep -c TIMER_ALERT", log = false).out.trim().toIntOrNull()?.let { it > 0 } == true
+
+/** Opens the Clock timer tab and taps its stop button (bottom left on MIUI Clock). Best try. */
+private suspend fun stopTimerInClock(context: Context) {
+    if (!context.launchClock(Intent(AlarmClock.ACTION_SHOW_TIMERS))) return
+    delay(1_500)
+    val m = context.resources.displayMetrics
+    val size = Regex("(\\d+)x(\\d+)").find(RootShell.run("wm size", log = false).out)?.destructured
+    val w = size?.component1()?.toIntOrNull() ?: m.widthPixels
+    val h = size?.component2()?.toIntOrNull() ?: m.heightPixels
+    JarvisLog.i("cancel_alarm: tapping timer stop in Clock")
+    RootInput.tap((w * 0.387).toInt(), (h * 0.935).toInt())
+    delay(500)
+}
+
 internal fun hasScheduledAlarm(next: Long?): Boolean = next != null
 
 internal fun timerSetResult(seconds: Int): ToolResult =
@@ -150,38 +187,61 @@ private val ALARM_DATE_FORMAT = DateTimeFormatter.ofPattern("EEEE d MMMM, h:mm a
 internal data class AlarmPlan(val at: LocalDateTime, val days: List<Int>?, val repeatText: String)
 
 internal fun resolveAlarm(time: String, date: String?, repeat: String?, now: LocalDateTime): AlarmPlan {
-    val clock = runCatching { LocalTime.parse(time) }.getOrNull()
-    require(clock != null && clock.second == 0 && clock.nano == 0) { "Use an alarm time like 07:00." }
+    val (timeDate, clock) = readAlarmTime(time) ?: throw IllegalArgumentException("Use an alarm time like 07:00.")
     val requestedDate = date?.let {
         runCatching { LocalDate.parse(it) }.getOrNull()
             ?: throw IllegalArgumentException("Use an alarm date like 2026-10-23.")
+    } ?: timeDate?.takeIf { it != now.toLocalDate() || !now.toLocalDate().atTime(clock).isAfter(now) }
+    val repetition = repeat?.trim()?.lowercase(Locale.ROOT)?.removePrefix("every ")?.takeUnless { it == "none" || it.isEmpty() }
+    val repeatDays: List<DayOfWeek>? = when (repetition) {
+        null -> null
+        "daily", "day", "everyday" -> DayOfWeek.entries
+        "weekdays", "weekday" -> DayOfWeek.entries.take(5)
+        "weekends", "weekend" -> listOf(DayOfWeek.SATURDAY, DayOfWeek.SUNDAY)
+        else -> listOf(
+            runCatching { DayOfWeek.valueOf(repetition.removeSuffix("s").uppercase(Locale.ROOT)) }.getOrNull()
+                ?: throw IllegalArgumentException("Alarm repeat must be daily, weekdays, weekends or a weekday name."),
+        )
     }
-    val repetition = repeat?.trim()?.lowercase(Locale.ROOT)?.takeUnless { it == "none" || it.isEmpty() }
-    val weekday = if (repetition != null && repetition != "daily") {
-        runCatching { DayOfWeek.valueOf(repetition.uppercase(Locale.ROOT)) }.getOrNull()
-            ?: throw IllegalArgumentException("Alarm repeat must be daily or a weekday name.")
-    } else null
-    require(requestedDate == null || repetition == null) { "I can't combine a start date with a repeating Clock alarm. No alarm was set." }
+    require(requestedDate == null || repeatDays == null) { "I can't combine a start date with a repeating Clock alarm. No alarm was set." }
     var at = now.toLocalDate().atTime(clock)
     if (!at.isAfter(now)) at = at.plusDays(1)
-    if (weekday != null) {
-        while (at.dayOfWeek != weekday) at = at.plusDays(1)
+    if (repeatDays != null) {
+        while (at.dayOfWeek !in repeatDays) at = at.plusDays(1)
     }
     if (requestedDate != null && requestedDate != at.toLocalDate()) {
         val requested = requestedDate.atTime(clock).format(ALARM_DATE_FORMAT)
         throw IllegalArgumentException("I can't set a one-time Clock alarm for $requested. No alarm was set. Ask for a reminder on that date instead.")
     }
-    val days = when {
-        repetition == "daily" -> (1..7).toList()
-        weekday != null -> listOf(calendarDay(weekday))
-        else -> null
+    val days = when (repeatDays?.size) {
+        null -> null
+        7 -> (1..7).toList()
+        else -> repeatDays.map(::calendarDay)
     }
-    val suffix = when {
-        repetition == "daily" -> ", repeating daily"
-        weekday != null -> ", repeating every ${weekday.name.lowercase(Locale.ROOT)}"
-        else -> ""
+    val suffix = when (repeatDays?.size) {
+        null -> ""
+        7 -> ", repeating daily"
+        1 -> ", repeating every ${repeatDays.single().name.lowercase(Locale.ROOT)}"
+        5 -> ", repeating on weekdays"
+        else -> ", repeating on weekends"
     }
     return AlarmPlan(at, days, suffix)
+}
+
+/** "07:30", "7:30", "7 am", "7:30 PM", "2026-10-23T07:00", "2026-10-23 07:00" → optional date + time. */
+internal fun readAlarmTime(text: String): Pair<LocalDate?, LocalTime>? {
+    val t = text.trim().lowercase(Locale.ROOT).replace(".", "")
+    runCatching { LocalDateTime.parse(t.replace(' ', 'T')) }.getOrNull()
+        ?.takeIf { it.second == 0 }?.let { return it.toLocalDate() to it.toLocalTime() }
+    val m = Regex("^(\\d{1,2})(?::(\\d{2}))?(?::00)?\\s*(am|pm|a m|p m)?$").find(t) ?: return null
+    var h = m.groupValues[1].toInt()
+    val min = m.groupValues[2].ifEmpty { "0" }.toInt()
+    val half = m.groupValues[3].replace(" ", "")
+    if (half.isEmpty() && m.groupValues[2].isEmpty()) return null
+    if (min > 59 || (half.isEmpty() && h > 23) || (half.isNotEmpty() && h !in 1..12)) return null
+    if (half == "pm" && h < 12) h += 12
+    if (half == "am" && h == 12) h = 0
+    return null to LocalTime.of(h, min)
 }
 
 private fun calendarDay(d: DayOfWeek) = when (d) {

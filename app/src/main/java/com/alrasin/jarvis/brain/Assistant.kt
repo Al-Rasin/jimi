@@ -76,6 +76,7 @@ class Assistant @Inject constructor(
     private var pending: Pair<ToolCall, Long>? = null
     private var contactChoice = PendingContactChoice()
     private val draft = MessageDraft()
+    private val timeSlot = TimeSlot()
     private var conversation = ConversationContext()
     private val contacts = Contacts(context)
     private var smokePending: Pair<ToolCall, Long>? = null
@@ -197,6 +198,16 @@ class Assistant @Inject constructor(
                 }
                 MessageDraft.Answer.None -> Unit
             }
+            when (val t = timeSlot.answer(text, monotonicMillis(), newCommand = rule != null)) {
+                is TimeSlot.Answer.Ready -> return runTool(t.call, input, "time_slot")
+                is TimeSlot.Answer.Ask -> return Reply(t.question, expectAnswer = true)
+                TimeSlot.Answer.Cancelled -> {
+                    clearConversation()
+                    return Reply("Okay, cancelled.", endConversation = true)
+                }
+                TimeSlot.Answer.GaveUp -> return Reply(TimeSlot.GAVE_UP)
+                TimeSlot.Answer.None -> Unit
+            }
         }
         trace("smalltalk")
         val smallTalk = Persona.smallTalk(text, LocalDateTime.now().hour)
@@ -309,6 +320,7 @@ class Assistant @Inject constructor(
     private fun clearConversation() {
         pending = null
         draft.clear()
+        timeSlot.clear()
         cloudHistory.clear()
         contactChoice.clear()
         conversation.clear()
@@ -354,6 +366,9 @@ class Assistant @Inject constructor(
             "run_routine" -> return runRoutine(call.arg("name") ?: "", input)
             "panic" -> return panic(input)
         }
+        if (source in setOf("llm", "cloud")) call = TimeSlot.asReminder(call, input.heard, LocalDateTime.now())
+        // "set an alarm" / "remind me to call mom": ask once for the missing time (ROADMAP §M.5).
+        if (smoke == null) timeSlot.start(call, monotonicMillis())?.let { q -> return Reply(q, tool = call.tool, expectAnswer = true) }
         val toSelf = call.tool in setOf("send_sms", "send_whatsapp") && SelfAccount.isSelf(call.arg("contact"))
         if (!confirmed && !toSelf && call.tool in setOf("call", "send_sms", "send_whatsapp")) {
             val who = call.arg("contact") ?: run {

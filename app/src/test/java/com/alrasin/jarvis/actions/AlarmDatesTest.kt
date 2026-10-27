@@ -41,7 +41,7 @@ class AlarmDatesTest {
             assertThrows(IllegalArgumentException::class.java) { resolveAlarm(time, null, null, now) }
         }
         assertThrows(IllegalArgumentException::class.java) { resolveAlarm("07:00", "2026-02-30", null, now) }
-        assertThrows(IllegalArgumentException::class.java) { resolveAlarm("07:00", null, "weekdays", now) }
+        assertThrows(IllegalArgumentException::class.java) { resolveAlarm("07:00", null, "fortnightly", now) }
         assertThrows(IllegalArgumentException::class.java) { resolveAlarm("07:00", "2026-10-23", "daily", now) }
     }
 

@@ -30,12 +30,21 @@ object TimeParser {
 
     private val IN_DURATION = Regex("\\b(?:in|after) ((?:(?:\\d+|a|an|half an?|1 and a half)\\s*(?:seconds?|secs?|minutes?|mins?|hours?|hrs?|days?)\\s*(?:and\\s*)?)+)")
 
+    private val DURATION = Regex("(\\d+|a|an|half an?|1 and a half)\\s*(seconds?|secs?|minutes?|mins?|hours?|hrs?|days?)\\b")
+
+    /** Seconds when the text is only a duration ("7 minutes", "an hour and a half"). Null if other words remain. */
+    fun durationOnly(text: String): Long? {
+        val n = normalize(text)
+        val rest = DURATION.replace(n.replace(Regex("\\bhalf an? hour\\b"), " "), " ")
+            .replace(Regex("\\b(?:and|a half|for|of)\\b"), " ").trim()
+        return if (rest.isEmpty()) duration(text)?.takeIf { it > 0 } else null
+    }
+
     /** Seconds in "2 hours and 5 minutes", "half an hour", "90 seconds". Null if none. */
     fun duration(text: String): Long? {
         var total = 0L
         var found = false
-        val re = Regex("(\\d+|a|an|half an?|1 and a half)\\s*(seconds?|secs?|minutes?|mins?|hours?|hrs?|days?)\\b")
-        for (m in re.findAll(normalize(text))) {
+        for (m in DURATION.findAll(normalize(text))) {
             val n = when (val q = m.groupValues[1]) {
                 "a", "an" -> 1.0
                 "half a", "half an" -> 0.5
@@ -84,7 +93,8 @@ object TimeParser {
             if (monthDay !in 1..31) return null
         }
         cut(Regex(" (?:tomorrow|tmrw)(?: (morning|afternoon|evening|night))?(?: at)? "))?.let {
-            date = now.toLocalDate().plusDays(1)
+            // Still awake after midnight: "tomorrow 7 am" means the coming morning.
+            date = now.toLocalDate().plusDays(if (now.hour < 4) 0 else 1)
             part = it.groupValues[1].takeIf { value -> value.isNotEmpty() }
             hint = partHint(part)
         }

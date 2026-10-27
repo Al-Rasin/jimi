@@ -119,14 +119,23 @@ object RuleMatcher {
         val timer = Regex("^(?:set |start |put )?(?:a |an )?(?:timer|countdown)(?: for| of)? (.+)$").find(t)
             ?: Regex("^(?:set |start |put )?(?:a |an )?(.+?) (?:timer|countdown)$").find(t)
         timer?.let { m -> TimeParser.duration(m.groupValues[1])?.let { return call("set_timer", "seconds" to it.toString()) } }
-        if (t.matches(re("(?:cancel|stop|delete|turn off|dismiss|remove|clear) (?:the |my |all )*(?:alarms?|timers?)"))) return call("cancel_alarm")
+        if (t.matches(re("(?:set |start |put )?(?:a |an |the |new )*(?:timer|countdown)"))) return call("set_timer")
+        // "7 minutes" alone is a timer.
+        Regex("^(?:set |start |put )?(?:a |an |for )?(.+)$").find(t)?.let { m ->
+            TimeParser.durationOnly(m.groupValues[1])?.let { return call("set_timer", "seconds" to it.toString()) }
+        }
+        val all = "(?:the |my |all )*(?:alarms?|timers?)"
+        if (t.matches(re("(?:cancel|stop|delete|turn off|switch off|dismiss|remove|clear) $all(?: and $all)?"))) return call("cancel_alarm")
+        if (t.matches(re("(?:set |create |make |add )?(?:an |a |my |new )*alarm"))) return call("set_alarm")
         oneAlarm(t, now)?.let { return it }
         // alarm
         val alarm = Regex("^(?:set |create |make |add )?(?:an |a |my )?alarm(?: for| at| to)? (.+)$").find(t)
             ?: Regex("^wake me(?: up)?(?: at| by)? (.+)$").find(t)
             ?: Regex("^set (?:an |a )?alarm(?: for)? (.+)$").find(t)
         if (alarm != null) {
-            val spec = alarm.groupValues[1]
+            val rawSpec = alarm.groupValues[1]
+            val weekRepeat = Regex("\\s*\\b(?:every |on |each )?(?:the )?(weekday|weekend)s?\\b\\s*").find(rawSpec)
+            val spec = if (weekRepeat != null) rawSpec.replaceRange(weekRepeat.range, " ").trim() else rawSpec
             val label = Regex("\\b(?:called|named|labelled|labeled|for) ([a-z ]+)$").find(spec)?.groupValues?.get(1)
                 ?.takeUnless { it.matches(Regex(".*\\d.*|tomorrow|today|tonight")) }
             val specNoLabel = if (label != null) spec.substringBeforeLast(label).removeSuffix(" ").removeSuffix("called").removeSuffix("named").removeSuffix("for").trim() else spec
@@ -145,7 +154,7 @@ object RuleMatcher {
                 // Clock intents only accept whole minutes; never ring before the requested delay.
                 if (m.at.second != 0 || now.nano != 0) m = m.copy(at = m.at.withSecond(0).plusMinutes(1))
             }
-            val days = if (m.repeat == "daily") "daily" else if (m.repeat == "weekly") m.at.dayOfWeek.name.lowercase() else null
+            val days = if (weekRepeat != null) weekRepeat.groupValues[1] + "s" else if (m.repeat == "daily") "daily" else if (m.repeat == "weekly") m.at.dayOfWeek.name.lowercase() else null
             return call("set_alarm", "time" to m.at.format(HM), "label" to label, "repeat" to days,
                 "date" to if (m.at.toLocalDate() != now.toLocalDate() && days == null) m.at.toLocalDate().toString() else null)
         }
@@ -161,12 +170,13 @@ object RuleMatcher {
         Regex("^(?:delete|remove|cancel|clear) (?:the |my )?(all )?reminders?(?: (?:to|about|for) (.+))?$").find(t)?.let {
             return call("delete_reminder", "text" to (it.groupValues[2].ifEmpty { if (it.groupValues[1].isNotEmpty()) "all" else "" }))
         }
-        val rem = Regex("^(?:remind me|set (?:a |an )?reminder|create (?:a |an )?reminder|add (?:a |an )?reminder|reminder)(?: to| that| about| for)?(.*)$").find(t)
+        val rem = Regex("^(?:remind me|(?:set|create|add|make) (?:a |an )?(?:new )?reminder|reminder)(?:(?: to| that| about| for)(?= ))?(.*)$").find(t)
         if (rem != null) {
-            val m = TimeParser.parse(rem.groupValues[1], now)
-            val text = (m?.rest ?: rem.groupValues[1]).trim()
+            val spec = rem.groupValues[1].replace(Regex("\\b(\\d+ (?:seconds?|minutes?|mins?|hours?|days?)) (?:later|from now)\\b"), "in $1")
+            val m = TimeParser.parse(spec, now)?.takeIf { it.hasTime }
+            val text = (m?.rest ?: spec).trim()
                 .removePrefix("to ").removePrefix("that ").removePrefix("about ").removeSuffix(" at").trim()
-            return call("create_reminder", "text" to text.ifEmpty { "reminder" }, "time" to m?.at?.format(ISO), "repeat" to m?.repeat?.takeIf { it != "none" })
+            return call("create_reminder", "text" to text.ifEmpty { null }, "time" to m?.at?.format(ISO), "repeat" to m?.repeat?.takeIf { it != "none" })
         }
         return null
     }
