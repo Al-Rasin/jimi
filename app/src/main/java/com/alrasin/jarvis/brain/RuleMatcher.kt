@@ -85,6 +85,7 @@ object RuleMatcher {
     private fun talk(t: String): ToolCall? = when {
         t.matches(re(PANIC)) -> call("panic")
         t.matches(re("cancel|stop|never ?mind|forget it|nothing|shut up|be quiet|quiet|stop talking")) -> call("cancel")
+        t.matches(re("(?:go to |go back to )?sleep(?: now)?|go quiet|take a (?:rest|break)|you can (?:sleep|rest)(?: now)?")) -> call("cancel")
         t.matches(re("(?:say (?:that|it) again|repeat(?: that| it)?|what did you say|come again|pardon)")) -> call("repeat_last")
         else -> null
     }
@@ -119,6 +120,7 @@ object RuleMatcher {
             ?: Regex("^(?:set |start |put )?(?:a |an )?(.+?) (?:timer|countdown)$").find(t)
         timer?.let { m -> TimeParser.duration(m.groupValues[1])?.let { return call("set_timer", "seconds" to it.toString()) } }
         if (t.matches(re("(?:cancel|stop|delete|turn off|dismiss|remove|clear) (?:the |my |all )*(?:alarms?|timers?)"))) return call("cancel_alarm")
+        oneAlarm(t, now)?.let { return it }
         // alarm
         val alarm = Regex("^(?:set |create |make |add )?(?:an |a |my )?alarm(?: for| at| to)? (.+)$").find(t)
             ?: Regex("^wake me(?: up)?(?: at| by)? (.+)$").find(t)
@@ -169,6 +171,15 @@ object RuleMatcher {
         return null
     }
 
+    /** "stop the 11 am alarm", "cancel alarm at 7" → cancel only that alarm (24h time). */
+    private fun oneAlarm(t: String, now: LocalDateTime): ToolCall? {
+        val m = Regex("^(?:cancel|stop|delete|turn off|switch off|disable|dismiss|remove|clear) (?:the |my )?(?:alarm (?:at|for) (.+)|(.+?) alarm)$").find(t) ?: return null
+        val spec = m.groupValues[1].ifEmpty { m.groupValues[2] }
+        if (!spec.any(Char::isDigit)) return call("cancel_alarm")
+        val at = TimeParser.parse("at $spec", now)?.takeIf { it.hasTime }?.at ?: return call("cancel_alarm")
+        return call("cancel_alarm", "time" to "%02d:%02d".format(at.hour, at.minute))
+    }
+
     private fun comms(t: String): ToolCall? {
         val calling = t.trimEnd('.', '!', '?').replace(Regex("(?: (?:please|for me|now|okay|ok))+$"), "")
         callControl(calling)?.let { return it }
@@ -176,6 +187,8 @@ object RuleMatcher {
             return call("call", "contact" to it.groupValues[3], "app" to commsApp(it.groupValues[1]),
                 "video" to it.groupValues[2].takeIf { mode -> mode.isNotEmpty() }?.let { mode -> (mode == "video").toString() })
         }
+        // "call using grameenphone" names a SIM, not a person: ask who.
+        if (calling.matches(Regex("^(?:make a )?(?:call|phone|dial)(?: (?:using|with|via|from|on) (?!whats ?app|messenger).+| sim ?\\d?.*)$"))) return call("call")
         Regex("^(?:(video|voice|audio) )?(?:call|phone|ring|dial)(?: to)? (.+?)(?: (?:on|via|using) (whats ?app|messenger|phone|speaker))?$").find(calling)?.let {
             return call("call", "contact" to it.groupValues[2], "app" to it.groupValues[3].takeUnless { app -> app.isEmpty() || app == "speaker" }?.let(::commsApp),
                 "video" to it.groupValues[1].takeIf { mode -> mode.isNotEmpty() }?.let { mode -> (mode == "video").toString() })
@@ -411,7 +424,7 @@ object RuleMatcher {
             t.matches(re("auto brightness(?: on)?|(?:turn on |enable )?(?:auto|automatic|adaptive) brightness")) -> return call("set_brightness", "level" to "auto")
             t.matches(re("(?:whats |what is )?(?:the )?time(?: is it)?(?: now)?|what time is it|tell me the time|time now")) -> return call("device_status", "what" to "time")
             t.matches(re("(?:whats |what is )?(?:the |todays )?date(?: today)?|what day is (?:it|today)|which day is today|whats today")) -> return call("device_status", "what" to "date")
-            t.matches(re("(?:whats |what is |check |how much )?(?:the |my )?(?:battery|charge)(?: level| percentage| status| left| is left)?|how much battery(?: is left| do i have)?(?: left)?|battery")) -> return call("device_status", "what" to "battery")
+            t.matches(re("(?:whats |what is |check |how much )?(?:the |my )?(?:battery|charge)(?: level| percentage| status| left| is left)?|how much battery(?: is left| do i have)?(?: left)?|battery|how(?:s| is) (?:the |my )?(?:battery|charge)(?: doing| level| health| now)?")) -> return call("device_status", "what" to "battery")
             t.matches(re("(?:how much |check )?(?:free )?(?:storage|space)(?: left| is left| do i have)?")) -> return call("device_status", "what" to "storage")
             t.matches(re("(?:device|phone|system) (?:status|info)|status(?: report)?|how is (?:my|the) phone")) -> return call("device_status", "what" to "all")
             t.matches(re("(?:take |capture )?(?:a )?screenshot|screen ?shot|capture (?:the )?screen")) -> return call("take_screenshot")
@@ -452,6 +465,8 @@ object RuleMatcher {
         WeatherRequest.match(t)?.let { return it }
         if (t.matches(re("(?:re ?)?scan (?:my|this|the) (?:phone|device)(?: again)?"))) return call("phone_profile", "scan" to "true")
         if (t.matches(re("what do you know about (?:my|this) (?:phone|device)|(?:tell me )?about (?:my|this) phone|what apps do i have|which apps do i have"))) return call("phone_profile")
+        if (t.matches(re("how many apps(?: do i have| are (?:there|installed)(?: on (?:my|this) phone)?| (?:are )?on (?:my|this) phone| have i (?:got|installed))?|(?:number|count) of (?:my )?apps|count (?:my )?apps"))) return call("phone_profile", "ask" to "apps")
+        if (t.matches(re("(?:so )?what (?:all |else )?(?:(?:can|could) you )?do(?: for me)?|what (?:all |else )?help(?: me)? with|what do you do|what are (?:your|you) (?:features|abilities|skills|powers)|(?:your|list (?:your|of)) (?:features|abilities|skills)|what (?:can|could) you help (?:me )?with|how can you help(?: me)?|help(?: me)?"))) return call("phone_profile", "ask" to "abilities")
         if (t.matches(re("where am i(?: right)?(?: now)?|(?:whats|what is|tell me|show me) my (?:current )?location|my (?:current )?location|where are we(?: now)?"))) return call("my_location")
         Regex("^(?:whats |what is |how is |hows )?(?:the )?weather(?: like)?(?: (?:today|now|tomorrow))?(?: in ([a-z ]+?))?(?: (?:today|now|tomorrow))?$").find(t)
             ?.let { return call("weather", "place" to it.groupValues[1], "day" to if (t.contains("tomorrow")) "tomorrow" else null) }

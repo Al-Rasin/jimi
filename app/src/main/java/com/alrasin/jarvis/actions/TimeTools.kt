@@ -75,7 +75,11 @@ fun timeTools(context: Context): List<Tool> = listOf(
         JarvisLog.i("set_timer: Clock request sent; Android does not expose timer confirmation")
         timerSetResult(secs)
     },
-    SimpleTool("cancel_alarm", "Turn off alarms and timers") { _, _ ->
+    SimpleTool(
+        "cancel_alarm", "Turn off alarms and timers; time=HH:mm (24h) turns off only that alarm",
+        listOf(arg("time", "24h HH:mm of the one alarm to turn off", required = false)),
+    ) { c, _ ->
+        c.arg("time")?.let { cancelOneAlarm(context, it) }?.let { return@SimpleTool it }
         val alarmsSent = context.launchClock(Intent(AlarmClock.ACTION_DISMISS_ALARM)
             .putExtra(AlarmClock.EXTRA_ALARM_SEARCH_MODE, AlarmClock.ALARM_SEARCH_MODE_ALL))
         val timersSent = context.launchClock(Intent(AlarmClock.ACTION_DISMISS_TIMER))
@@ -204,3 +208,27 @@ fun speakDuration(secs: Int): String {
         s.takeIf { it > 0 }?.let { "$it second${if (it > 1) "s" else ""}" },
     ).joinToString(" and ").ifEmpty { "0 seconds" }
 }
+
+/** Clock's own search mode finds the alarm at that time; null when [time] is not HH:mm. MIUI Clock may ignore it, so check. */
+private suspend fun cancelOneAlarm(context: Context, time: String): ToolResult? {
+    val (h, m) = Regex("^(\\d{1,2}):(\\d{2})$").find(time)?.destructured ?: return null
+    val target = LocalTime.of(h.toInt(), m.toInt())
+    val spoken = target.format(DateTimeFormatter.ofPattern("h:mm a", Locale.ENGLISH))
+    val wasNext = isAt(context.getSystemService(AlarmManager::class.java)?.nextAlarmClock?.triggerTime, target)
+    val sent = context.launchClock(Intent(AlarmClock.ACTION_DISMISS_ALARM)
+        .putExtra(AlarmClock.EXTRA_ALARM_SEARCH_MODE, AlarmClock.ALARM_SEARCH_MODE_TIME)
+        .putExtra(AlarmClock.EXTRA_HOUR, target.hour)
+        .putExtra(AlarmClock.EXTRA_MINUTES, target.minute))
+    if (!sent) return ToolResult.fail("The clock didn't accept the turn-off request. Check the Clock app.")
+    if (!wasNext) {
+        JarvisLog.i("cancel_alarm: one alarm $time sent; not the next alarm, cannot verify")
+        return ToolResult.ok("I asked Clock to turn off the $spoken alarm. Please check it.")
+    }
+    val off = awaitAlarmState(context) { !isAt(it, target) }
+    JarvisLog.i("cancel_alarm: one alarm $time off=$off")
+    return if (off) ToolResult.ok("Okay, the $spoken alarm is off.")
+    else ToolResult.fail("Clock didn't turn off the $spoken alarm. Please switch it off in Clock.")
+}
+
+private fun isAt(triggerMillis: Long?, time: LocalTime): Boolean = triggerMillis != null &&
+    LocalDateTime.ofInstant(java.time.Instant.ofEpochMilli(triggerMillis), ZoneId.systemDefault()).toLocalTime().withSecond(0).withNano(0) == time

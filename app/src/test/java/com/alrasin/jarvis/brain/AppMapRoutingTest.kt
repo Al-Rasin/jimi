@@ -38,6 +38,7 @@ class AppMapRoutingTest {
         assertEquals("app_abilities", call.tool)
         assertEquals("whatsapp", call.arg("app"))
         assertEquals(IntentRouter.Route.TOOL, IntentRouter.classify("what can you do in youtube").route)
-        assertEquals(IntentRouter.Route.CHAT, IntentRouter.classify("what can you do").route)
+        // #56: plain "what can you do" gives the real list (phone_profile ask=abilities), not fixed chat text.
+        assertEquals("phone_profile", RuleMatcher.match("what can you do")?.tool)
     }
 }

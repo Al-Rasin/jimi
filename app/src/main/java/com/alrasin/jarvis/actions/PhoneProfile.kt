@@ -210,11 +210,23 @@ class PhoneProfile(private val context: Context, private val apps: AppList) {
     }
 }
 
-/** "What do you know about my phone" / "scan my phone". */
-fun phoneProfileTool(profile: PhoneProfile) = SimpleTool(
-    "phone_profile", "What Jimi knows about this phone (apps, contacts count); scan=true to rescan",
-    listOf(arg("scan", "rescan the phone now", required = false, choices = listOf("true", "false"))),
+/** "What do you know about my phone" / "scan my phone" / "how many apps do I have" / "what can you do". */
+fun phoneProfileTool(profile: PhoneProfile, toolCount: () -> Int) = SimpleTool(
+    "phone_profile", "What Jimi knows about this phone (apps, contacts count); scan=true to rescan; ask=apps for the app count, ask=abilities for what Jimi can do",
+    listOf(
+        arg("scan", "rescan the phone now", required = false, choices = listOf("true", "false")),
+        arg("ask", "apps or abilities", required = false, choices = listOf("apps", "abilities")),
+    ),
 ) { c, _ ->
     val p = if (c.arg("scan") == "true") profile.scan() else profile.current() ?: profile.refreshIfOld()
-    ToolResult.ok(PhoneProfile.say(p), PhoneProfile.cloudLine(p))
+    when (c.arg("ask")) {
+        "apps" -> ToolResult.ok("You have ${p.apps.size} apps.")
+        "abilities" -> ToolResult.ok(abilitiesLine(toolCount(), p.apps.size))
+        else -> ToolResult.ok(PhoneProfile.say(p), PhoneProfile.cloudLine(p))
+    }
 }
+
+/** Real list, built from the tool count and the phone scan, not a fixed sentence. */
+fun abilitiesLine(tools: Int, apps: Int): String =
+    "I have $tools tools. I can open and use your $apps apps, call and message, set alarms, timers and reminders, " +
+        "take notes, change settings, play music, read your screen, notifications and messages, and search the web."

@@ -163,7 +163,7 @@ internal class ToolSafetyGate {
             "redial" -> "Call the last number again"
             "unlock_phone" -> "Unlock your phone"
             "clear_notifications" -> "Clear all your notifications"
-            "cancel_alarm" -> "Cancel all your alarms and timers"
+            "cancel_alarm" -> arg("time")?.let(::spokenClock)?.let { "Turn off your $it alarm" } ?: "Cancel all your alarms and timers"
             "delete_reminder" -> when (val text = arg("text")) {
                 "all" -> "Delete all your reminders"
                 null -> "Delete that reminder"
@@ -193,3 +193,7 @@ internal class ToolSafetyGate {
 
     private fun spoken(text: String): String = text.replace('_', ' ').replace(Regex("\\s+"), " ").trim()
 }
+
+/** "07:00" → "7:00 AM"; null when not HH:mm. */
+private fun spokenClock(hhmm: String): String? =
+    runCatching { java.time.LocalTime.parse(hhmm.padStart(5, '0')).format(java.time.format.DateTimeFormatter.ofPattern("h:mm a", java.util.Locale.US)) }.getOrNull()

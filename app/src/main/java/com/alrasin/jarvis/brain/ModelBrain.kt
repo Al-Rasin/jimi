@@ -156,7 +156,7 @@ class ModelBrain @Inject constructor(
             }.onFailure { JarvisLog.e("tool model failed", it) }.getOrNull() ?: return@withModels null
             val call = FunctionGemma.parse(if (out.contains("<start_function_call>") && !out.endsWith("<end_function_call>")) "$out<end_function_call>" else out)
             JarvisLog.i("llm tool ${System.currentTimeMillis() - t0} ms (${tools.size} tools): $out")
-            call?.takeIf { valid(it) }
+            call?.takeIf { valid(it) && ToolFit.fits(text, it).also { fit -> if (!fit) JarvisLog.i("llm tool dropped: ${it.tool} has no tool words") } }
         }
     }
 

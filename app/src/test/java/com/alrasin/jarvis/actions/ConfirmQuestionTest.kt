@@ -104,7 +104,8 @@ class ConfirmQuestionTest {
     @Test fun alarmConfirmationMatchesTheToolsActualScope() = runBlocking {
         val expected = "Cancel all your alarms and timers, ${Persona.ADDRESS}?"
         assertEquals(expected, question(ToolCall("cancel_alarm")))
-        assertEquals(expected, question(ToolCall("cancel_alarm", mapOf("time" to "07:00"))))
+        // #56: with a time only that one alarm is turned off.
+        assertEquals("Turn off your 7:00 AM alarm, ${Persona.ADDRESS}?", question(ToolCall("cancel_alarm", mapOf("time" to "07:00"))))
     }
 
     @Test fun notificationSearchIncludesTheQuery() = runBlocking {

@@ -46,8 +46,6 @@ object Persona {
             t.matches(Regex("(who|what) are you|whats your name|your name|introduce yourself")) -> "I'm $NAME, your phone assistant."
             t.matches(Regex("(thank you|thanks|thank u|thx|great|good job|nice|well done|awesome|perfect)( very much| so much| a lot)?( jimi)?")) -> "Any time, $ADDRESS."
             t.matches(Regex("(are you there|you there|can you hear me|are you listening)")) -> "I'm here, $ADDRESS."
-            t.matches(Regex("(what can you do|help|what do you do|how can you help)")) ->
-                "I can open apps, call and message, set alarms and reminders, take notes, control settings, read your screen and notifications, and search the web."
             t.matches(Regex("(bye|goodbye|see you|later|see ya)")) -> "Bye, $ADDRESS."
             t.matches(Regex("tell me a joke|say something funny|joke")) -> JOKES.random()
             else -> null
