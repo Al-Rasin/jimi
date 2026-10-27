@@ -6,11 +6,11 @@ package com.alrasin.jarvis.voice
  */
 object WakePhrase {
     private const val SEPARATOR = "[\\s\\p{P}]+"
-    private const val NAMES = "jimi|jimmy|jimmie|jimmi|gymmy|zimmy|zumi|zoomy|azumi|hazumi|yumi|izumi|hayzumi|zooming"
+    private const val NAMES = "jimi|jimmy|jimmie|jimmi|gymmy|zimmy|zumi|zoomy|azumi|hazumi|yumi|izumi|hayzumi|zooming|hizumi|hazyme|asuming"
     private val prefix = Regex(
-        "^[\\s\\p{P}]*(?:(?:hey|hay|hi|hello|okay|ok|a)$SEPARATOR(?:$NAMES|jim|jamie|jenny|genie|gimme|gimmie|gym|mi|jee${SEPARATOR}mee)|" +
+        "^[\\s\\p{P}]*(?:(?:hey|hay|hi|hello|okay|ok|a)$SEPARATOR(?:$NAMES|jim|jamie|jenny|genie|gimme|gimmie|gym|mi|yarn|see${SEPARATOR}me|jee${SEPARATOR}mee)|" +
             "(?:hazy|gym)$SEPARATOR(?:me|mi)|" +
-            "(?:as${SEPARATOR}you${SEPARATOR}(?:me|may)|as${SEPARATOR}well)(?=$SEPARATOR(?:what|whats|set|wake|alarm|turn|down|open|go|tell|show|play)\\b)|$NAMES)(?![\\p{L}\\p{N}'’])[\\s\\p{P}]*",
+            "(?:as${SEPARATOR}you${SEPARATOR}(?:me|may)|as${SEPARATOR}well|asium${SEPARATOR}me|his${SEPARATOR}re)(?=$SEPARATOR(?:what|whats|set|wake|alarm|turn|down|open|go|tell|show|play)\\b)|$NAMES)(?![\\p{L}\\p{N}'’])[\\s\\p{P}]*",
         RegexOption.IGNORE_CASE,
     )
 

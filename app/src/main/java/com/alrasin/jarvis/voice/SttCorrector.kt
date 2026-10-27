@@ -15,8 +15,9 @@ class SttCorrector(
     private val apps = entries(apps)
     private val tools = entries(toolWords)
 
-    fun correct(text: String): String {
-        if (text.isBlank() || text.length > 512) return text
+    fun correct(heard: String): String {
+        if (heard.isBlank() || heard.length > 512) return heard
+        val text = HeardFixes.apply(heard)
         contactPatterns.forEach { pattern ->
             pattern.find(text)?.let { return replaceSlot(text, it.groups[1]!!, contacts) }
         }
