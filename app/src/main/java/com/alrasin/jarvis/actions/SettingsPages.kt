@@ -35,6 +35,7 @@ class SettingsPages(private val context: Context) {
     }
 
     suspend fun run(name: String, state: String?): ToolResult {
+        if (state == "status") return status(name)
         direct(name, state)?.let { return it }
         if (context.isLocked()) return ToolResult.fail("Unlock the phone first, Boss.")
         if (state == "on" || state == "off") stored(name, state == "on")?.let { return it }
@@ -64,6 +65,27 @@ class SettingsPages(private val context: Context) {
         return ToolResult.ok("I opened $name settings. Turn it ${state} there.")
     }
 
+    /** Reads the real on/off value; changes nothing, so a "did you…?" answer is never a guess. */
+    private suspend fun status(name: String): ToolResult {
+        val label = name.replaceFirstChar { it.uppercase() }
+        if (DARK.containsMatchIn(name)) {
+            val out = RootShell.run("cmd uimode night", log = false).out.lowercase()
+            if ("yes" in out || "no" in out) return ToolResult.ok("$label is ${if ("yes" in out) "on" else "off"}.")
+        }
+        val (ns, key, _) = key(name, entries(), read = true) ?: return ToolResult.fail("I can't read $name from here.")
+        return when (RootSettings.get(ns, key)) {
+            "1" -> ToolResult.ok("$label is on.")
+            "0" -> ToolResult.ok("$label is off.")
+            else -> ToolResult.fail("I can't read $name from here.")
+        }
+    }
+
+    private suspend fun entries() = NAMESPACES.flatMap { ns ->
+        RootSettings.list(ns).mapNotNull { line ->
+            line.split('=', limit = 2).takeIf { it.size == 2 }?.let { (k, v) -> Triple(ns, k.trim(), v.trim()) }
+        }
+    }
+
     /** Settings Android can set straight away (root), the same on every phone; null = not one of them. */
     private suspend fun direct(name: String, state: String?): ToolResult? {
         if (state != "on" && state != "off" || !DARK.containsMatchIn(name)) return null
@@ -76,12 +98,7 @@ class SettingsPages(private val context: Context) {
      * system haptic_feedback_enabled. Set with root and read back; null = no such key (then the Settings app is used).
      */
     private suspend fun stored(name: String, on: Boolean): ToolResult? {
-        val entries = NAMESPACES.flatMap { ns ->
-            RootSettings.list(ns).mapNotNull { line ->
-                line.split('=', limit = 2).takeIf { it.size == 2 }?.let { (k, v) -> Triple(ns, k.trim(), v.trim()) }
-            }
-        }
-        val (ns, key, _) = key(name, entries) ?: return null
+        val (ns, key, _) = key(name, entries()) ?: return null
         val v = if (on) "1" else "0"
         val done = RootSettings.put(ns, key, v) && RootSettings.get(ns, key) == v
         JarvisLog.i("setting key $ns/$key → $v ${if (done) "ok" else "failed"}")
@@ -122,6 +139,11 @@ class SettingsPages(private val context: Context) {
 
     companion object {
         private val DARK = Regex("\\b(?:dark (?:mode|theme)|night mode)\\b")
+        /**
+         * Key words that differ from the spoken name, used only to READ a value: MIUI keeps reading mode in
+         * screen_paper_mode_enabled, but writing that key alone may skip the screen change, so turning it on still uses Settings.
+         */
+        private val READ_KEYS = mapOf("reading" to "paper")
         private val SPELLING = mapOf("wifi" to "wi-fi", "vibration" to "vibrate", "haptics" to "haptic", "hotspot" to "hotspot")
 
         /** What to type: the whole name, its usual spelling, then single words, longest first (MIUI search is word based). */
@@ -138,9 +160,9 @@ class SettingsPages(private val context: Context) {
         private val DENY = Regex("adb|develop|accessibility|verifier|install|password|lock|usb|secure|admin|boot|airplane")
 
         /** Best 0/1 key holding every spoken word (fewest extra words); null when none fits. */
-        internal fun key(name: String, entries: List<Triple<String, String, String>>): Triple<String, String, String>? {
+        internal fun key(name: String, entries: List<Triple<String, String, String>>, read: Boolean = false): Triple<String, String, String>? {
             val words = name.lowercase().split(Regex("[^a-z0-9]+")).filter { it.length > 2 && it !in FILLER }
-                .map { SPELLING[it] ?: it }.map { it.replace("-", "").trimEnd('s') }
+                .map { SPELLING[it] ?: it }.map { if (read) READ_KEYS[it] ?: it else it }.map { it.replace("-", "").trimEnd('s') }
             if (words.isEmpty()) return null
             return entries.filter { (_, k, v) -> (v == "0" || v == "1") && !DENY.containsMatchIn(k) }
                 .mapNotNull { e ->
@@ -194,7 +216,7 @@ class SettingsPages(private val context: Context) {
 /** "open dark mode settings", "turn on reading mode" — any setting, not only the fixed toggles. */
 fun settingTool(pages: SettingsPages) = SimpleTool(
     "setting", "Open any phone setting by name, or turn a setting on/off that the toggle tool does not cover",
-    listOf(arg("name", "setting name, e.g. dark mode, nfc, language"), arg("state", "open, on or off", required = false, choices = listOf("open", "on", "off"))),
+    listOf(arg("name", "setting name, e.g. dark mode, nfc, language"), arg("state", "open, on, off, or status to only read it", required = false, choices = listOf("open", "on", "off", "status"))),
 ) { c, _ ->
     val name = c.arg("name") ?: return@SimpleTool ToolResult.fail("Which setting?")
     pages.run(name, c.arg("state"))

@@ -273,4 +273,53 @@ class ConversationContextTest {
         assertNull(context.resolve("unrecognized sentence"))
         assertNotNull(context.snapshot())
     }
+
+    private fun says(text: String) = assertTrue(text, context.resolve(text) is ConversationContext.Resolution.Say)
+
+    @Test fun turnItOffUsesLastSetting() {
+        remember("setting", "name" to "reading mode", "state" to "on")
+        for (phrase in listOf("turn it off", "Turn this off.", "switch off it", "turn that back off")) {
+            assertEquals(phrase, ToolCall("setting", mapOf("name" to "reading mode", "state" to "off")), tool(phrase))
+        }
+        remember("toggle", "target" to "wifi", "state" to "off")
+        assertEquals(ToolCall("toggle", mapOf("target" to "wifi", "state" to "on")), tool("turn it on again"))
+    }
+
+    @Test fun turnItOffWithoutSwitchAsks() {
+        clarifies("turn it off")
+        remember("weather", "place" to "Dhaka")
+        clarifies("turn it on")
+    }
+
+    @Test fun doItAgainRepeatsLastSwitch() {
+        remember("toggle", "target" to "flashlight", "state" to "toggle")
+        assertEquals(ToolCall("toggle", mapOf("target" to "flashlight", "state" to "toggle")), tool("do it again"))
+        remember("send_sms", "contact" to "Rahim", "text" to "Hi")
+        clarifies("again")
+    }
+
+    @Test fun didYouReadsTheRealState() {
+        remember("setting", "name" to "reading mode", "state" to "off")
+        assertEquals(ToolCall("setting", mapOf("name" to "reading mode", "state" to "status")), tool("did you turn it off?"))
+        assertEquals("status", tool("is it on now").args["state"])
+        assertEquals(ToolCall("toggle", mapOf("target" to "wifi", "state" to "status")), tool("did you turn off wifi"))
+        assertEquals(ToolCall("setting", mapOf("name" to "dark mode", "state" to "status")), tool("did you turn the dark mode on"))
+    }
+
+    @Test fun didYouWithoutSwitchNeverClaims() {
+        says("did you turn it off")
+        context.remember("hello", null, "I turned it off.")
+        says("did you turn it off")
+    }
+
+    @Test fun onlyForTodayFollowsLastAction() {
+        remember("set_alarm", "time" to "07:00", "repeat" to "daily")
+        assertEquals(ToolCall("set_alarm", mapOf("time" to "07:00")), tool("only for today"))
+        remember("set_alarm", "time" to "07:00")
+        says("just for today")
+        remember("toggle", "target" to "dnd", "state" to "on")
+        says("only for today")
+        context.clear()
+        clarifies("only for today")
+    }
 }

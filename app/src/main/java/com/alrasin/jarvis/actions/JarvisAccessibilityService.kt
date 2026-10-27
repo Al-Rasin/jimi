@@ -135,9 +135,14 @@ class JarvisAccessibilityService : AccessibilityService() {
 
     private fun rowOf(packageName: String, label: String): AccessibilityNodeInfo? = visibleNodes(packageName)
         .filter { !it.isEditable && it.text?.toString()?.trim().equals(label, true) }
-        .mapNotNull { clickableParent(it, packageName) }.distinct().singleOrNull()
+        .mapNotNull { clickableParent(it, packageName) }.distinct()
+        // The page title often repeats the row name ("Reading mode"); the row with the switch is the one meant.
+        .let { rows -> rows.singleOrNull() ?: rows.filter { switchIn(it) != null }.singleOrNull() }
 
-    private fun switchIn(node: AccessibilityNodeInfo?): AccessibilityNodeInfo? = node.findFirst { it.isCheckable }
+    /** On/off switches only: radio buttons and checked list items pick one choice ("Custom period"), they are not on/off. */
+    private fun switchIn(node: AccessibilityNodeInfo?): AccessibilityNodeInfo? = node.findFirst {
+        it.isCheckable && it.className?.toString()?.substringAfterLast('.') !in setOf("RadioButton", "CheckedTextView")
+    }
 
     private fun clickableParent(node: AccessibilityNodeInfo, packageName: String): AccessibilityNodeInfo? {
         var current: AccessibilityNodeInfo? = node

@@ -191,7 +191,7 @@ fun systemTools(context: Context, torch: Torch): List<Tool> {
     return listOf(
         SimpleTool(
             "toggle", "Turn a phone feature on or off",
-            listOf(arg("target", "feature", choices = TOGGLE_TARGETS), arg("state", "on, off or toggle", choices = listOf("on", "off", "toggle"))),
+            listOf(arg("target", "feature", choices = TOGGLE_TARGETS), arg("state", "on, off, toggle, or status to only read it", choices = listOf("on", "off", "toggle", "status"))),
         ) { c, _ ->
             val target = c.arg("target") ?: return@SimpleTool ToolResult.fail("Turn what on or off?")
             if (target !in TOGGLE_TARGETS) return@SimpleTool ToolResult.fail("I can't switch $target.")
@@ -200,6 +200,8 @@ fun systemTools(context: Context, torch: Torch): List<Tool> {
                 else ToolResult.fail("Boss, I couldn't open hotspot settings.")
             }
             val before = isOn(target)
+            if (c.arg("state") == "status") return@SimpleTool before?.let { ToolResult.ok("Boss, ${nice(target)} is ${if (it) "on" else "off"}.") }
+                ?: ToolResult.fail("Boss, I can't read ${nice(target)}.")
             val want = requestedToggleState(c.arg("state"), before)
                 ?: return@SimpleTool ToolResult.fail("Boss, I can't read ${nice(target)}. Say on or off.")
             if (before == want) return@SimpleTool toggleTruth(nice(target), want, before)

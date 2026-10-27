@@ -250,6 +250,7 @@ class Assistant @Inject constructor(
         when (followUp) {
             is ConversationContext.Resolution.Tool -> return runTool(followUp.call, input, "follow_up")
             is ConversationContext.Resolution.Clarify -> return Reply(followUp.question, expectAnswer = true)
+            is ConversationContext.Resolution.Say -> return Reply(followUp.text)
             is ConversationContext.Resolution.Query -> {
                 query = followUp.text
                 contextualQuestion = true
