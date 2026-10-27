@@ -2,6 +2,7 @@ package com.alrasin.jarvis.agent.appmap
 
 import android.content.Context
 import android.content.pm.PackageManager
+import com.alrasin.jarvis.actions.PhoneProfile
 import com.alrasin.jarvis.core.JarvisLog
 import com.alrasin.jarvis.core.Json
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -40,7 +41,8 @@ class AppCards @Inject constructor(
         val cards = readAll()
         val pm = context.packageManager
         val map = HashMap<String, AppCard>()
-        cards.forEach { card ->
+        // D-072: Jimi does nothing with money apps, so their cards are not loaded.
+        cards.filterNot { c -> c.packages.any(PhoneProfile::isPaymentPackage) }.forEach { card ->
             val installed = card.packages.firstOrNull { installed(pm, it) } ?: return@forEach
             card.packages.forEach { map[it] = card }
             runCatching { store(card, installed, pm) }.onFailure { JarvisLog.e("app card ${card.name} failed", it) }
