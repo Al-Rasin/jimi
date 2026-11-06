@@ -48,3 +48,19 @@ data class AppEdge(
     val lastOk: Long,
     val failedCount: Int,
 )
+
+/** Permission queue (ROADMAP §J.7): a step Jimi did not try alone while learning [pkg].
+ *  [status]: pending | approved | denied. Denied rows stay so the same step is never asked again. */
+@Entity(tableName = "app_ask", indices = [Index(value = ["pkg", "role", "label"], unique = true)])
+data class AppAsk(
+    @PrimaryKey(autoGenerate = true) val id: Long = 0,
+    val pkg: String,
+    val label: String,
+    val role: String,
+    val screen: String,
+    val status: String,
+    val createdAt: Long,
+)
+
+/** Row for [AppMapDao.screenCounts]. */
+data class PkgCount(val pkg: String, val n: Int)

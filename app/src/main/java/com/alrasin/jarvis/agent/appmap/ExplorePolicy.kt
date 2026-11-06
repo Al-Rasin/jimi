@@ -20,7 +20,8 @@ object ExplorePolicy {
     /** [raw] is the on-screen text, used to find the node again (the label is cleaned). */
     data class Target(val element: Element, val raw: String)
 
-    data class Plan(val targets: List<Target>, val risky: List<Element>)
+    /** [ask]: plain buttons Jimi does not tap alone; they go to the permission queue (§J.7). */
+    data class Plan(val targets: List<Target>, val risky: List<Element>, val ask: List<Element> = emptyList())
 
     private val neverTap = Regex(
         "(?i)\\b(pay|payment|buy|send|post|share|call|delete|remove|log ?out|log ?off|sign ?out|follow|like|" +
@@ -28,29 +29,43 @@ object ExplorePolicy {
     )
     private val openButton = Regex("(?i)^(more|more options|settings|menu|options|open navigation drawer|navigation drawer|me|my|profile)$")
     private val roleOrder = listOf("tab", "drawer", "menu", "button", "row")
+    private const val MAX_ASKS = 5
+    /** Moves only; never worth a question. */
+    private val noAsk = Regex("(?i)^(back|navigate up|up|close|cancel|done|dismiss|search|clear search|more|ok)$")
 
     fun risky(label: String): Boolean =
         neverTap.containsMatchIn(label) || AgentSafety.riskLevel(label) != "low"
 
-    fun plan(nodes: List<RawNode>, windowClass: String, pkg: String = ""): Plan {
+    /** [approved]: button labels the user said yes to (§J.7); they are tapped like More/Settings. */
+    fun plan(nodes: List<RawNode>, windowClass: String, pkg: String = "", approved: Set<String> = emptySet()): Plan {
         val risky = ArrayList<Element>()
         val safe = ArrayList<Target>()
+        val ask = ArrayList<Element>()
         val ids = nodes.groupingBy { it.resourceId }.eachCount()
         // Chat rows open real chats (and can mark them read); tabs and menus are enough to learn a chat app (§M.11).
         val rowsAllowed = pkg !in CHAT_APPS && (settingsScreen(nodes, windowClass) || menuScreen(nodes, windowClass))
         for (n in nodes) {
             if (n.editable || n.password || n.checkable) continue
             val target = (if (n.inList) row(n, rowsAllowed) else structural(n, ids)) ?: continue
-            if (risky(target.element.label) || risky(target.raw)) {
+            val label = target.element.label
+            if (risky(label) || risky(target.raw)) {
                 risky += target.element.copy(risk = "high")
             } else if (target.element.role in roleOrder) {
                 safe += target
+            } else if (target.element.role == "skip" && label in approved) {
+                safe += target.copy(element = target.element.copy(role = "button"))
+            } else if (target.element.role == "skip" && pkg !in CHAT_APPS && label.length in 2..40 && !noAsk.matches(label)) {
+                ask += target.element.copy(role = "button")
             }
         }
         val unique = safe.distinctBy { it.element.label }
         val ordered = unique.sortedBy { roleOrder.indexOf(it.element.role) }
         val rows = ordered.filter { it.element.role == "row" }.take(MAX_ROWS)
-        return Plan(ordered.filter { it.element.role != "row" }.take(MAX_TARGETS) + rows, risky.distinctBy { it.label })
+        return Plan(
+            ordered.filter { it.element.role != "row" }.take(MAX_TARGETS) + rows,
+            risky.distinctBy { it.label },
+            ask.distinctBy { it.label }.take(MAX_ASKS),
+        )
     }
 
     private fun structural(n: RawNode, ids: Map<String, Int>): Target? {

@@ -36,3 +36,9 @@ internal val MIGRATION_SQL_4_5 = listOf(
     "CREATE INDEX IF NOT EXISTS `index_app_element_screen` ON `app_element` (`screen`)",
     "CREATE INDEX IF NOT EXISTS `index_app_edge_fromScreen` ON `app_edge` (`fromScreen`)",
 )
+
+/** Table added in DB v6: permission queue (ROADMAP §J.7). */
+internal val MIGRATION_SQL_5_6 = listOf(
+    "CREATE TABLE IF NOT EXISTS `app_ask` (`id` INTEGER PRIMARY KEY AUTOINCREMENT NOT NULL, `pkg` TEXT NOT NULL, `label` TEXT NOT NULL, `role` TEXT NOT NULL, `screen` TEXT NOT NULL, `status` TEXT NOT NULL, `createdAt` INTEGER NOT NULL)",
+    "CREATE UNIQUE INDEX IF NOT EXISTS `index_app_ask_pkg_role_label` ON `app_ask` (`pkg`, `role`, `label`)",
+)

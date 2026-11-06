@@ -72,6 +72,7 @@ object IntentRouter {
     private val chatWords = setOf("joke", "story", "poem", "gravity", "meaning", "explain", "opinion", "advice", "feel", "think")
     private val webWords = setOf("search", "google", "online", "internet", "weather", "news", "headlines", "forecast")
     private val webTools = setOf("web_search", "weather", "news")
+    private val CAPABILITY_TOOLS = setOf("app_abilities", "app_limits", "phone_profile")
     private val capabilityQuestion = Regex("\\bwhat (?:can|could|do) you (?:do|help)\\b")
     private val launchRequest = Regex("^(?:open|launch|start|run|show)(?: the| my)? (.+?)(?: app| application)?$")
 
@@ -90,11 +91,11 @@ object IntentRouter {
 
         // These guards precede broad rules such as open_app, call and type_text.
         val quoted = raw.firstOrNull() in setOf('"', '“', '\'') && raw.lastOrNull() in setOf('"', '”', '\'')
-        if (quoted || spokenQuote.matches(raw) || negation.matches(normalized)) return Decision(Route.CHAT, 0.98f, "quoted or negated request")
+        if (quoted || spokenQuote.matches(raw) || (negation.matches(normalized) && ruleCall?.tool != "app_questions")) return Decision(Route.CHAT, 0.98f, "quoted or negated request")
         if (nickname.matches(normalized) || metaphor.matches(normalized)) return Decision(Route.CHAT, 0.98f, "conversational expression")
         if (explanation.matches(normalized) || definition.matches(normalized) || creative.matches(normalized)) return Decision(Route.CHAT, 0.96f, "explanation or creative request")
         if (greeting.matches(normalized)) return Decision(Route.CHAT, 0.98f, "conversation")
-        if (capabilityQuestion.containsMatchIn(normalized) && ruleCall?.tool != "app_abilities" && ruleCall?.tool != "phone_profile") return Decision(Route.CHAT, 0.98f, "capability question")
+        if (capabilityQuestion.containsMatchIn(normalized) && ruleCall?.tool !in CAPABILITY_TOOLS) return Decision(Route.CHAT, 0.98f, "capability question")
 
         val launchApp = when (ruleCall?.tool) {
             "open_app" -> ruleCall.arg("app")

@@ -8,6 +8,7 @@ import com.alrasin.jarvis.actions.PhoneProfile
 import com.alrasin.jarvis.actions.SimpleTool
 import com.alrasin.jarvis.actions.arg
 import com.alrasin.jarvis.agent.UiQuery
+import com.alrasin.jarvis.brain.Persona
 import com.alrasin.jarvis.core.JarvisLog
 import com.alrasin.jarvis.core.Json
 import com.alrasin.jarvis.core.Tool
@@ -198,6 +199,37 @@ class Planner @Inject constructor(
         return ToolResult.ok(MapPlan.abilities(app.name, app.card, graph(app.pkg)))
     }
 
+    /** "what can't you do in X" (§J.7): card reasons, payment/skip, risky and denied buttons. */
+    suspend fun limits(name: String, apps: AppList): ToolResult {
+        val app = resolve(name, apps) ?: return ToolResult.fail("I can't find an app called $name.")
+        val readOnly = PhoneProfile.isPaymentPackage(app.pkg) || app.card?.readOnly == true
+        val risky = graph(app.pkg).elements.values.flatten().filter { it.risk != "low" }.map { it.label }.distinct().size
+        val denied = dao.asksFor(app.pkg).filter { it.status == AppAskQueue.DENIED }.map { it.label }
+        val skipped = ExplorePolicy.skipPackage(app.pkg, context.packageName)
+        return ToolResult.ok(AppAskQueue.limits(app.name, app.card?.cannot.orEmpty(), readOnly, skipped, denied, risky))
+    }
+
+    @Volatile private var lastAsk: Long = 0
+
+    /** Permission queue (§J.7): [action] list = ask the oldest question; yes/no = answer it. */
+    suspend fun questions(action: String, appName: String, apps: AppList): ToolResult {
+        val pkg = appName.takeIf { it.isNotBlank() }?.let { resolve(it, apps)?.pkg }
+        val pending = dao.pendingAsksOnce().filter { pkg == null || it.pkg == pkg }
+        if (action == "yes" || action == "no") {
+            val ask = dao.ask(lastAsk)?.takeIf { it.status == AppAskQueue.PENDING } ?: pending.firstOrNull()
+                ?: return ToolResult.fail("I have no question waiting, ${Persona.ADDRESS}.")
+            val yes = action == "yes"
+            dao.setAskStatus(ask.id, if (yes) AppAskQueue.APPROVED else AppAskQueue.DENIED)
+            lastAsk = 0
+            val name = forPackage(ask.pkg, apps).name
+            return ToolResult.ok(if (yes) "OK, I'll tap \"${ask.label}\" next time I learn $name." else "OK, I won't tap \"${ask.label}\" in $name.")
+        }
+        val ask = pending.firstOrNull() ?: return ToolResult.ok("No questions, ${Persona.ADDRESS}.")
+        lastAsk = ask.id
+        val more = if (pending.size > 1) " ${pending.size - 1} more after this." else ""
+        return ToolResult.ok(AppAskQueue.question(forPackage(ask.pkg, apps).name, ask) + more)
+    }
+
     suspend fun go(name: String, target: String, apps: AppList): ToolResult {
         val app = resolve(name, apps) ?: return ToolResult.fail("I can't find an app called $name.")
         if (PhoneProfile.isPaymentPackage(app.pkg) || app.card?.readOnly == true) {
@@ -326,5 +358,19 @@ fun mapTools(planner: Planner, apps: AppList): List<Tool> = listOf(
     ) { call, _ ->
         val app = call.arg("app").orEmpty()
         if (app.isBlank()) ToolResult.fail("Which app?") else planner.abilities(app, apps)
+    },    SimpleTool(
+        "app_limits",
+        "Say what Jarvis can't do inside an app and why.",
+        listOf(arg("app", "app name")),
+    ) { call, _ ->
+        val app = call.arg("app").orEmpty()
+        if (app.isBlank()) ToolResult.fail("Which app?") else planner.limits(app, apps)
+    },
+    SimpleTool(
+        "app_questions",
+        "Ask or answer Jarvis's questions about buttons it may tap while learning apps.",
+        listOf(arg("action", "list, yes or no", choices = listOf("list", "yes", "no")), arg("app", "app name, optional", required = false)),
+    ) { call, _ ->
+        planner.questions(call.arg("action")?.lowercase() ?: "list", call.arg("app").orEmpty(), apps)
     },
 )

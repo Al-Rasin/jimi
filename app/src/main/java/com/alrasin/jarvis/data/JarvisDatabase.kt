@@ -6,6 +6,7 @@ import androidx.room.Room
 import androidx.room.RoomDatabase
 import androidx.room.migration.Migration
 import androidx.sqlite.db.SupportSQLiteDatabase
+import com.alrasin.jarvis.agent.appmap.AppAsk
 import com.alrasin.jarvis.agent.appmap.AppEdge
 import com.alrasin.jarvis.agent.appmap.AppElement
 import com.alrasin.jarvis.agent.appmap.AppInfo
@@ -22,9 +23,9 @@ import javax.inject.Singleton
     entities = [
         WakeEvent::class, ConversationTurn::class, Note::class, Reminder::class, NotificationLog::class,
         AppRule::class, MemoryFact::class, ToolCallLog::class, Routine::class,
-        AppInfo::class, AppScreen::class, AppElement::class, AppEdge::class, RecipeRow::class,
+        AppInfo::class, AppScreen::class, AppElement::class, AppEdge::class, RecipeRow::class, AppAsk::class,
     ],
-    version = 5,
+    version = 6,
     exportSchema = true,
 )
 abstract class JarvisDatabase : RoomDatabase() {
@@ -67,6 +68,13 @@ abstract class JarvisDatabase : RoomDatabase() {
                 MIGRATION_SQL_4_5.forEach(db::execSQL)
             }
         }
+
+        /** v6 adds the permission queue (ROADMAP §J.7). */
+        val MIGRATION_5_6 = object : Migration(5, 6) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                MIGRATION_SQL_5_6.forEach(db::execSQL)
+            }
+        }
     }
 }
 
@@ -77,7 +85,7 @@ object DataModule {
     @Singleton
     fun database(@ApplicationContext context: Context): JarvisDatabase =
         Room.databaseBuilder(context, JarvisDatabase::class.java, "jarvis.db")
-            .addMigrations(JarvisDatabase.MIGRATION_1_2, JarvisDatabase.MIGRATION_2_3, JarvisDatabase.MIGRATION_3_4, JarvisDatabase.MIGRATION_4_5)
+            .addMigrations(JarvisDatabase.MIGRATION_1_2, JarvisDatabase.MIGRATION_2_3, JarvisDatabase.MIGRATION_3_4, JarvisDatabase.MIGRATION_4_5, JarvisDatabase.MIGRATION_5_6)
             .build()
 
     @Provides fun wakeEventDao(db: JarvisDatabase): WakeEventDao = db.wakeEventDao()

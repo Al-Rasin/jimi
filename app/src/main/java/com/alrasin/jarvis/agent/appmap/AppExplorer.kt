@@ -89,7 +89,7 @@ class AppExplorer @Inject constructor(
         val app = planner.forPackage(pkg, apps)
         val service = JarvisAccessibilityService.instance
             ?: return Report(app.name, 0, 0, 0, "accessibility is off").also { JarvisLog.i("explore $pkg: $it") }
-        val s = Session(service, pkg, apps)
+        val s = Session(service, pkg, apps).apply { approved = learner.approvedLabels(pkg) }
         JarvisLog.i("explore $pkg: start")
         try {
             val finished = withTimeoutOrNull(ExplorePolicy.MAX_MS + SAFETY_MS) {
@@ -122,6 +122,7 @@ class AppExplorer @Inject constructor(
         var risky = 0
         var relaunches = 0
         var stop: String? = null
+        var approved: Set<String> = emptySet()
 
         /** Depth-first: learn this screen, then each safe target, coming back here between them. */
         suspend fun visit(path: List<ExplorePolicy.Target>) {
@@ -130,8 +131,9 @@ class AppExplorer @Inject constructor(
             JarvisLog.i("explore $pkg: screen ${screens.size + 1} depth ${path.size}, taps $taps")
             screens += fp
             learner.onScreen(pkg, live.windowClass, live.nodes)
-            val plan = ExplorePolicy.plan(live.nodes, live.windowClass, pkg)
+            val plan = ExplorePolicy.plan(live.nodes, live.windowClass, pkg, approved)
             learner.noteRisky(pkg, plan.risky)
+            learner.queueAsks(pkg, live.windowClass.substringAfterLast('.'), plan.ask)
             risky += plan.risky.size
             if (path.size >= ExplorePolicy.MAX_DEPTH) return
             for (t in plan.targets) {

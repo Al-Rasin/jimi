@@ -27,4 +27,13 @@ interface AppMapDao {
     @Query("SELECT * FROM app_edge WHERE fromScreen = :fromScreen") suspend fun edgesFrom(fromScreen: Long): List<AppEdge>
     @Query("SELECT * FROM app_edge WHERE fromScreen = :fromScreen AND element = :element LIMIT 1")
     suspend fun edge(fromScreen: Long, element: Long): AppEdge?
+
+    @Insert(onConflict = OnConflictStrategy.IGNORE) suspend fun insertAsk(a: AppAsk): Long
+    @Query("SELECT * FROM app_ask WHERE status = 'pending' ORDER BY createdAt, id") fun pendingAsks(): Flow<List<AppAsk>>
+    @Query("SELECT * FROM app_ask WHERE status = 'pending' ORDER BY createdAt, id") suspend fun pendingAsksOnce(): List<AppAsk>
+    @Query("SELECT * FROM app_ask WHERE pkg = :pkg ORDER BY createdAt, id") suspend fun asksFor(pkg: String): List<AppAsk>
+    @Query("SELECT * FROM app_ask ORDER BY createdAt, id") fun allAsks(): Flow<List<AppAsk>>
+    @Query("UPDATE app_ask SET status = :status WHERE id = :id") suspend fun setAskStatus(id: Long, status: String)
+    @Query("SELECT * FROM app_ask WHERE id = :id") suspend fun ask(id: Long): AppAsk?
+    @Query("SELECT pkg, COUNT(*) AS n FROM app_screen GROUP BY pkg") fun screenCounts(): Flow<List<PkgCount>>
 }

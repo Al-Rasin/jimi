@@ -10,6 +10,8 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.widthIn
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
@@ -25,6 +27,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.ui.res.painterResource
 import com.alrasin.jarvis.R
+import com.alrasin.jarvis.agent.appmap.AppAskQueue
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.graphics.SolidColor
@@ -500,6 +503,7 @@ private fun SettingsTab(vm: AppViewModel, onSetup: () -> Unit, onDeviceCheck: ()
             }
             if (message.isNotBlank()) Hint(message)
         }
+        "apps" -> SubPage("App knowledge", close) { AppKnowledgeCards(vm) }
         "debug" -> SubPage("Run a tool", close) {
             RowsCard {
                 OutlinedTextField(tool, { tool = it.trim() }, Modifier.fillMaxWidth(), label = { Text("Tool") }, singleLine = true)
@@ -540,6 +544,8 @@ private fun SettingsTab(vm: AppViewModel, onSetup: () -> Unit, onDeviceCheck: ()
                 NavRow("Assistant mode") { page = "assistant" }
             }
             RowsCard {
+                NavRow("App knowledge") { page = "apps" }
+                RowDivider()
                 NavRow("Setup & data") { page = "setup" }
                 RowDivider()
                 NavRow("Run a tool") { page = "debug" }
@@ -629,5 +635,39 @@ private fun KeyRow(spec: KeyRowSpec, saved: Boolean, onSave: (String) -> Unit, o
             visualTransformation = if (spec.hidden) PasswordVisualTransformation() else VisualTransformation.None,
         )
         Chip(if (value.isEmpty() && saved) "Remove" else "Save", selected = true) { onSave(value); value = ""; editing = false }
+    }
+}
+
+/** What Jimi knows per app, what it can't do, and its questions waiting for a yes/no (ROADMAP §J.7). */
+@Composable
+private fun AppKnowledgeCards(vm: AppViewModel) {
+    val apps by vm.appKnowledge.collectAsStateWithLifecycle()
+    val asks by vm.pendingAsks.collectAsStateWithLifecycle()
+    val names = apps.associate { it.pkg to it.label }
+    if (asks.isNotEmpty()) RowsCard(title = "Questions") {
+        asks.take(20).forEachIndexed { i, a ->
+            if (i > 0) RowDivider()
+            ItemRow("Tap \"${a.label}\"?", "${names[a.pkg] ?: a.pkg} · ${AppAskQueue.pretty(a.screen)}") {
+                Chip("Yes") { vm.answerAsk(a.id, true) }
+                Spacer(Modifier.width(6.dp))
+                Chip("No") { vm.answerAsk(a.id, false) }
+            }
+        }
+    }
+    if (apps.isEmpty()) {
+        EmptyState("No apps yet", "Say \"learn WhatsApp\" and I'll map it.")
+        return
+    }
+    RowsCard(title = "Apps") {
+        apps.forEachIndexed { i, a ->
+            if (i > 0) RowDivider()
+            val meta = buildList {
+                add("${a.screens} screens")
+                if (a.tasks.isNotEmpty()) add("can: ${a.tasks.joinToString(", ")}")
+                if (a.cannot.isNotEmpty()) add("can't: ${a.cannot.joinToString(", ")}")
+                if (a.lastLearned > 0) add(timeFmt.format(Date(a.lastLearned)))
+            }.joinToString(" · ")
+            ItemRow(a.label, meta)
+        }
     }
 }

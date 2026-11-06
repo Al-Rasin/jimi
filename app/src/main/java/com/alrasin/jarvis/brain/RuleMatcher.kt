@@ -568,6 +568,15 @@ object RuleMatcher {
 
     /** App map (ROADMAP §J.4): "open privacy settings in whatsapp", "what can you do in youtube". */
     private fun appMap(t: String): ToolCall? {
+        // Permission queue (§J.7): plain "yes"/"no" stay with the confirm flow, so these need "learn it"/"skip it".
+        if (t.matches(re("(?:do you have |you have )?any (?:app )?questions(?: for me)?|what (?:do you )?(?:want|need) to ask(?: me)?|(?:show |open )?(?:the )?permission queue|ask (?:me )?your questions?"))) return call("app_questions", "action" to "list")
+        if (t.matches(re("(?:yes|yeah|ok|sure),? (?:learn|tap|try) it|yes you (?:can|may)(?: tap it)?|(?:you can|you may) tap it"))) return call("app_questions", "action" to "yes")
+        if (t.matches(re("(?:no|nope),? (?:skip|leave) it|(?:dont|do not) (?:learn|tap|touch) (?:it|that)"))) return call("app_questions", "action" to "no")
+        Regex("^what (?:(?:cant|cannot|can not|couldnt) (?:you )?|(?:you )?not |things (?:you )?(?:cant|cannot) )do (?:in|on|with|inside) (?:the )?(.+?)(?: app)?$").find(t)
+            ?.let {
+                val app = it.groupValues[1]
+                return if (appNameMatches?.invoke(app) == true) call("app_limits", "app" to app) else null
+            }
         // Explorer (§J.5): "learn this app", "learn mi remote".
         if (t.matches(re("(?:learn|explore) (?:this|the|the current|current) app"))) return call("learn_app")
         Regex("^(?:learn|explore) (?:the )?(.+?)(?: app)?$").find(t)?.let {

@@ -1,5 +1,9 @@
 package com.alrasin.jarvis.ui
 
+import com.alrasin.jarvis.actions.PhoneProfile
+import com.alrasin.jarvis.agent.appmap.AppAskQueue
+import com.alrasin.jarvis.agent.appmap.AppCards
+import com.alrasin.jarvis.agent.appmap.AppMapDao
 import android.app.Application
 import android.media.MediaPlayer
 import androidx.lifecycle.AndroidViewModel
@@ -37,6 +41,7 @@ import com.alrasin.jarvis.voice.VoicePack
 import com.alrasin.jarvis.voice.Voices
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -67,6 +72,8 @@ class AppViewModel @Inject constructor(
     private val models: ModelBrain,
     private val speakerProvider: dagger.Lazy<SpeakerVerifier>,
     private val cloud: dagger.Lazy<com.alrasin.jarvis.brain.CloudBrain>,
+    private val appMap: AppMapDao,
+    private val appCards: AppCards,
 ) : AndroidViewModel(app) {
     private val secrets get() = secretsProvider.get()
     private val speaker get() = speakerProvider.get()
@@ -79,6 +86,21 @@ class AppViewModel @Inject constructor(
     val notificationList = notifications.recent().state(emptyList())
     val rules = notifications.rulesFlow().state(emptyList())
     val facts = memory.flow().state(emptyList())
+    /** One row per known app for the "App knowledge" page (§J.7). */
+    data class AppKnowledge(val pkg: String, val label: String, val screens: Int, val tasks: List<String>, val cannot: List<String>, val lastLearned: Long)
+    val appKnowledge = combine(appMap.allInfo(), appMap.screenCounts()) { infos, counts ->
+        val n = counts.associate { it.pkg to it.n }
+        infos.map { i ->
+            val card = appCards.card(i.pkg)
+            val cannot = card?.cannot.orEmpty().map { c -> if (c.why.isBlank()) c.what else "${c.what} (${c.why})" } +
+                listOfNotNull("only reads, never taps (payment)".takeIf { card?.readOnly == true || PhoneProfile.isPaymentPackage(i.pkg) })
+            AppKnowledge(i.pkg, i.label.ifBlank { card?.name ?: i.pkg }, n[i.pkg] ?: 0, card?.tasks.orEmpty().map { it.name }, cannot, i.lastLearned)
+        }.sortedBy { it.label.lowercase() }
+    }.state(emptyList())
+    val pendingAsks = appMap.pendingAsks().state(emptyList())
+    fun answerAsk(id: Long, yes: Boolean) = viewModelScope.launch(Dispatchers.IO) {
+        appMap.setAskStatus(id, if (yes) AppAskQueue.APPROVED else AppAskQueue.DENIED)
+    }
     val spokenWake = settings.spokenWake.state(true)
     val followUp = settings.followUp.state(true)
     val showPanel = settings.showPanel.state(true)

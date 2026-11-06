@@ -68,6 +68,21 @@ class AppLearner @Inject constructor(
         pendingClick = if (pkg == lastPkg) element else null
     }
 
+    /** Buttons the user said "yes, learn it" to for [pkg] (§J.7). */
+    suspend fun approvedLabels(pkg: String): Set<String> = runCatching {
+        dao.asksFor(pkg).filter { it.status == AppAskQueue.APPROVED }.map { it.label }.toSet()
+    }.getOrDefault(emptySet())
+
+    /** Queue unknown buttons as questions. The unique row means a denied one is never asked again. */
+    suspend fun queueAsks(pkg: String, screen: String, elements: List<ScreenStructure.Element>) {
+        runCatching {
+            val now = System.currentTimeMillis()
+            elements.forEach {
+                dao.insertAsk(AppAsk(pkg = pkg, label = it.label, role = it.role, screen = screen, status = AppAskQueue.PENDING, createdAt = now))
+            }
+        }.onFailure { JarvisLog.e("app ask queue failed", it) }
+    }
+
     /** Save risky elements the explorer skipped, marked high, on the current screen. */
     suspend fun noteRisky(pkg: String, elements: List<ScreenStructure.Element>) = lock.withLock {
         runCatching {
