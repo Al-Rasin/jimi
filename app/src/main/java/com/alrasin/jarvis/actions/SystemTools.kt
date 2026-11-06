@@ -70,20 +70,42 @@ class Torch(private val context: Context) {
     /** MIUI can accept setTorchMode from a background app and silently ignore it; wait for the callback to confirm. */
     private suspend fun confirmed(value: Boolean): Boolean = pollUntil(10, 50) { state == value }
 
-    /** Camera API first; MIUI refuses it for background apps, then the flash LED is switched with root. */
+    /**
+     * Camera API first; MIUI refuses it for background apps, then the flash LED is switched with root.
+     * One night the first try failed while the camera was busy (state null, LED read 0) and later tries worked,
+     * so everything is tried once more after a short wait with the LED path looked up again.
+     */
     suspend fun set(value: Boolean): Boolean {
+        repeat(2) { attempt ->
+            if (attempt > 0) { JarvisLog.i("torch: retry"); rootLed = null; delay(RETRY_MS) }
+            if (viaApi(value) || viaRoot(value)) return true
+        }
+        return false
+    }
+
+    private suspend fun viaApi(value: Boolean): Boolean {
         val api = runCatching { id?.let { state = null; cm.setTorchMode(it, value); true } ?: false }
             .onFailure { JarvisLog.e("torch: camera API failed", it) }.getOrDefault(false)
         if (api && confirmed(value)) { usesRoot = false; return true }
         if (api) JarvisLog.i("torch: camera API accepted but torch did not change; trying root LED")
-        val path = led() ?: return false
-        val maximum = DeviceActionPolicy.torchBrightness(
-            RootShell.run("cat ${RootShell.quote("$path/max_brightness")}").out,
-        ) ?: return false
-        val ok = RootShell.run("echo ${if (value) maximum else 0} > ${RootShell.quote("$path/brightness")}").ok
-        usesRoot = ok
+        return false
+    }
+
+    /** Writes the LED and reads it back, so "done" is never said for a write the driver ignored. */
+    private suspend fun viaRoot(value: Boolean): Boolean {
+        val path = led() ?: return false.also { JarvisLog.i("torch: no root LED (root=${RootShell.available})") }
+        val brightness = RootShell.quote("$path/brightness")
+        val maximum = DeviceActionPolicy.torchBrightness(RootShell.run("cat ${RootShell.quote("$path/max_brightness")}").out)
+            ?: return false
+        RootShell.run("echo ${if (value) maximum else 0} > $brightness")
+        val now = RootShell.run("cat $brightness").out.trim().toIntOrNull()
+        val ok = now != null && (now > 0) == value
+        JarvisLog.i("torch: root LED $path → $now")
+        if (ok) usesRoot = true
         return ok
     }
+
+    private companion object { const val RETRY_MS = 400L }
 }
 
 val TOGGLE_TARGETS = listOf("flashlight", "wifi", "bluetooth", "data", "dnd", "airplane", "location", "hotspot", "battery_saver", "auto_rotate",

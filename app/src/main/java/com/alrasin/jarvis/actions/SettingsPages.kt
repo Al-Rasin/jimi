@@ -35,11 +35,18 @@ class SettingsPages(private val context: Context) {
     }
 
     suspend fun run(name: String, state: String?): ToolResult {
+        if (DESKTOP.containsMatchIn(name)) return ToolResult.ok(DESKTOP_REPLY)
         if (state == "status") return status(name)
         direct(name, state)?.let { return it }
-        if (context.isLocked()) return ToolResult.fail("Unlock the phone first, Boss.")
-        if (state == "on" || state == "off") stored(name, state == "on")?.let { return it }
+        // Keys are set with root, so they work on the lock screen too; only the Settings app needs unlocking.
         val service = JarvisAccessibilityService.instance
+        val locked = context.isLocked()
+        val k = known(name)
+        if (state == "on" || state == "off") {
+            if (k != null && (!k.appFirst || locked || service == null)) knownSet(k, state == "on")?.takeIf { it.ok || locked }?.let { return it }
+            if (k == null) stored(name, state == "on")?.let { return it }
+        }
+        if (locked) return ToolResult.fail("Unlock the phone first, Boss.")
         val page = best(name, pages)
         val flip = state == "on" || state == "off"
         val opened = when {
@@ -51,6 +58,7 @@ class SettingsPages(private val context: Context) {
         if (!flip) return ToolResult.ok("Opened $name settings.")
         service ?: return ToolResult.ok("Opened $name settings. Turn it ${state} there.")
         val on = state == "on"
+        val lastTry = suspend { k?.let { knownSet(it, on) } }
         // The row may not be on screen at once; wait for it, then flip and read back.
         repeat(12) {
             val label = match(name, service.texts(settingsPkg).filter { service.switchState(settingsPkg, it) != null })
@@ -58,19 +66,24 @@ class SettingsPages(private val context: Context) {
                 service.setSwitch(settingsPkg, label, on)
                 delay(500)
                 return if (service.switchState(settingsPkg, label) == on) ToolResult.ok("$label is ${state} now.")
-                else ToolResult.ok("I opened $label. Turn it ${state} there.")
+                else lastTry() ?: ToolResult.ok("I opened $label. Turn it ${state} there.")
             }
             delay(250)
         }
-        return ToolResult.ok("I opened $name settings. Turn it ${state} there.")
+        return lastTry() ?: ToolResult.ok("I opened $name settings. Turn it ${state} there.")
     }
 
     /** Reads the real on/off value; changes nothing, so a "did you…?" answer is never a guess. */
     private suspend fun status(name: String): ToolResult {
         val label = name.replaceFirstChar { it.uppercase() }
         if (DARK.containsMatchIn(name)) {
-            val out = RootShell.run("cmd uimode night", log = false).out.lowercase()
-            if ("yes" in out || "no" in out) return ToolResult.ok("$label is ${if ("yes" in out) "on" else "off"}.")
+            darkOn()?.let { return ToolResult.ok("Dark mode is ${if (it) "on" else "off"}.") }
+        }
+        known(name)?.let { k ->
+            when (RootSettings.get(k.keys.first().first, k.keys.first().second)) {
+                "1" -> return ToolResult.ok("${k.label} is on.")
+                "0" -> return ToolResult.ok("${k.label} is off.")
+            }
         }
         val (ns, key, _) = key(name, entries(), read = true) ?: return ToolResult.fail("I can't read $name from here.")
         return when (RootSettings.get(ns, key)) {
@@ -89,8 +102,37 @@ class SettingsPages(private val context: Context) {
     /** Settings Android can set straight away (root), the same on every phone; null = not one of them. */
     private suspend fun direct(name: String, state: String?): ToolResult? {
         if (state != "on" && state != "off" || !DARK.containsMatchIn(name)) return null
-        val ok = RootShell.run("cmd uimode night ${if (state == "on") "yes" else "no"}").ok
-        return if (ok) ToolResult.ok("Dark mode is $state now.") else null
+        val on = darkWanted(name, state == "on")
+        RootShell.run("cmd uimode night ${if (on) "yes" else "no"}")
+        // MIUI sometimes ignores the uimode command; the secure key (2 = dark, 1 = light) is the same switch.
+        if (darkOn() != on) RootShell.run("settings put secure ui_night_mode ${if (on) 2 else 1}", "cmd uimode night ${if (on) "yes" else "no"}")
+        val now = darkOn()
+        JarvisLog.i("dark mode → $on, reads $now")
+        return when (now) {
+            on -> ToolResult.ok("Dark mode is ${if (on) "on" else "off"} now.")
+            null -> null
+            else -> ToolResult.fail("Dark mode is still ${if (now) "on" else "off"}.")
+        }
+    }
+
+    private suspend fun darkOn(): Boolean? {
+        val out = RootShell.run("cmd uimode night", log = false).out.lowercase()
+        return when {
+            "yes" in out -> true
+            "no" in out -> false
+            else -> when (RootSettings.get("secure", "ui_night_mode")) { "2" -> true; "1" -> false; else -> null }
+        }
+    }
+
+    /** Writes every key of [k] with root and reads them back; null when root is missing (then the Settings app is used). */
+    private suspend fun knownSet(k: Known, on: Boolean): ToolResult? {
+        if (!RootShell.available) return null
+        val v = if (on) "1" else "0"
+        k.keys.forEach { (ns, key) -> RootSettings.put(ns, key, v) }
+        val read = k.keys.map { (ns, key) -> RootSettings.get(ns, key) }
+        JarvisLog.i("setting ${k.label}: ${k.keys.map { it.second }} → $v, reads $read")
+        return if (read.all { it == v }) ToolResult.ok("${k.label} is ${if (on) "on" else "off"} now.")
+        else ToolResult.fail("${k.label} didn't change. It reads ${if (read.first() == "1") "on" else "off"}.")
     }
 
     /**
@@ -138,7 +180,30 @@ class SettingsPages(private val context: Context) {
     }
 
     companion object {
-        private val DARK = Regex("\\b(?:dark (?:mode|theme)|night mode)\\b")
+        private val DARK = Regex("\\b(?:dark|light (?:mode|theme)|night mode)\\b")
+        private val DESKTOP = Regex("\\bdesktop\\b")
+        internal const val DESKTOP_REPLY = "Desktop mode shows apps in windows on a big screen, like a computer. This phone doesn't have it."
+
+        /** "turn on light mode" means dark mode off. */
+        internal fun darkWanted(name: String, on: Boolean): Boolean =
+            if (Regex("\\blight (?:mode|theme)\\b").containsMatchIn(name.lowercase()) && "dark" !in name.lowercase()) !on else on
+
+        /** Settings whose keys are known, so no guessing from `settings list`; every key is written (MIUI keeps extra copies). */
+        internal data class Known(val label: String, val keys: List<Pair<String, String>>, val appFirst: Boolean = false)
+
+        internal fun known(name: String): Known? {
+            val n = name.lowercase()
+            return when {
+                Regex("\\bhaptic|touch (?:feedback|vibration)|vibrate on touch").containsMatchIn(n) ->
+                    Known("Haptic feedback", listOf("system" to "haptic_feedback_enabled"))
+                Regex("\\bvibrat").containsMatchIn(n) ->
+                    Known("Vibration", listOf("system" to "vibrate_when_ringing", "system" to "vibrate_in_normal", "system" to "vibrate_in_silent"))
+                Regex("\\b(?:reading|paper) mode\\b|\\beye comfort\\b").containsMatchIn(n) ->
+                    // The Settings switch was proven on the phone (#58); the key alone may not repaint the screen, so it is the fallback.
+                    Known("Reading mode", listOf("system" to "screen_paper_mode_enabled"), appFirst = true)
+                else -> null
+            }
+        }
         /**
          * Key words that differ from the spoken name, used only to READ a value: MIUI keeps reading mode in
          * screen_paper_mode_enabled, but writing that key alone may skip the screen change, so turning it on still uses Settings.

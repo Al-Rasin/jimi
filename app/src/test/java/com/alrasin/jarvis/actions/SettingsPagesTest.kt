@@ -1,7 +1,9 @@
 package com.alrasin.jarvis.actions
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class SettingsPagesTest {
@@ -49,5 +51,36 @@ class SettingsPagesTest {
         assertNull(SettingsPages.key("adb", e))
         assertNull(SettingsPages.key("lockscreen sounds", e))
         assertNull(SettingsPages.key("reading mode", e))
+    }
+
+    @Test fun hapticUsesItsKey() {
+        assertEquals(listOf("system" to "haptic_feedback_enabled"), SettingsPages.known("haptic feedback")?.keys)
+        assertEquals("Haptic feedback", SettingsPages.known("touch vibration")?.label)
+        assertEquals("Haptic feedback", SettingsPages.known("haptics")?.label)
+    }
+
+    @Test fun vibrationWritesMiuiCopies() {
+        val k = SettingsPages.known("vibration")!!
+        assertEquals("system" to "vibrate_when_ringing", k.keys.first())
+        assertTrue(("system" to "vibrate_in_silent") in k.keys)
+        assertEquals("Vibration", SettingsPages.known("vibrate mode")?.label)
+    }
+
+    @Test fun readingModeKeyIsFallbackAfterSwitch() {
+        val k = SettingsPages.known("reading mode")!!
+        assertEquals(listOf("system" to "screen_paper_mode_enabled"), k.keys)
+        assertTrue(k.appFirst)
+        assertEquals("Reading mode", SettingsPages.known("eye comfort mode")?.label)
+    }
+
+    @Test fun unknownNamesFallBackToSearch() {
+        assertNull(SettingsPages.known("nfc"))
+        assertNull(SettingsPages.known("dark mode"))
+    }
+
+    @Test fun lightModeMeansDarkOff() {
+        assertFalse(SettingsPages.darkWanted("light mode", true))
+        assertTrue(SettingsPages.darkWanted("light mode", false))
+        assertTrue(SettingsPages.darkWanted("dark mode", true))
     }
 }
