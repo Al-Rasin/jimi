@@ -22,24 +22,34 @@ class FastWeather(private val context: Context? = null) {
         get(name, tomorrow, mapOf("latitude" to lat, "longitude" to lon, "name" to name))
 
     suspend fun get(place: String, tomorrow: Boolean, known: Map<*, *>? = null): ToolResult = withContext(Dispatchers.IO) {
+        val key = place.trim().lowercase(java.util.Locale.ROOT)
+        val cacheKey = "$key|$tomorrow"
         val cm = context?.getSystemService(ConnectivityManager::class.java)
         if (cm != null && cm.getNetworkCapabilities(cm.activeNetwork)
                 ?.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET) != true) {
-            return@withContext ToolResult.fail("No internet. I can't check the weather right now.")
+            return@withContext cache.fallback(cacheKey, "No internet. I can't check the weather right now.")
         }
-        val deadline = System.nanoTime() + TimeUnit.MILLISECONDS.toNanos(4000)
+        // One retry inside a 7 s budget: the first call often times out while mobile data wakes up (§M.8).
+        val deadline = System.nanoTime() + TimeUnit.MILLISECONDS.toNanos(7000)
         fun fetch(url: String): Map<*, *> {
-            val remaining = deadline - System.nanoTime()
-            if (remaining <= 0) throw java.net.SocketTimeoutException()
-            val call = http.newCall(Request.Builder().url(url).build())
-            call.timeout().timeout(remaining, TimeUnit.NANOSECONDS)
-            return call.execute().use { response ->
-                check(response.isSuccessful) { "Weather HTTP ${response.code}" }
-                Json.parse(checkNotNull(response.body).string()) as Map<*, *>
+            var attempt = 0
+            while (true) {
+                val remaining = deadline - System.nanoTime()
+                if (remaining <= 0) throw java.net.SocketTimeoutException()
+                val call = http.newCall(Request.Builder().url(url).build())
+                call.timeout().timeout(if (attempt == 0) minOf(remaining, TimeUnit.MILLISECONDS.toNanos(4000)) else remaining, TimeUnit.NANOSECONDS)
+                try {
+                    return call.execute().use { response ->
+                        check(response.isSuccessful) { "Weather HTTP ${response.code}" }
+                        Json.parse(checkNotNull(response.body).string()) as Map<*, *>
+                    }
+                } catch (e: java.io.IOException) {
+                    if (attempt++ > 0) throw e
+                    JarvisLog.i("weather: retry after ${e.javaClass.simpleName}")
+                }
             }
         }
         try {
-            val key = place.trim().lowercase(java.util.Locale.ROOT)
             val geo = known ?: places[key] ?: run {
                 val results = fetch("https://geocoding-api.open-meteo.com/v1/search?count=1&name=${Web.enc(place)}")
                 val found = (results["results"] as? List<*>)?.firstOrNull() as? Map<*, *>
@@ -52,16 +62,37 @@ class FastWeather(private val context: Context? = null) {
                 "&temperature_unit=celsius&timezone=auto&forecast_days=2")
             val report = WeatherReport.render(data, geo["name"] as? String ?: place, tomorrow)
             JarvisLog.i("weather: current and forecast received")
+            cache.put(cacheKey, report)
             ToolResult.ok(report)
         } catch (cancelled: kotlinx.coroutines.CancellationException) {
             throw cancelled
-        } catch (_: java.io.InterruptedIOException) {
-            ToolResult.fail("The weather service is taking too long. Please try again.")
-        } catch (_: java.io.IOException) {
-            ToolResult.fail("No internet or weather service connection. Please try again.")
-        } catch (_: RuntimeException) {
-            ToolResult.fail("The weather service returned incomplete information. Please try again.")
+        } catch (e: java.io.InterruptedIOException) {
+            JarvisLog.e("weather: timeout", e)
+            cache.fallback(cacheKey, "The weather service is taking too long. Please try again.")
+        } catch (e: java.io.IOException) {
+            JarvisLog.e("weather: network error", e)
+            cache.fallback(cacheKey, "No internet or weather service connection. Please try again.")
+        } catch (e: RuntimeException) {
+            JarvisLog.e("weather: bad answer", e)
+            cache.fallback(cacheKey, "The weather service returned incomplete information. Please try again.")
         }
+    }
+
+    private val cache = WeatherCache()
+}
+
+/** Last good report per place and day, said when a refresh fails (§M.8). Old reports (> 6 h) are not used. */
+internal class WeatherCache(private val now: () -> Long = System::currentTimeMillis) {
+    private val last = java.util.concurrent.ConcurrentHashMap<String, Pair<Long, String>>()
+
+    fun put(key: String, report: String) { last[key] = now() to report }
+
+    fun fallback(key: String, error: String): ToolResult {
+        val (at, report) = last[key] ?: return ToolResult.fail(error)
+        if (now() - at > TimeUnit.HOURS.toMillis(6)) return ToolResult.fail(error)
+        val time = java.time.Instant.ofEpochMilli(at).atZone(java.time.ZoneId.systemDefault())
+            .format(java.time.format.DateTimeFormatter.ofPattern("h:mm a", java.util.Locale.US))
+        return ToolResult.ok("I couldn't refresh the weather. At $time: $report")
     }
 }
 

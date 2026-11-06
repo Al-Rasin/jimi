@@ -3,14 +3,22 @@ package com.alrasin.jarvis.brain
 import com.alrasin.jarvis.core.ToolCall
 
 internal object WeatherRequest {
+    /** "at my place / here / near me": no place, so the weather tool uses the current location (§M.8). */
+    private val here = Regex(
+        " (?:(?:at|in|for|near|around) (?:my (?:place|area|location|current location|home|city)|here|where i am|me)|here|near me|around me|nearby)$",
+    )
+
     fun match(text: String): ToolCall? {
-        val day = if (Regex("\\btomorrow\\b").containsMatchIn(text)) "tomorrow" else "today"
-        val withoutDay = text.replace(Regex("\\b(?:today|tomorrow|now|right now|outside)\\b"), " ")
+        val day = if (Regex("\\btomorrows?\\b").containsMatchIn(text)) "tomorrow" else "today"
+        val withoutDay = text.replace(Regex("\\b(?:todays|today|tomorrows|tomorrow|right now|now|outside|current|currently|latest)\\b"), " ")
             .replace(Regex("\\s+"), " ").trim()
-        val location = Regex(" in ([a-z][a-z ]*)$").find(withoutDay)
+            .removeSuffix(" right") // normalize() drops the "now" of "right now"
+            .replace(here, "")
+        val location = Regex(" (?:in|for|at) ([a-z][a-z ]*)$").find(withoutDay)
         val question = if (location == null) withoutDay else withoutDay.substring(0, location.range.first)
         val patterns = listOf(
-            "(?:(?:whats|what is|hows|how is|tell me|show me|check) )?(?:the )?(?:weather|temperature)(?: like| forecast| report)?",
+            "(?:(?:whats|what is|hows|how is|tell me|show me|give me|check|get)(?: me)? )?(?:the )?(?:weather|temperature)" +
+                "(?: like| forecast| report| update| updates| conditions?| info)?",
             "(?:will it|is it going to|is it) (?:rain|raining)",
             "(?:do i need|should i take|should i carry) (?:an? |my )?umbrella",
             "how (?:hot|cold) is it",

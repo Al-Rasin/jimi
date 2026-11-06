@@ -388,6 +388,7 @@ object RuleMatcher {
             t.matches(re("(?:next|skip)(?: the)?(?: song| track| video)?|play (?:the )?next(?: song| track)?|skip (?:this|it)")) -> return call("media_control", "action" to "next")
             t.matches(re("(?:previous|last|go back)(?: song| track)|play (?:the )?previous(?: song| track)?|previous")) -> return call("media_control", "action" to "previous")
         }
+        storeSearch(t)?.let { return it }
         val mediaApps = "youtube music|you tube music|youtube|you tube|spotify"
         Regex("^(?:open|launch) ($mediaApps)(?: app)? and (?:play|search(?: for)?) (.+)$").find(t)?.let {
             return call("play_media", "query" to it.groupValues[2], "app" to mediaApp(it.groupValues[1]))
@@ -411,6 +412,18 @@ object RuleMatcher {
             t.matches(re("(?:max|maximum|full) volume|volume (?:max|maximum|full)")) -> return call("set_volume", "level" to "100")
         }
         return null
+    }
+
+    private const val STORE = "(?:the )?(?:google play store|google play|play store|playstore|app store)"
+
+    /** "search X in Play Store" → Play Store results (§M.8), before appMap opens the store or web_search runs. */
+    private fun storeSearch(t: String): ToolCall? {
+        val s = t.trimEnd('.', '!', '?')
+        val query = Regex("^(?:search|find|look for|look up)(?: for)? (.+?) (?:on|in|from) $STORE$").find(s)?.groupValues?.get(1)
+            ?: Regex("^(?:search|find|look for) $STORE(?: for)? (.+)$").find(s)?.groupValues?.get(1)
+            ?: Regex("^(?:open|launch|go to) $STORE(?: app)? (?:and|then) (?:search|find|look for|look up)(?: for)? (.+)$").find(s)?.groupValues?.get(1)
+            ?: return null
+        return call("store_search", "query" to query.replace(Regex(" (?:app|apps|game|games)$"), ""))
     }
 
     private fun mediaApp(app: String) = app.replace("you tube", "youtube").replace(' ', '_')
@@ -527,8 +540,9 @@ object RuleMatcher {
         if (t.matches(re("(?:will|is) it (?:going to )?rain(?: today| tomorrow)?|do i need an umbrella(?: today)?|how (?:hot|cold) is it(?: today| outside)?|temperature(?: outside)?|whats the temperature(?: outside)?"))) {
             return call("weather", "day" to if (t.contains("tomorrow")) "tomorrow" else null)
         }
-        Regex("^(?:whats in the |read |tell me |give me |latest |todays )?(?:the )?(?:latest )?(?:news|headlines)(?: about| on)?(?: ([a-z ]+))?(?: today)?$").find(t)
-            ?.let { return call("news", "topic" to it.groupValues[1].removeSuffix(" today")) }
+        Regex("^(?:(?:whats|what is|what are) (?:in )?|(?:read|tell|give|show)(?: me)? |any |get(?: me)? )?(?:the )?(?:latest |top |todays |breaking )*" +
+            "(?:news|headlines)(?: (?:today|now|update|updates|headlines))?(?:(?: about| on| in| from)? ([a-z ]+?))?(?: today)?$").find(t)
+            ?.let { return call("news", "topic" to it.groupValues[1]) }
         Regex("^(?:search|google|look up|search for|search the web for|search google for|find)(?: for)? (.+?)(?: on (?:google|the internet|the web|internet))?$").find(t)
             ?.let { if (!t.startsWith("find my")) return call("web_search", "query" to it.groupValues[1]) }
         Regex("^(?:wikipedia|wiki|look up on wikipedia|search wikipedia for|tell me about) (.+)$").find(t)

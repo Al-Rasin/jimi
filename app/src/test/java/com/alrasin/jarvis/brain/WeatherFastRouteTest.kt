@@ -25,3 +25,19 @@ class WeatherFastRouteTest {
         }
     }
 }
+
+class WeatherM8PhrasesTest {
+    @Test fun herePhrasesUseCurrentLocation() {
+        listOf("todays weather update", "current weather", "weather at my place", "whats the weather near me",
+            "give me the weather here", "weather conditions right now", "whats the weather right now").forEach { text ->
+            val call = RuleMatcher.match(text)
+            assertEquals(text, "weather", call?.tool)
+            assertNull(text, call?.arg("place"))
+        }
+    }
+
+    @Test fun namedPlaceKept() {
+        assertEquals("chittagong", RuleMatcher.match("weather for chittagong")?.arg("place"))
+        assertEquals("tomorrow", RuleMatcher.match("tomorrows weather")?.arg("day"))
+    }
+}
