@@ -53,6 +53,16 @@ class ScreenAgentTest {
         assertNotNull(AgentSafety.confirmation(AgentAction.Type(1, "123456"), otp))
     }
 
+    @Test fun searchBoxesFieldsAndTabsNeedNoConfirm() {
+        fun tap(e: ScreenElement) = AgentSafety.confirmation(AgentAction.Tap(1), ScreenSnapshot("app", listOf(e)))
+        assertNull(tap(ScreenElement(1, "Search", clickable = true)))
+        assertNull(tap(ScreenElement(1, resourceId = "app:id/search_button", clickable = true)))
+        assertNull(tap(ScreenElement(1, "Chats tab", clickable = true)))
+        assertNull(tap(ScreenElement(1, "", editable = true, clickable = true)))
+        assertNotNull(tap(ScreenElement(1, "Send", editable = true, clickable = true)))
+        assertNotNull(tap(ScreenElement(1, "Search", clickable = true, safetyUncertain = true)))
+    }
+
     @Test fun namedAppOpensBeforeTheModel() = runBlocking {
         val screen = Screen(safe)
         val result = ScreenAgent(model(AgentAction.Done("Found it")), screen).run("open messenger and find the search box")

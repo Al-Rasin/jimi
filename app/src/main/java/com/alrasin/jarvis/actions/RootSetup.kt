@@ -50,14 +50,23 @@ object RootSetup {
             "settings put secure voice_interaction_service $vis",
             "settings put secure voice_recognition_service $pkg/com.alrasin.jarvis.assist.JarvisRecognitionService",
         )
+        out += (if (enableAccessibility()) "ok " else "fail ") + "accessibility"
+        return out
+    }
+
+    /** Adds Jimi's accessibility service to the enabled list (keeps the others) and turns accessibility on.
+     * [restart]: remove it first so Android binds it again (listed but not running after MIUI killed it). */
+    suspend fun enableAccessibility(restart: Boolean = false): Boolean {
         val a11y = JarvisAccessibilityService.COMPONENT
-        step(
-            "accessibility",
+        if (restart) RootShell.run(
+            "cur=\$(settings get secure enabled_accessibility_services | sed -e 's#$a11y##g' -e 's#::*#:#g' -e 's#^:##' -e 's#:\$##'); " +
+                "settings put secure enabled_accessibility_services \"\${cur:-null}\"",
+        )
+        return RootShell.run(
             "cur=\$(settings get secure enabled_accessibility_services); " +
                 "case \"\$cur\" in *$a11y*) ;; null|'') settings put secure enabled_accessibility_services $a11y ;; " +
                 "*) settings put secure enabled_accessibility_services \"\$cur:$a11y\" ;; esac",
             "settings put secure accessibility_enabled 1",
-        )
-        return out
+        ).ok
     }
 }

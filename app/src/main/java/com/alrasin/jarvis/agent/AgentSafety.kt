@@ -2,7 +2,8 @@ package com.alrasin.jarvis.agent
 
 object AgentSafety {
     private val risky = Regex("(?i)pay|buy|send|delete|purchase|checkout|place.?order|confirm|book.?ride|request.?ride|remove|transfer|submit")
-    private val secret = Regex("(?i)password|passcode|\\bpin\\b|\\botp\\b|one.?time|verification.?code|security.?code")
+    private val harmless = Regex("(?i)search|\\btabs?\\b|tab_|_tab")
+    private val secret =Regex("(?i)password|passcode|\\bpin\\b|\\botp\\b|one.?time|verification.?code|security.?code")
 
     /** Risk for a stored map element from its label text. [password] = field is a password/secret input. */
     fun riskLevel(label: String, password: Boolean = false): String = when {
@@ -19,6 +20,8 @@ object AgentSafety {
                     snapshot.elements.any { secret.containsMatchIn("${it.text} ${it.description}") })) {
             return "May I enter private credentials in this field? Please confirm by voice."
         }
+        // Search boxes, text fields and tabs only move around; asking "may I" for them blocks simple tasks (§M.9).
+        if (action is AgentAction.Tap && !risky.containsMatchIn(label) && (target.editable || (!target.safetyUncertain && harmless.containsMatchIn(label)))) return null
         if (action is AgentAction.Tap && (target.safetyUncertain || risky.containsMatchIn(label) ||
                     (target.text.isBlank() && target.description.isBlank()))) {
             return "May I activate #$index? It may send, purchase, or delete something. Please confirm by voice."

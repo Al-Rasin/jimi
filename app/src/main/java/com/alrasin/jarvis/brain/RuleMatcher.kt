@@ -585,6 +585,14 @@ object RuleMatcher {
 
     /** General skills for any app (ROADMAP §H.4). Plain "tap X" stays on the old tap tool. */
     private fun skills(t: String): ToolCall? {
+        // "open messenger and find rahim": one tool searches and opens the match (§M.9).
+        Regex("^(?:open|launch|start|go to) (?:the |my )?(.+?)(?: app)?,? (?:and(?: then)?|then) (?:find|look for|search(?: for)?|open (?:the )?chat (?:with|of)) (.+)$")
+            .find(t)?.let {
+                val app = it.groupValues[1]
+                if (appNameMatches?.invoke(app) == true) return call("find_in_app", "query" to it.groupValues[2], "app" to app)
+            }
+        Regex("^(?:find|look for) (.+?) (?:in|on) (?:the |my )?(messenger|whats ?app|telegram|instagram)(?: app)?$").find(t)
+            ?.let { return call("find_in_app", "query" to it.groupValues[1], "app" to it.groupValues[2]) }
         Regex("^(?:search|find|look up)(?: for)? (.+?) (?:in|on|inside) (?:the )?(.+?)(?: app)?$").find(t)?.let {
             val app = it.groupValues[2]
             val web = app.matches(re("google|(?:the )?(?:web|internet)|online"))

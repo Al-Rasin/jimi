@@ -3,6 +3,7 @@ package com.alrasin.jarvis.brain
 import org.junit.After
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNotEquals
+import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
 
@@ -11,7 +12,7 @@ class SkillRoutingTest {
     private val previousMatcher = RuleMatcher.appNameMatches
 
     @Before fun knownApps() {
-        RuleMatcher.appNameMatches = { it in setOf("daraz", "youtube", "settings", "google") }
+        RuleMatcher.appNameMatches = { it in setOf("daraz", "youtube", "settings", "google", "messenger") }
     }
 
     @After fun restore() {
@@ -24,6 +25,18 @@ class SkillRoutingTest {
         assertEquals("red shoes", call.arg("query"))
         assertEquals("daraz", call.arg("app"))
         assertEquals("search_in_app", RuleMatcher.match("find lofi music on youtube app")?.tool)
+    }
+
+    @Test fun findInApp() {
+        for (text in listOf("open messenger and find rahim", "open messenger and search for rahim", "open messenger then open chat with rahim")) {
+            val call = RuleMatcher.match(text)!!
+            assertEquals(text, "find_in_app", call.tool)
+            assertEquals("rahim", call.arg("query"))
+            assertEquals("messenger", call.arg("app"))
+        }
+        assertEquals("find_in_app", RuleMatcher.match("find rahim on messenger")?.tool)
+        assertNotEquals("find_in_app", RuleMatcher.match("open my bag and find keys")?.tool)
+        assertTrue(com.alrasin.jarvis.agent.AgentRouting.acceptsSingleTool("open messenger and find rahim", "find_in_app"))
     }
 
     @Test fun webAndUnknownAppStayWeb() {

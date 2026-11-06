@@ -102,7 +102,8 @@ internal class AppCommunications(private val context: Context, private val conta
         val (pkg, label) = chat(app) ?: return ToolResult.fail("${chatLabel(app)} is not installed.")
         val service = requireScreen { return ToolResult.fail("Enable Jimi accessibility in Android settings so I can send the $label message.") }
         openConversation(person, app, pkg, service, text)?.let { return ToolResult.fail(it) }
-        if (!service.replaceText(pkg, text) || service.editableText(pkg) != text)
+        // The Message field shows a moment after the chat opens (Messenger), so retry instead of failing at once (§M.9).
+        if (!pollUntil(12, 250) { service.replaceText(pkg, text) && service.editableText(pkg) == text })
             return ToolResult.fail("I couldn't enter the exact message in ${person.name}'s $label chat. Nothing was sent.")
         if (!conversationMatches(service, pkg, person)) return ToolResult.fail("The $label conversation changed. Nothing was sent.")
         tapSend(service, app, AppChat(pkg, label))?.let { return ToolResult.fail(it) }

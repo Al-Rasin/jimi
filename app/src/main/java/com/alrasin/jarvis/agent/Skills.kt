@@ -208,16 +208,26 @@ fun skillTools(context: Context, planner: Planner, apps: AppList): List<Tool> = 
         listOf(arg("query", "what to search for"), arg("app", "app name", required = false)),
     ) { c, _ ->
         val query = c.arg("query") ?: return@SimpleTool ToolResult.fail("What should I search for?")
+        searchInApp(context, planner, apps, query, c.arg("app"), useLink = true)
+    },
+    SimpleTool(
+        "find_in_app",
+        "Find a person or item inside an app and open it (search, then tap the match), e.g. a chat in Messenger.",
+        listOf(arg("query", "who or what to find"), arg("app", "app name", required = false)),
+    ) { c, _ ->
+        val query = c.arg("query") ?: return@SimpleTool ToolResult.fail("Who should I find?")
+        // The screen search, not a deep link: the result list must be on screen to open the match (§M.9).
+        val searched = searchInApp(context, planner, apps, query, c.arg("app"), useLink = false)
+        if (!searched.ok) return@SimpleTool searched
         val service = JarvisAccessibilityService.instance ?: return@SimpleTool ToolResult.fail(NO_SERVICE)
-        val app = c.arg("app")?.let { planner.resolve(it, apps) ?: return@SimpleTool ToolResult.fail("I can't find an app called $it.") }
-            ?: service.appPackage()?.let { planner.forPackage(it, apps) }
-            ?: return@SimpleTool ToolResult.fail("Which app should I search in?")
-        if (PhoneProfile.isPaymentPackage(app.pkg) || app.card?.readOnly == true) {
-            return@SimpleTool ToolResult.fail("${app.name} is a payment app. I only read it, I don't tap in it.")
+        var pick: Skills.Pick = Skills.Pick.NotFound
+        pollUntil(10, 300) {
+            val screen = Skills.read(service) ?: return@pollUntil false
+            val below = screen.items.filter { it.editable }.minByOrNull { it.top }?.bottom ?: 0
+            pick = Skills.pickResult(screen.items, query, below)
+            pick !is Skills.Pick.NotFound
         }
-        searchByLink(context, app, query)?.let { return@SimpleTool it }
-        if (!planner.openIfNeeded(service, app.pkg, apps)) return@SimpleTool ToolResult.fail("I couldn't open ${app.name}.")
-        searchOnScreen(context, service, app, query)
+        tapPick(service, pick, query, "Opened")
     },
     SimpleTool(
         "open_result",
@@ -303,6 +313,22 @@ private suspend fun scrollDown(service: JarvisAccessibilityService): Boolean {
     if (!list.scroll(true)) return false
     delay(300)
     return true
+}
+
+/** Shared by search_in_app and find_in_app: resolve the app, refuse payment apps, open it and search. */
+private suspend fun searchInApp(
+    context: Context, planner: Planner, apps: AppList, query: String, appName: String?, useLink: Boolean,
+): ToolResult {
+    val service = JarvisAccessibilityService.instance ?: return ToolResult.fail(NO_SERVICE)
+    val app = appName?.let { planner.resolve(it, apps) ?: return ToolResult.fail("I can't find an app called $it.") }
+        ?: service.appPackage()?.let { planner.forPackage(it, apps) }
+        ?: return ToolResult.fail("Which app should I search in?")
+    if (PhoneProfile.isPaymentPackage(app.pkg) || app.card?.readOnly == true) {
+        return ToolResult.fail("${app.name} is a payment app. I only read it, I don't tap in it.")
+    }
+    if (useLink) searchByLink(context, app, query)?.let { return it }
+    if (!planner.openIfNeeded(service, app.pkg, apps)) return ToolResult.fail("I couldn't open ${app.name}.")
+    return searchOnScreen(context, service, app, query)
 }
 
 /** Card says "search via deep link": open it with the query filled in. Null = no link, use the screen. */

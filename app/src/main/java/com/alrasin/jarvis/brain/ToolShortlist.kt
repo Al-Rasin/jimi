@@ -48,7 +48,7 @@ object ToolShortlist {
         "missed" to listOf("missed_calls", "notification_summary", "read_messages"),
         "open" to listOf("open_app", "open_url", "open_result"), "launch" to listOf("open_app"), "start" to listOf("open_app"),
         "app" to listOf("open_app", "close_app"), "close" to listOf("close_app"), "kill" to listOf("close_app"),
-        "website" to listOf("open_url"), "site" to listOf("open_url"), "search" to listOf("web_search", "search_in_app"), "google" to listOf("web_search"),
+        "website" to listOf("open_url"), "site" to listOf("open_url"), "search" to listOf("web_search", "search_in_app"), "find" to listOf("find_in_app", "search_in_app"), "google" to listOf("web_search"),
         "who" to listOf("wiki_lookup", "web_search"), "what" to listOf("wiki_lookup", "web_search"), "news" to listOf("news"),
         "headlines" to listOf("news"), "screenshot" to listOf("take_screenshot"), "capture" to listOf("take_screenshot"),
         "screen" to listOf("read_screen", "take_screenshot", "set_brightness"), "lock" to listOf("lock_phone"),
