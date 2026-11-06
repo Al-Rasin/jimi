@@ -32,11 +32,12 @@ object ExplorePolicy {
     fun risky(label: String): Boolean =
         neverTap.containsMatchIn(label) || AgentSafety.riskLevel(label) != "low"
 
-    fun plan(nodes: List<RawNode>, windowClass: String): Plan {
+    fun plan(nodes: List<RawNode>, windowClass: String, pkg: String = ""): Plan {
         val risky = ArrayList<Element>()
         val safe = ArrayList<Target>()
         val ids = nodes.groupingBy { it.resourceId }.eachCount()
-        val rowsAllowed = settingsScreen(nodes, windowClass) || menuScreen(nodes, windowClass)
+        // Chat rows open real chats (and can mark them read); tabs and menus are enough to learn a chat app (§M.11).
+        val rowsAllowed = pkg !in CHAT_APPS && (settingsScreen(nodes, windowClass) || menuScreen(nodes, windowClass))
         for (n in nodes) {
             if (n.editable || n.password || n.checkable) continue
             val target = (if (n.inList) row(n, rowsAllowed) else structural(n, ids)) ?: continue
@@ -106,6 +107,10 @@ object ExplorePolicy {
         "com.android.systemui", "com.android.dialer", "com.google.android.dialer", "com.android.contacts",
         "com.google.android.contacts", "com.android.camera", "com.android.camera2", "com.google.android.GoogleCamera",
         "com.miui.home", "com.android.launcher3", "com.android.incallui", "com.android.phone",
+    )
+    private val CHAT_APPS = setOf(
+        "com.whatsapp", "com.whatsapp.w4b", "com.facebook.orca", "com.facebook.mlite", "org.telegram.messenger",
+        "com.google.android.apps.messaging", "com.android.mms",
     )
     private val SKIP_PARTS = listOf("launcher", "camera", "dialer")
     private val PERMISSION_PACKAGES = setOf(

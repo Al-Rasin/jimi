@@ -130,7 +130,7 @@ class AppExplorer @Inject constructor(
             JarvisLog.i("explore $pkg: screen ${screens.size + 1} depth ${path.size}, taps $taps")
             screens += fp
             learner.onScreen(pkg, live.windowClass, live.nodes)
-            val plan = ExplorePolicy.plan(live.nodes, live.windowClass)
+            val plan = ExplorePolicy.plan(live.nodes, live.windowClass, pkg)
             learner.noteRisky(pkg, plan.risky)
             risky += plan.risky.size
             if (path.size >= ExplorePolicy.MAX_DEPTH) return

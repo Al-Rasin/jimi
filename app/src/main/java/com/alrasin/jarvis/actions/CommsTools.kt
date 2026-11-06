@@ -122,13 +122,21 @@ fun commsTools(context: Context, contacts: Contacts): List<Tool> = listOf(
         val inbox = Uri.parse("content://sms/inbox")
         // MIUI's Messages app leaves read = 0 on messages the user has opened; it only sets seen = 1
         val unreadWhere = "read = 0 AND seen = 0"
-        val unreadCount = context.contentResolver.query(inbox, arrayOf("_id"), unreadWhere, null, null)?.use { it.count } ?: 0
+        val unreadCount = context.contentResolver.query(inbox, arrayOf("address"), unreadWhere, null, null)?.use { c ->
+            var n = 0
+            while (c.moveToNext()) if (!SmsSender.isBroadcast(c.getString(0))) n++
+            n
+        } ?: 0
         val msgs = ArrayList<Pair<String, String>>()
         val where = if (unreadCount > 0) unreadWhere else null
         context.contentResolver.query(inbox, arrayOf("address", "body"), where, null, "date DESC")?.use { c ->
-            while (c.moveToNext() && msgs.size < 3) msgs.add((c.getString(0) ?: "") to (c.getString(1) ?: ""))
+            var scanned = 0
+            while (c.moveToNext() && msgs.size < 3 && ++scanned <= 200) {
+                val address = c.getString(0) ?: ""
+                if (!SmsSender.isBroadcast(address)) msgs.add(address to (c.getString(1) ?: ""))
+            }
         }
-        if (msgs.isEmpty()) return@SimpleTool ToolResult.ok("No messages.")
+        if (msgs.isEmpty()) return@SimpleTool ToolResult.ok("No messages from people. I skip service and promo texts.")
         val list = msgs.map { "${contacts.nameFor(it.first)}: ${it.second.take(160)}" }
         val head = when {
             unreadCount > msgs.size -> "$unreadCount unread. Newest ${msgs.size}:"
@@ -145,6 +153,16 @@ fun commsTools(context: Context, contacts: Contacts): List<Tool> = listOf(
         if (context.launch(i)) ToolResult.ok("Boss, I opened email with the message ready. Tap send.") else ToolResult.fail("No mail app found.")
     },
 )
+
+/** Government, operator, bank and promo senders: short codes ("16216") or names ("GP", "AD-BKASH") (§M.11). */
+internal object SmsSender {
+    fun isBroadcast(address: String?): Boolean {
+        val a = address?.trim().orEmpty()
+        if (a.isEmpty()) return true
+        if (a.any(Char::isLetter)) return true
+        return a.count(Char::isDigit) < 7
+    }
+}
 
 /** Every part must receive its own successful sent callback. Null means still unconfirmed. */
 internal class SmsSentStatus(private val partCount: Int) {

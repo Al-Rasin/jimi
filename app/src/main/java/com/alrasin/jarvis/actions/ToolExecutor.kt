@@ -131,7 +131,7 @@ internal class ToolSafetyGate {
             else -> Risk.SAFE
         }
         if (risk != Risk.SAFE) {
-            if (lockdown) return Outcome.Denied("Panic mode is on. Unlock the phone by hand before I can do that.")
+            if (lockdown) return Outcome.Denied("Panic mode is on. Lock the phone, then unlock it with your PIN to end it.")
             // null means the optional check is off; the service reports missing/failed verification as false.
             if (locked && voiceOk == false) return Outcome.Denied(
                 "I couldn't verify your voice. Voice ID may be unavailable or not enrolled. Unlock the phone by hand to do that.",

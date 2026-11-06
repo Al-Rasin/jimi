@@ -459,7 +459,7 @@ class Assistant @Inject constructor(
         val r = executor.execute(call, ToolContext(context, input.heard, input.locked), confirmed = true, voiceOk = null)
         log(input.heard, call, "panic", (r as? Outcome.Done)?.result ?: ToolResult.fail("not run"))
         JarvisLog.i("panic: locked down")
-        return Reply("Locked down.", tool = "panic", endConversation = true)
+        return Reply("Locked down. Unlock with your PIN to end panic mode.", tool = "panic", endConversation = true)
     }
 
     private suspend fun log(heard: String, call: ToolCall, source: String, r: ToolResult) {

@@ -7,18 +7,18 @@ import org.junit.Test
 
 class BargeInTest {
     @Test fun raisesWakeThresholdWithoutLoweringStrictSettings() {
-        assertEquals(0.85f, BargeIn.wakeThreshold(0.5f), 0.0001f)
-        assertEquals(0.95f, BargeIn.wakeThreshold(0.8f), 0.0001f)
+        assertEquals(0.9f, BargeIn.wakeThreshold(0.5f), 0.0001f)
+        assertEquals(0.98f, BargeIn.wakeThreshold(0.8f), 0.0001f)
         assertEquals(0.98f, BargeIn.wakeThreshold(0.9f), 0.0001f)
         assertEquals(0.99f, BargeIn.wakeThreshold(0.99f), 0.0001f)
         assertEquals(1f, BargeIn.wakeThreshold(Float.NaN), 0f)
     }
 
-    @Test fun acceptsOnlyStandaloneInterruptionWords() {
-        listOf("stop", " WAIT! ", "\nStop.\t", "“wait”").forEach {
+    @Test fun acceptsOnlyTwoWordInterruptions() {
+        listOf("stop stop", " Jimi, WAIT! ", "\nhey jimi stop.\t", "“wait jimi”", "okay stop", "stop please", "wait stop").forEach {
             assertTrue(it, BargeIn.isInterruption(it))
         }
-        listOf("", "...", "stoplight", "waiting", "don't stop", "stop the timer", "wait stop", "st.op").forEach {
+        listOf("", "...", "stop", "Wait.", "stoplight", "waiting", "don't stop", "stop the timer", "st.op").forEach {
             assertFalse(it, BargeIn.isInterruption(it))
         }
     }
@@ -57,6 +57,8 @@ class BargeInTest {
         assertEquals("turn on the light", BargeIn.stripInterruption(" Stop, turn on the light "))
         assertEquals("What time is it?", BargeIn.stripInterruption("WAIT! What time is it?"))
         assertEquals("", BargeIn.stripInterruption("wait"))
+        assertEquals("what time is it", BargeIn.stripInterruption("Jimi stop, what time is it"))
+        assertEquals("open youtube", BargeIn.stripInterruption("stop stop open youtube"))
         assertEquals("stoplight", BargeIn.stripInterruption("stoplight"))
         assertEquals("don't stop", BargeIn.stripInterruption("don't stop"))
         assertEquals("stop's meaning", BargeIn.stripInterruption("stop's meaning"))

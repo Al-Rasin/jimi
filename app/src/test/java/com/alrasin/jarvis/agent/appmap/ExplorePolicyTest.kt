@@ -61,6 +61,13 @@ class ExplorePolicyTest {
         assertEquals("Privacy", settings.targets.first().raw)
     }
 
+    @Test fun chatAppsNeverOpenRows() {
+        val rows = listOf(row("Privacy"), row("Notifications"))
+        assertTrue(ExplorePolicy.plan(rows, "com.app.SettingsActivity", "com.whatsapp").targets.isEmpty())
+        assertTrue(ExplorePolicy.plan(rows, "com.app.SettingsActivity", "com.facebook.orca").targets.isEmpty())
+        assertEquals(2, ExplorePolicy.plan(rows, "com.app.SettingsActivity", "com.app").targets.size)
+    }
+
     @Test fun riskyWords() {
         listOf("Pay now", "Buy", "Send", "Log out", "Sign out", "Delete", "Allow", "OK", "Install", "Uninstall", "Share")
             .forEach { assertTrue(it, ExplorePolicy.risky(it)) }
