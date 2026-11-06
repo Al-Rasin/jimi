@@ -72,7 +72,7 @@ object RuleMatcher {
         return talk(t) ?: comms(actionText) ?: media(actionText.trimEnd('.', '!', '?')) ?: appMap(t) ?: skills(t)
             ?: knowledge(t)?.takeIf { it.tool == "web_search" || it.tool == "wiki_lookup" }
             ?: toggle(t) ?: time(normalize(input, keepClockColon = true), now) ?: notes(t, now) ?: media(t) ?: system(t) ?: screen(t)
-            ?: notifications(t) ?: noisyTool(t, now) ?: knowledge(t) ?: memory(t) ?: apps(t)
+            ?: notifications(t) ?: noisyTool(t, now) ?: knowledge(t) ?: memory(t, actionText) ?: apps(t)
     }
 
     private fun call(tool: String, vararg args: Pair<String, String?>) =
@@ -553,11 +553,14 @@ object RuleMatcher {
         return null
     }
 
-    private fun memory(t: String): ToolCall? {
+    /** [raw] keeps words polite() drops ("jimi", "just", "now"), so "remember jimi means my assistant" saves it all (§M.10). */
+    private fun memory(t: String, raw: String = t): ToolCall? {
         if (t.matches(re("what do you (?:remember|know)(?: about me)?|what (?:have|did) you (?:remembered|remember|learned)(?: about me)?|(?:list|show|tell me)(?: my| your)? (?:facts|memories)"))) return call("recall_facts")
         Regex("^(?:remember|dont forget|keep in mind|note that i)(?: that)? (.+)$").find(t)?.let {
             if (it.groupValues[1].startsWith("to ")) return null   // "remember to buy milk" = reminder, handled by LLM/chat
-            return call("remember_fact", "text" to it.groupValues[1])
+            val whole = Regex("^(?:remember|don'?t forget|keep in mind)[,:]?(?: that)?[,:]? (.+)$").find(raw)
+                ?.groupValues?.get(1)?.trim()?.trimEnd('.', '!', '?', ',')?.takeIf { it.isNotBlank() }
+            return call("remember_fact", "text" to (whole ?: it.groupValues[1]))
         }
         Regex("^forget(?: that| about)? (.+)$").find(t)?.let { return call("forget_fact", "text" to it.groupValues[1]) }
         return null

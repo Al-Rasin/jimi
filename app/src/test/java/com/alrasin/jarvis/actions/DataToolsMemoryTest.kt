@@ -1,7 +1,6 @@
 package com.alrasin.jarvis.actions
 
 import android.content.ContextWrapper
-import com.alrasin.jarvis.core.Json
 import com.alrasin.jarvis.core.ToolCall
 import com.alrasin.jarvis.core.ToolContext
 import com.alrasin.jarvis.data.MemoryDao
@@ -21,16 +20,12 @@ class DataToolsMemoryTest {
     private val wifi = MemoryFact(id = 7, timeMs = 10, text = "My wifi password is sample-pass")
     private val birthday = MemoryFact(id = 8, timeMs = 20, text = "My wife's birthday is May 12")
 
-    @Test fun partialMatchReturnsCandidateWithoutDeleting() = runBlocking {
+    @Test fun partialMatchDeletesBestCandidateAfterGateConfirm() = runBlocking {
         val memory = FakeMemoryDao(listOf(wifi, birthday))
         val result = forget(memory, "my wifi password")
-        assertFalse(result.ok)
-        assertEquals("Forget '${wifi.text}'?", result.say)
-        val candidate = Json.parse(result.data) as Map<*, *>
-        assertEquals("forget_fact_confirmation", candidate["type"])
-        assertEquals(wifi.id, (candidate["id"] as Number).toLong())
-        assertEquals(wifi.text, candidate["text"])
-        assertTrue(memory.deleted.isEmpty())
+        assertTrue(result.ok)
+        assertEquals("Forgotten: ${wifi.text}.", result.say)
+        assertEquals(listOf(wifi.id), memory.deleted)
     }
 
     @Test fun exactMatchDeletesOnlyMatchingId() = runBlocking {
@@ -54,12 +49,56 @@ class DataToolsMemoryTest {
         assertTrue(memory.deleted.isEmpty())
     }
 
-    @Test fun thatUsesProvidedStableIdAndStillConfirms() = runBlocking {
+    @Test fun thatUsesProvidedStableId() = runBlocking {
         val memory = FakeMemoryDao(listOf(wifi, birthday))
-        val result = forget(memory, "that", wifi.id)
-        assertFalse(result.ok)
-        assertEquals("Forget '${wifi.text}'?", result.say)
-        assertTrue(memory.deleted.isEmpty())
+        assertTrue(forget(memory, "that", wifi.id).ok)
+        assertEquals(listOf(wifi.id), memory.deleted)
+    }
+
+    @Test fun forgetThatRemovesJustRememberedFact() = runBlocking {
+        val memory = FakeMemoryDao(listOf(wifi))
+        val tools = tools(memory)
+        assertTrue(run(tools, "remember_fact", "my car is blue").ok)
+        val result = run(tools, "forget_fact", "that")
+        assertTrue(result.ok)
+        assertEquals(listOf("My wifi password is sample-pass"), memory.all().map { it.text })
+    }
+
+    @Test fun rememberCleansTimestampsAndPunctuation() = runBlocking {
+        val memory = FakeMemoryDao(emptyList())
+        assertTrue(run(tools(memory), "remember_fact", "that my car is blue 2026-11-01T10:22:33.").ok)
+        assertEquals(listOf("My car is blue"), memory.all().map { it.text })
+    }
+
+    @Test fun rememberJunkFails() = runBlocking {
+        val memory = FakeMemoryDao(emptyList())
+        assertFalse(run(tools(memory), "remember_fact", "..").ok)
+        assertTrue(memory.all().isEmpty())
+    }
+
+    @Test fun rememberSameFactTwiceKeepsOne() = runBlocking {
+        val memory = FakeMemoryDao(listOf(wifi))
+        assertEquals("I already know that.", run(tools(memory), "remember_fact", "my wifi password is sample-pass.").say)
+        assertEquals(1, memory.all().size)
+    }
+
+    @Test fun rememberSameSubjectReplacesOldFact() = runBlocking {
+        val memory = FakeMemoryDao(listOf(wifi, birthday))
+        assertTrue(run(tools(memory), "remember_fact", "My wifi password is new-pass").ok)
+        assertEquals(listOf(wifi.id), memory.deleted)
+        assertTrue(memory.all().any { it.text == "My wifi password is new-pass" })
+    }
+
+    @Test fun recallDropsJunkAndDuplicates() = runBlocking {
+        val memory = FakeMemoryDao(listOf(
+            MemoryFact(id = 1, timeMs = 1, text = "My car is blue"),
+            MemoryFact(id = 2, timeMs = 2, text = ".."),
+            MemoryFact(id = 3, timeMs = 3, text = "my car is blue."),
+            MemoryFact(id = 4, timeMs = 4, text = "1730457600000 I like tea"),
+        ))
+        val result = run(tools(memory), "recall_facts", null)
+        assertEquals("I remember: I like tea. My car is blue.", result.say)
+        assertEquals(setOf("I like tea", "My car is blue"), memory.all().map { it.text }.toSet())
     }
 
     @Test fun staleReferentDoesNotDeleteAnotherFact() = runBlocking {
@@ -67,6 +106,17 @@ class DataToolsMemoryTest {
         assertFalse(forget(memory, "that", 999).ok)
         assertTrue(memory.deleted.isEmpty())
     }
+
+    private fun tools(memory: MemoryDao): List<com.alrasin.jarvis.core.Tool> {
+        val reminders = fake<ReminderDao>()
+        return dataTools(fake<NoteDao>(), reminders, ReminderScheduler(ContextWrapper(null), reminders), memory)
+    }
+
+    private suspend fun run(tools: List<com.alrasin.jarvis.core.Tool>, name: String, text: String?) =
+        tools.single { it.name == name }.run(
+            ToolCall(name, text?.let { mapOf("text" to it) }.orEmpty()),
+            ToolContext(ContextWrapper(null), text.orEmpty(), false),
+        )
 
     private suspend fun forget(memory: MemoryDao, query: String, selectedId: Long? = null): com.alrasin.jarvis.core.ToolResult {
         val context = ContextWrapper(null)
@@ -82,9 +132,11 @@ class DataToolsMemoryTest {
     private class FakeMemoryDao(facts: List<MemoryFact>) : MemoryDao {
         private val facts = facts.toMutableList()
         val deleted = mutableListOf<Long>()
+        private var nextId = 100L
         override suspend fun insert(f: MemoryFact): Long {
-            facts.add(f)
-            return f.id
+            val saved = if (f.id == 0L) f.copy(id = nextId++) else f
+            facts.add(saved)
+            return saved.id
         }
         override suspend fun delete(id: Long) {
             deleted.add(id)

@@ -76,4 +76,10 @@ class ChatFormatTest {
         assertTrue(p.endsWith("<|im_start|>assistant\n<think>\n\n</think>\n\n"))
         assertTrue(p.contains("hello /no_think"))
     }
+
+    @Test fun cleanStripsControlTokens() {
+        assertEquals("Paris is the capital, Boss.", ChatFormat.clean("/no_think Paris is the capital, Boss.<|im_end|>"))
+        assertEquals("Hi.", ChatFormat.clean("<|im_start|>assistant Hi. /nothink<end_of_turn>"))
+        assertEquals("Ok.", ChatFormat.clean("<think>\n\n</think>\n\nOk. /think"))
+    }
 }

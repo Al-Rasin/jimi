@@ -69,6 +69,9 @@ object ChatFormat {
         return out to remainder
     }
 
+    /** Drops think blocks, chat control tokens and "/no_think" echoes so they are never spoken or shown (§M.10). */
     fun clean(text: String) = text.replace(Regex("<think>.*?(?:</think>|$)", RegexOption.DOT_MATCHES_ALL), "")
+        .replace(Regex("<\\|im_start\\|>\\s*(?:system|user|assistant)?|</?think>|<\\|[^|>]*\\|>|</?(?:start|end)_of_turn>|<bos>|<eos>"), " ")
+        .replace(Regex("(?i)/\\s?(?:no_?think|think)\\b"), " ")
         .replace(Regex("[*#`_]"), "").replace(Regex("\\s+"), " ").trim()
 }

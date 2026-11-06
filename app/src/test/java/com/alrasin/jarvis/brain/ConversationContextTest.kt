@@ -322,4 +322,20 @@ class ConversationContextTest {
         context.clear()
         clarifies("only for today")
     }
+
+    @Test fun whereDidYouSaveTheNoteNamesTheApp() {
+        context.remember("note buy milk", ToolCall("create_note", mapOf("text" to "buy milk")), "Saved in Google Keep.")
+        assertEquals(ConversationContext.Resolution.Say("In Google Keep, Boss."), context.resolve("Where did you save the note?"))
+        assertEquals(ConversationContext.Resolution.Say("In Google Keep, Boss."), context.resolve("where did you save it"))
+    }
+
+    @Test fun whereIsItWithoutNoteIsNotHandled() {
+        remember("weather")
+        assertNull(context.resolve("where is it"))
+    }
+
+    @Test fun whatDoYouKnowAfterNoteReadsNotes() {
+        context.remember("note buy milk", ToolCall("create_note", mapOf("text" to "buy milk")), "Noted.")
+        assertEquals("read_notes", tool("what do you know").tool)
+    }
 }

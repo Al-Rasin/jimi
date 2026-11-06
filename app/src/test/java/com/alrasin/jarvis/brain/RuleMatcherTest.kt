@@ -144,4 +144,9 @@ class RuleMatcherTest {
         assertNull(m("why is the sky blue"))
         assertNull(m(""))
     }
+
+    @Test fun rememberKeepsWholeSentence() {
+        assertEquals(c("remember_fact", "text" to "jimi means my assistant"), m("remember that jimi means my assistant."))
+        assertEquals(c("remember_fact", "text" to "i just moved to dhaka"), m("Remember I just moved to Dhaka"))
+    }
 }

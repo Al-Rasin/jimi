@@ -119,12 +119,23 @@ class ConversationContext(
                 else -> Resolution.Clarify("What should be only for today?")
             }
         }
+        if (NOTE_WHERE.matches(text) && (text.contains("note") || current?.lastTool?.tool == "create_note")) {
+            return Resolution.Say(noteLocation(current))
+        }
+        if (NOTES_KNOW.matches(text) && current?.lastTool?.tool in NOTE_TOOLS) return Resolution.Tool(ToolCall("read_notes"))
         if (TIMER_REFERENCE.matches(text)) {
             return Resolution.Clarify(if (current?.lastTool?.tool == "set_timer") {
                 "I can't change an existing timer yet. Would you like to set a new timer?"
             } else "Which timer would you like to change?")
         }
         return null
+    }
+
+    /** The note tool said where it saved ("Saved in Google Keep."); repeat that instead of letting chat make a joke (§M.10). */
+    private fun noteLocation(current: Snapshot?): String {
+        if (current?.lastTool?.tool != "create_note") return "I save notes in your notes app and keep a copy in Jimi's notes, ${Persona.ADDRESS}."
+        val app = Regex("Saved in (.+?)\\.?$").find(current.lastAnswer.trim())?.groupValues?.get(1)
+        return if (app != null) "In $app, ${Persona.ADDRESS}." else "In Jimi's notes, ${Persona.ADDRESS}."
     }
 
     private fun withState(call: ToolCall, state: String): ToolCall =
@@ -166,6 +177,9 @@ class ConversationContext(
         val AGAIN_REFERENCES = setOf("do it", "do it again", "do that", "do that again", "again", "one more time", "same again")
         val DID_YOU_REFERENCE = Regex("(?:did|have) you (?:turn|switch)(?:ed)? (on|off) ?(.*)|(?:did|have) you (?:turn|switch)(?:ed)? (it|this|that|.+?) (?:on|off)|is (it|this|that) (?:on|off)(?: now)?")
         val ONLY_TODAY = Regex("(?:only|just) (?:for )?today|(?:only|just) for today|for today only")
+        val NOTE_TOOLS = setOf("create_note", "read_notes")
+        val NOTE_WHERE = Regex("where (?:did|do|have) you (?:save|saved|put|keep|kept|store|stored|write|wrote|note|noted)(?: it| that| this| the note| my note| the notes| my notes)?|where (?:is|are) (?:it|that|the note|my note|the notes|my notes)(?: saved)?|where (?:was|is) (?:it|that|the note|my note) (?:saved|stored|kept)")
+        val NOTES_KNOW = Regex("what do you (?:know|remember)(?: about (?:it|that|them|this|my notes?|the notes?))?|what (?:is|was) in (?:it|that|the note|my notes?)|what did i (?:note|save)")
         val TIMER_REFERENCE = Regex("(?:make|change|set) (?:it|that|the timer)(?: to)? .+ (?:seconds?|minutes?|hours?)")
     }
 }

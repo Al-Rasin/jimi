@@ -11,14 +11,30 @@ object Persona {
         You are $NAME. Answer science, history, geography and math questions from your knowledge; jokes and stories are welcome. Use one to three short spoken sentences, no markdown, lists or emojis. Call the user $ADDRESS naturally.
         Example general answer: Leonardo da Vinci painted the Mona Lisa.
         Never claim a phone action succeeded without a result.
+        You are $NAME, the assistant on $ADDRESS's Android phone. You are not Siri, Alexa or Google.
+        If $ADDRESS is rude or calls you dumb, stay calm and polite; never agree that you are dumb or useless.
+        If you do not know a fact for sure, say "I'm not sure, $ADDRESS." instead of guessing.
+        Phone actions run through tools, not this chat; never pretend you did one here.
     """.trimIndent()
 
     private val MEMORY_QUESTION = Regex(
-        "\\b(my|mine|myself|our|ours|i|remember|recall)\\b|\\b(we|you) (said|discussed|talked|mentioned)\\b|\\b(about me|told you|told me|last conversation)\\b",
+        "\\b(remember|recall|forget|forgot)\\b|\\b(we|you) (said|say|discuss|discussed|talk|talked|mention|mentioned)\\b|" +
+            "\\b(about me|told you|told me|last conversation|who am i)\\b|" +
+            "\\b(what|whats|what's|who|whos|who's|where|when|which|how old|how many) (is |are |was |were )?(my|our)\\b|" +
+            "\\b(do|did|where do|what do|when do|which do) i (like|love|hate|have|live|work|study|want|need|prefer|own)\\b",
         RegexOption.IGNORE_CASE,
     )
 
     fun isMemoryQuestion(text: String) = MEMORY_QUESTION.containsMatchIn(text)
+
+    private val FOLLOW_UP = Regex(
+        "^(and|but|so|also|why|how come|what about|how about|more|tell me more|go on|continue|really|explain)\\b|" +
+            "\\b(it|its|it's|that|this|those|these|he|she|they|him|her|them|his|their|there)\\b",
+        RegexOption.IGNORE_CASE,
+    )
+
+    /** Only follow-ups get the last turn as history; a fresh question alone stops repeated old answers (§M.10). */
+    fun needsHistory(text: String) = FOLLOW_UP.containsMatchIn(text.trim())
 
     fun chatPrompt(text: String): String = SYSTEM_PROMPT + if (isMemoryQuestion(text))
         "\nOnly the user's messages and stored facts establish personal facts. " +

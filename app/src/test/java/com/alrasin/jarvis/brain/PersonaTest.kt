@@ -25,4 +25,26 @@ class PersonaTest {
     @Test fun goodMorningIsARoutineNotSmallTalk() = assertNull(Persona.smallTalk("good morning", 8))
 
     @Test fun commandsAreNotSmallTalk() = assertNull(Persona.smallTalk("open youtube", 10))
+
+    @Test fun memoryQuestionOnlyForPersonalAsks() {
+        listOf("what is my name", "where do i live", "do you remember my car", "what did we talk about", "who am i").forEach {
+            assertTrue(it, Persona.isMemoryQuestion(it))
+        }
+        listOf("can i boil water at 50 degrees", "who painted the mona lisa", "my phone is slow why", "tell me a story").forEach {
+            assertFalse(it, Persona.isMemoryQuestion(it))
+        }
+    }
+
+    @Test fun historyOnlyForFollowUps() {
+        assertTrue(Persona.needsHistory("why is that"))
+        assertTrue(Persona.needsHistory("tell me more"))
+        assertTrue(Persona.needsHistory("how old is he"))
+        assertFalse(Persona.needsHistory("what is the capital of france"))
+        assertFalse(Persona.needsHistory("how far is the moon"))
+    }
+
+    @Test fun promptSaysNotSiriAndNotSure() {
+        assertTrue(Persona.SYSTEM_PROMPT.contains("not Siri"))
+        assertTrue(Persona.SYSTEM_PROMPT.contains("I'm not sure"))
+    }
 }
