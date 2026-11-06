@@ -35,13 +35,13 @@ class AlarmCheckTest {
         assertEquals("Timer set for 20 minutes.", result.say)
     }
 
-    @Test fun acceptedCancellationReturnsSuccessWithEitherAlarmState() {
+    @Test fun cancellationIsHonestAboutAlarmsLeftOn() {
         val cleared = cancelAlarmResult(true)
         assertTrue(cleared.ok)
         assertEquals("Okay, alarms and timers are off.", cleared.say)
         val remaining = cancelAlarmResult(false)
-        assertTrue(remaining.ok)
-        assertEquals("I asked the clock to turn them off.", remaining.say)
+        assertFalse(remaining.ok)
+        assertEquals("I couldn't turn off every alarm. Some are still on in Clock.", remaining.say)
     }
 
     @Test fun timerAcceptsOnlyPositiveWholeSecondsWithinIntentRange() {

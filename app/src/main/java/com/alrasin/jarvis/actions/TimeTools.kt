@@ -54,11 +54,11 @@ fun timeTools(context: Context): List<Tool> = listOf(
         val expected = plan.at.atZone(ZoneId.systemDefault()).toInstant().toEpochMilli()
         var seen: Long? = null
         val check: (Long?) -> Boolean = { next -> seen = next; matchesAlarmMinute(next, expected) }
-        var verified = awaitAlarmState(context, check)
+        var verified = awaitAlarmState(context, matches = check)
         // An earlier alarm hides the new one; sending again would only make a copy.
         if (!verified && seen.let { it == null || it > expected }) {
             JarvisLog.i("set_alarm: not seen (next=$seen), sending once more")
-            if (context.launchClock(Intent(i))) verified = awaitAlarmState(context, check)
+            if (context.launchClock(Intent(i))) verified = awaitAlarmState(context, matches = check)
         }
         if (!verified) verified = clockHasAlarm(expected)
         if (!verified) {
@@ -96,10 +96,16 @@ fun timeTools(context: Context): List<Tool> = listOf(
         // MIUI Clock has no handler for DISMISS_TIMER; a running timer is stopped in its screen below.
         val timersSent = context.launchClock(Intent(AlarmClock.ACTION_DISMISS_TIMER))
         JarvisLog.i("cancel_alarm: Clock accepted alarm request=$alarmsSent, timer request=$timersSent")
-        var noNextAlarm = awaitAlarmState(context) { it == null }
+        var noNextAlarm = awaitClockIdle(context)
         if (!noNextAlarm && timerRunning()) {
             stopTimerInClock(context)
-            noNextAlarm = awaitAlarmState(context) { it == null }
+            noNextAlarm = awaitClockIdle(context)
+        }
+        if (!noNextAlarm) {
+            // MIUI Clock ignores DISMISS_ALARM for repeating alarms; switch the rows off directly (root).
+            val left = ClockDb.disable(ClockDb.enabledRows())
+            // Clock reschedules a few seconds after TIME_SET, so wait longer here.
+            noNextAlarm = left.isEmpty() && awaitClockIdle(context, tries = 20)
         }
         JarvisLog.i("cancel_alarm: no next alarm confirmed=$noNextAlarm")
         if (!alarmsSent && !noNextAlarm) return@SimpleTool ToolResult.fail("The clock didn't accept the turn-off request. Check the Clock app.")
@@ -140,6 +146,12 @@ private suspend fun awaitAlarmState(context: Context, matches: (Long?) -> Boolea
     return matched && !failed
 }
 
+/** True when Clock has nothing scheduled. Root counts only Clock's entries; without root, any next alarm clock counts. */
+private suspend fun awaitClockIdle(context: Context, tries: Int = 5): Boolean {
+    if (ClockDb.scheduledCount() == null) return awaitAlarmState(context) { it == null }
+    return pollUntil(tries, 500) { ClockDb.scheduledCount() == 0 }
+}
+
 private const val TIMER_SLACK_MS = 5_000L
 
 /** Second check when an earlier alarm hides the new one: an enabled row in the Clock alarm table (root only). */
@@ -170,9 +182,9 @@ internal fun hasScheduledAlarm(next: Long?): Boolean = next != null
 internal fun timerSetResult(seconds: Int): ToolResult =
     ToolResult.ok("Timer set for ${speakDuration(seconds)}.")
 
-internal fun cancelAlarmResult(noNextAlarm: Boolean): ToolResult = ToolResult.ok(
-    if (noNextAlarm) "Okay, alarms and timers are off." else "I asked the clock to turn them off."
-)
+internal fun cancelAlarmResult(noNextAlarm: Boolean): ToolResult =
+    if (noNextAlarm) ToolResult.ok("Okay, alarms and timers are off.")
+    else ToolResult.fail("I couldn't turn off every alarm. Some are still on in Clock.")
 
 internal fun matchesAlarmMinute(actual: Long?, expected: Long): Boolean =
     actual != null && Math.floorDiv(actual, 60_000L) == Math.floorDiv(expected, 60_000L)
@@ -281,16 +293,23 @@ private suspend fun cancelOneAlarm(context: Context, time: String): ToolResult? 
         .putExtra(AlarmClock.EXTRA_ALARM_SEARCH_MODE, AlarmClock.ALARM_SEARCH_MODE_TIME)
         .putExtra(AlarmClock.EXTRA_HOUR, target.hour)
         .putExtra(AlarmClock.EXTRA_MINUTES, target.minute))
-    if (!sent) return ToolResult.fail("The clock didn't accept the turn-off request. Check the Clock app.")
-    if (!wasNext) {
-        JarvisLog.i("cancel_alarm: one alarm $time sent; not the next alarm, cannot verify")
-        return ToolResult.ok("I asked Clock to turn off the $spoken alarm. Please check it.")
+    val off = (sent && wasNext && awaitAlarmState(context) { !isAt(it, target) }) || disableRowsAt(target)
+    JarvisLog.i("cancel_alarm: one alarm $time sent=$sent off=$off")
+    return when {
+        off -> ToolResult.ok("Okay, the $spoken alarm is off.")
+        rowsAt(ClockDb.enabledRows(), target).isEmpty() && !wasNext -> ToolResult.ok("You have no $spoken alarm on.")
+        else -> ToolResult.fail("Clock didn't turn off the $spoken alarm. Please switch it off in Clock.")
     }
-    val off = awaitAlarmState(context) { !isAt(it, target) }
-    JarvisLog.i("cancel_alarm: one alarm $time off=$off")
-    return if (off) ToolResult.ok("Okay, the $spoken alarm is off.")
-    else ToolResult.fail("Clock didn't turn off the $spoken alarm. Please switch it off in Clock.")
 }
+
+/** Root fallback: switch off enabled Clock rows at [time]; true only if there were some and all are off now. */
+private suspend fun disableRowsAt(time: LocalTime): Boolean {
+    val rows = rowsAt(ClockDb.enabledRows(), time)
+    return rows.isNotEmpty() && ClockDb.disable(rows).isEmpty()
+}
+
+internal fun rowsAt(rows: List<ClockDb.Row>, time: LocalTime): List<ClockDb.Row> =
+    rows.filter { it.hour == time.hour && it.minute == time.minute }
 
 private fun isAt(triggerMillis: Long?, time: LocalTime): Boolean = triggerMillis != null &&
     LocalDateTime.ofInstant(java.time.Instant.ofEpochMilli(triggerMillis), ZoneId.systemDefault()).toLocalTime().withSecond(0).withNano(0) == time
