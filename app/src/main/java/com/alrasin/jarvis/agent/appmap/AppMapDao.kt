@@ -4,6 +4,7 @@ import androidx.room.Dao
 import androidx.room.Insert
 import androidx.room.OnConflictStrategy
 import androidx.room.Query
+import androidx.room.Transaction
 import androidx.room.Update
 import kotlinx.coroutines.flow.Flow
 
@@ -22,6 +23,8 @@ interface AppMapDao {
     @Insert suspend fun insertElement(e: AppElement): Long
     @Query("SELECT * FROM app_element WHERE screen = :screen") suspend fun elementsFor(screen: Long): List<AppElement>
 
+    @Update suspend fun updateElement(e: AppElement)
+
     @Insert suspend fun insertEdge(e: AppEdge): Long
     @Update suspend fun updateEdge(e: AppEdge)
     @Query("SELECT * FROM app_edge WHERE fromScreen = :fromScreen") suspend fun edgesFrom(fromScreen: Long): List<AppEdge>
@@ -36,4 +39,20 @@ interface AppMapDao {
     @Query("UPDATE app_ask SET status = :status WHERE id = :id") suspend fun setAskStatus(id: Long, status: String)
     @Query("SELECT * FROM app_ask WHERE id = :id") suspend fun ask(id: Long): AppAsk?
     @Query("SELECT pkg, COUNT(*) AS n FROM app_screen GROUP BY pkg") fun screenCounts(): Flow<List<PkgCount>>
+
+    // ---- Keep maps fresh (§J.6)
+    @Query("UPDATE app_info SET versionCode = :versionCode, lastLearned = 0 WHERE pkg = :pkg")
+    suspend fun markCheckAgain(pkg: String, versionCode: Long)
+    @Query("UPDATE app_edge SET failedCount = MAX(failedCount, :fails) WHERE fromScreen IN (SELECT id FROM app_screen WHERE pkg = :pkg)")
+    suspend fun doubtEdges(pkg: String, fails: Int)
+    @Query("DELETE FROM app_edge WHERE fromScreen IN (SELECT id FROM app_screen WHERE pkg = :pkg)") suspend fun deleteEdges(pkg: String)
+    @Query("DELETE FROM app_element WHERE screen IN (SELECT id FROM app_screen WHERE pkg = :pkg)") suspend fun deleteElements(pkg: String)
+    @Query("DELETE FROM app_screen WHERE pkg = :pkg") suspend fun deleteScreens(pkg: String)
+    @Query("DELETE FROM app_ask WHERE pkg = :pkg") suspend fun deleteAsks(pkg: String)
+    @Query("DELETE FROM app_info WHERE pkg = :pkg") suspend fun deleteInfo(pkg: String)
+
+    @Transaction
+    suspend fun forgetApp(pkg: String) {
+        deleteEdges(pkg); deleteElements(pkg); deleteScreens(pkg); deleteAsks(pkg); deleteInfo(pkg)
+    }
 }

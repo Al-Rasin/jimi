@@ -80,12 +80,34 @@ class PlannerTest {
             screens = (1L..3L).map { AppScreen(it, "p", "c::", "s$it", 0) },
             elements = emptyMap(),
             edges = listOf(
-                AppEdge(1, 1, 11, 3, 0, 0, failedCount = 3),
+                AppEdge(1, 1, 11, 3, 0, 0, failedCount = 1),
                 AppEdge(2, 1, 12, 2, 0, 0, 0),
                 AppEdge(3, 2, 21, 3, 0, 0, 0),
             ),
         )
         assertEquals(listOf(11L), MapPlan.shortestPath(g, setOf(1L), 3L)!!.map { it.element })
+    }
+
+    @Test fun staleEdgeIsAvoided() {
+        val g = MapPlan.Graph(
+            screens = (1L..3L).map { AppScreen(it, "p", "c::", "s$it", 0) },
+            elements = emptyMap(),
+            edges = listOf(
+                AppEdge(1, 1, 11, 3, 0, 0, failedCount = SelfHeal.STALE_FAILS),
+                AppEdge(2, 1, 12, 2, 0, 0, 0),
+                AppEdge(3, 2, 21, 3, 0, 0, 0),
+            ),
+        )
+        assertEquals(listOf(12L, 21L), MapPlan.shortestPath(g, setOf(1L), 3L)!!.map { it.element })
+    }
+
+    @Test fun staleEdgeStillUsedWhenOnlyWay() {
+        val g = MapPlan.Graph(
+            screens = (1L..2L).map { AppScreen(it, "p", "c::", "s$it", 0) },
+            elements = emptyMap(),
+            edges = listOf(AppEdge(1, 1, 11, 2, 0, 0, failedCount = 5)),
+        )
+        assertEquals(listOf(11L), MapPlan.shortestPath(g, setOf(1L), 2L)!!.map { it.element })
     }
 
     @Test fun riskyTapIsRefused() {

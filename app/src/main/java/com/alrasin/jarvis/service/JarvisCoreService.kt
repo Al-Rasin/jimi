@@ -1,5 +1,6 @@
 package com.alrasin.jarvis.service
 
+import com.alrasin.jarvis.agent.appmap.AppMapFreshness
 import android.Manifest
 import android.annotation.SuppressLint
 import android.content.BroadcastReceiver
@@ -102,6 +103,7 @@ class JarvisCoreService : LifecycleService() {
     @Inject lateinit var registry: ToolRegistry
     @Inject lateinit var speaker: SpeakerVerifier
     @Inject lateinit var screenAgent: ScreenAgentSession
+    @Inject lateinit var mapFreshness: AppMapFreshness
 
     @Volatile private var threshold = Settings.DEFAULT_THRESHOLD
     @Volatile private var missedRequested = false
@@ -268,6 +270,7 @@ class JarvisCoreService : LifecycleService() {
         lifecycleScope.launch { settings.speakerThreshold.collect { speakerThreshold = it } }
         registerReceiver(battery, IntentFilter(Intent.ACTION_BATTERY_CHANGED))
         registerReceiver(ringing, IntentFilter(TelephonyManager.ACTION_PHONE_STATE_CHANGED))
+        mapFreshness.start()
         lifecycleScope.launch(Dispatchers.IO) { protectFromLowMemoryKiller() }
     }
 
@@ -1108,6 +1111,7 @@ class JarvisCoreService : LifecycleService() {
         listenJob?.cancel()
         runCatching { unregisterReceiver(battery) }
         runCatching { unregisterReceiver(ringing) }
+        mapFreshness.stop()
         speech.close()
         shutUp()
         speechEpoch++

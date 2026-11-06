@@ -1,6 +1,7 @@
 package com.alrasin.jarvis.agent.appmap
 
 import android.content.Context
+import android.view.accessibility.AccessibilityNodeInfo
 import com.alrasin.jarvis.actions.AppList
 import com.alrasin.jarvis.actions.Fuzzy
 import com.alrasin.jarvis.actions.JarvisAccessibilityService
@@ -100,7 +101,8 @@ object MapPlan {
             if (d > (dist[at] ?: Int.MAX_VALUE)) continue
             if (at == goal) break
             g.edges.filter { it.fromScreen == at }.forEach { e ->
-                val nd = d + TAP_COST + e.failedCount
+                // Stale edges (failed twice) stay usable as a last way only (§J.6).
+                val nd = d + TAP_COST + e.failedCount + if (SelfHeal.isStale(e)) SelfHeal.STALE_COST else 0
                 if (nd < (dist[e.toScreen] ?: Int.MAX_VALUE)) {
                     dist[e.toScreen] = nd
                     via[e.toScreen] = e
@@ -265,7 +267,7 @@ class Planner @Inject constructor(
             val failed = walk(service, g, plan.path)
             if (failed == null) {
                 plan.finalTap?.let { e ->
-                    val node = UiQuery.waitFor(MapPlan.selectors(e), STEP_WAIT_MS)
+                    val node = findOrHeal(e, app.pkg)
                     if (node == null || !UiQuery.tap(node)) return ToolResult.fail("I got there but couldn't tap ${e.label}.")
                 }
                 return ToolResult.ok("Opened ${plan.label} in ${app.name}.")
@@ -282,15 +284,33 @@ class Planner @Inject constructor(
     private suspend fun walk(service: JarvisAccessibilityService, g: MapPlan.Graph, path: List<AppEdge>): AppEdge? {
         for (edge in path) {
             val element = g.element(edge.element) ?: return edge
-            val node = UiQuery.waitFor(MapPlan.selectors(element), STEP_WAIT_MS) ?: return edge
+            val node = findOrHeal(element, g.screen(edge.fromScreen)?.pkg.orEmpty()) ?: return edge
             if (!UiQuery.tap(node)) return edge
             UiQuery.settle(service, tries = 4, pauseMs = 300)
             val expected = g.screen(edge.toScreen) ?: return edge
             // Check, then look once more (slow screens), before calling it wrong.
             if (!onScreen(service, expected) && !(pause() && onScreen(service, expected))) return edge
-            dao.updateEdge(edge.copy(timesSeen = edge.timesSeen + 1, lastOk = System.currentTimeMillis()))
+            dao.updateEdge(edge.copy(timesSeen = edge.timesSeen + 1, lastOk = System.currentTimeMillis(), failedCount = 0))
         }
         return null
+    }
+
+    /**
+     * Saved selectors first; if they fail, self-heal (§H.7): score what is on screen and take only a clear,
+     * not-opposite, not-riskier winner, then save its new selectors. Unsure → null (caller fails, agent takes over).
+     */
+    private suspend fun findOrHeal(e: AppElement, pkg: String): AccessibilityNodeInfo? {
+        val selectors = MapPlan.selectors(e)
+        UiQuery.waitFor(selectors, STEP_WAIT_MS)?.let { return it }
+        val winner = SelfHeal.pick(SelfHeal.saved(e, selectors), UiQuery.candidates())
+        if (winner?.node == null) {
+            JarvisLog.i("self-heal: no clear match for \"${e.label}\" in $pkg")
+            return null
+        }
+        val healed = SelfHeal.healedSelectors(winner)
+        if (healed.isNotEmpty()) dao.updateElement(e.copy(selectorsJson = Json.write(healed)))
+        JarvisLog.i("self-heal: \"${e.label}\" → \"${winner.text.ifBlank { winner.desc }}\" ${winner.resourceId} in $pkg")
+        return winner.node
     }
 
     private fun onScreen(service: JarvisAccessibilityService, s: AppScreen): Boolean {

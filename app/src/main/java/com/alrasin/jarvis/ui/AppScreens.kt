@@ -665,7 +665,7 @@ private fun AppKnowledgeCards(vm: AppViewModel) {
                 add("${a.screens} screens")
                 if (a.tasks.isNotEmpty()) add("can: ${a.tasks.joinToString(", ")}")
                 if (a.cannot.isNotEmpty()) add("can't: ${a.cannot.joinToString(", ")}")
-                if (a.lastLearned > 0) add(timeFmt.format(Date(a.lastLearned)))
+                if (a.lastLearned > 0) add(timeFmt.format(Date(a.lastLearned))) else add("check again")
             }.joinToString(" · ")
             ItemRow(a.label, meta)
         }

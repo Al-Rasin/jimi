@@ -115,6 +115,10 @@ object UiQuery {
     fun find(root: AccessibilityNodeInfo, selectors: List<Selector>): AccessibilityNodeInfo? =
         matchCandidate(selectors, buildCandidates(root))?.node
 
+    /** All visible+enabled nodes on the live screen, for self-heal scoring (§H.7). */
+    fun candidates(): List<Candidate> =
+        JarvisAccessibilityService.instance?.rootInActiveWindow?.let(::buildCandidates).orEmpty()
+
     private fun buildCandidates(root: AccessibilityNodeInfo): List<Candidate> {
         var i = 0
         return root.findAll(maxDepth = 40) { it.isVisibleToUser && it.isEnabled }.map { n ->
