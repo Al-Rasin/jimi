@@ -55,6 +55,24 @@ class PendingContactChoiceTest {
         assertTrue(pending.answer("the second one") is PendingContactChoice.Reply.Selection)
     }
 
+    @Test fun twoMissesShowTheListAndStopAsking() {
+        begin()
+        assertTrue(pending.answer("banana") is PendingContactChoice.Reply.Prompt)
+        val gaveUp = pending.answer("apple") as PendingContactChoice.Reply.GaveUp
+        assertTrue(gaveUp.list.contains("Rahim Office – +15550000002"))
+        assertEquals(PendingContactChoice.Reply.NoPending, pending.answer("office"))
+    }
+
+    @Test fun spelledNameSelects() {
+        begin()
+        assertEquals(candidates[2], (pending.answer("r a h i m u d d i n") as PendingContactChoice.Reply.Selection).contact)
+    }
+
+    @Test fun numberEndingSelects() {
+        begin()
+        assertEquals(candidates[1], (pending.answer("the one with number ending 0002") as PendingContactChoice.Reply.Selection).contact)
+    }
+
     @Test fun unknownReplyKeepsChoiceOpen() {
         begin()
         assertTrue(pending.answer("banana") is PendingContactChoice.Reply.Prompt)

@@ -74,6 +74,7 @@ class Assistant @Inject constructor(
 
     private val lock = Mutex()
     private var pending: Pair<ToolCall, Long>? = null
+    private var pendingQuestion: String? = null
     private var contactChoice = PendingContactChoice()
     private val draft = MessageDraft()
     private val timeSlot = TimeSlot()
@@ -225,6 +226,11 @@ class Assistant @Inject constructor(
                 trace("contact_choice", ok = false)
                 return Reply("That contact choice expired. Who should I contact?", expectAnswer = true)
             }
+            is PendingContactChoice.Reply.GaveUp -> {
+                trace("contact_choice", ok = false)
+                clearConversation()
+                return Reply("I couldn't tell which one. Here they are — say the full name or the number:\n${choice.list}")
+            }
             PendingContactChoice.Reply.NoPending -> Unit
         }
         pending?.let { (call, at) ->
@@ -246,7 +252,13 @@ class Assistant @Inject constructor(
                 }
             } else if (Persona.isYes(text)) {
                 trace("confirm", call, false)
-                return Reply("That confirmation expired. Please repeat the request.", expectAnswer = true)
+                // A late "yes" (dialog still on screen) asks again instead of dropping the request.
+                val question = pendingQuestion
+                if (question != null && monotonicMillis() - at in 0 until LATE_YES_MS) {
+                    pending = call to monotonicMillis()
+                    return Reply("That took a while, so once more: $question", tool = call.tool, expectAnswer = true)
+                }
+                return Reply("That confirmation expired. Say the request again.", expectAnswer = true)
             }
         }
         if (input.source == "follow_up" && rule == null && smallTalk == null && followUp == null && ReplyText.isNoise(text)) {
@@ -405,6 +417,7 @@ class Assistant @Inject constructor(
                     call.tool in setOf("send_sms", "send_whatsapp") -> "Send \"${call.arg("text")}\" to $recipient?"
                     else -> o.question
                 }
+                pendingQuestion = question
                 Reply(question, tool = call.tool, expectAnswer = true)
             }
             is Outcome.Denied -> {
@@ -492,6 +505,7 @@ class Assistant @Inject constructor(
 
     companion object {
         private const val PENDING_MS = 30_000L
+        private const val LATE_YES_MS = 180_000L
         private val MESSAGE_TOOLS = setOf("send_sms", "send_whatsapp")
         private val WEB_TOOLS = setOf("web_search", "weather", "news", "wiki_lookup", "read_page", "open_url")
 

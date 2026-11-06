@@ -6,7 +6,10 @@ package com.alrasin.jarvis.actions
  * Nothing is stored; values are read when needed and never logged.
  */
 internal object SelfAccount {
-    private val SELF = Regex("^(?:me|myself|my ?self|self|yourself|my own(?: (?:number|account|chat|inbox))?|message yourself)$")
+    private val SELF = Regex(
+        "^(?:me|myself|my ?self|self|yourself|my own|message yourself|" +
+            "my (?:own )?(?:number|account|chat|inbox|whats ?app|messenger)(?: (?:number|account|chat))?)$",
+    )
 
     fun isSelf(who: String?): Boolean = who != null && SELF.matches(who.trim().trimEnd('.', '!', '?').lowercase())
 

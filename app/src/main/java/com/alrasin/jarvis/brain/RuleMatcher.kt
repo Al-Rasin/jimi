@@ -1,5 +1,6 @@
 package com.alrasin.jarvis.brain
 
+import com.alrasin.jarvis.actions.SelfAccount
 import com.alrasin.jarvis.core.ToolCall
 import java.time.LocalDateTime
 import java.time.format.DateTimeFormatter
@@ -206,14 +207,18 @@ object RuleMatcher {
         Regex("^(?:(?:send|write) (?:a |an )?)?(whats ?app|messenger)(?: message| text)?( to)? (.+)$").find(t)?.let {
             return message(it.groupValues[3], commsApp(it.groupValues[1]), addressed = it.groupValues[2].isNotEmpty())
         }
-        Regex("^(?:(?:send|write) (?:a |an )?)?(?:message|text|sms|msg)(?: (?:on|via|using|in) (whats ?app|messenger|sms))?( to)? (.+)$").find(t)?.let {
-            return message(it.groupValues[3], it.groupValues[1].takeIf(String::isNotEmpty)?.let(::commsApp), addressed = it.groupValues[2].isNotEmpty())
+        Regex("^(?:(?:send|write) (?:a |an )?)?(message|text|sms|msg)(?: (?:on|via|using|in) (whats ?app|messenger|sms))?( to)? (.+)$").find(t)?.let {
+            val app = it.groupValues[2].takeIf(String::isNotEmpty)?.let(::commsApp)
+            // Only a plain "message" leaves the app open, so "message rahim saying hi on whatsapp" picks WhatsApp.
+            return message(it.groupValues[4], app, addressed = it.groupValues[3].isNotEmpty(),
+                appAfterText = app == null && it.groupValues[1] in setOf("message", "msg"))
         }
         // "send a message", "send a whatsapp message", "message on messenger" → ask who and what.
         Regex("^(?:(?:send|write) )?(?:a |an )?(?:(whats ?app|messenger) )?(?:message|text|msg)(?: (?:on|via|using|in) (whats ?app|messenger))?$").find(t)?.let {
             val app = (it.groupValues[1].ifEmpty { it.groupValues[2] }).takeIf(String::isNotEmpty)?.let(::commsApp)
             return call(if (app == "whatsapp") "send_whatsapp" else "send_sms", "app" to app?.takeIf { a -> a == "messenger" })
         }
+        appInMiddle(t)?.let { return it }
         anyOrderChat(t)?.let { return it }
         if (normalize(t).matches(re("(?:read|check|show|any|do i have any)(?: me)?(?: my)?(?: new| unread| latest| last)? (?:messages|texts|sms)|(?:read|show) (?:the )?last (?:message|text|sms)"))) return call("read_messages")
         Regex("^(?:send|write|compose) (?:an |a )?(?:email|mail|e mail)(?: to ([a-z0-9 ]+?))?(?: about (.+))?$").find(t)
@@ -257,13 +262,34 @@ object RuleMatcher {
         val sendApp = app ?: return null
         Regex("^(?:send|write)(?: an?)? (?:message|text|msg|sms)(?: (.+))?$").find(s)?.let { return message(it.groupValues[1], sendApp) }
         Regex("^(?:say|send|write) (.+) to (.+)$").find(s)?.let {
-            if (it.groupValues[2].trim() in NOT_A_CONTACT) return null
+            if (it.groupValues[2].trim() in NOT_A_CONTACT && !SelfAccount.isSelf(it.groupValues[2])) return null
             return call(if (sendApp == "whatsapp") "send_whatsapp" else "send_sms", "contact" to it.groupValues[2],
                 "text" to it.groupValues[1], "app" to sendApp.takeIf { a -> a == "messenger" })
         }
         Regex("^tell (.+)$").find(s)?.takeUnless { it.groupValues[1].substringBefore(' ') in NOT_A_CONTACT }
             ?.let { return message(it.groupValues[1], sendApp) }
         Regex("^(?:message|text|msg) (.+)$").find(s)?.let { return message(it.groupValues[1], sendApp) }
+        return null
+    }
+
+    /**
+     * "send hello on whatsapp to rahim", "send hi to my whatsapp" (owner's own chat), "send hi to 017 1234 5678"
+     * (a number said alone is SMS to that number, no contact search). ROADMAP §M.6.
+     */
+    private fun appInMiddle(raw: String): ToolCall? {
+        val s = raw.trimEnd('.', '!', '?').trim()
+        fun send(app: String, who: String, text: String) = call(if (app == "whatsapp") "send_whatsapp" else "send_sms",
+            "contact" to who.trim(), "text" to text.trim(), "app" to app.takeIf { it == "messenger" })
+        Regex("^(?:say|send|write) (.+?) (?:on|via|in|using) (?:the )?(whats ?app|messenger|sms) to (.+)$").find(s)?.let {
+            if (it.groupValues[3].trim() in NOT_A_CONTACT && !SelfAccount.isSelf(it.groupValues[3])) return null
+            return send(commsApp(it.groupValues[2]), it.groupValues[3], it.groupValues[1])
+        }
+        Regex("^(?:say|send|write) (.+) to my (?:own )?(whats ?app|messenger)$").find(s)?.let {
+            return send(commsApp(it.groupValues[2]), "myself", it.groupValues[1])
+        }
+        Regex("^(?:say|send|write) (.+) to (\\+?[0-9][0-9 -]{3,}[0-9])$").find(s)?.takeIf { it.groupValues[2].count(Char::isDigit) >= 5 }?.let {
+            return send("sms", it.groupValues[2], it.groupValues[1])
+        }
         return null
     }
 
@@ -289,7 +315,7 @@ object RuleMatcher {
      * [addressed]: the words came after "to", so with no "saying …" the whole rest is the contact.
      * Missing contact or text is returned empty; the Assistant then asks for it (MessageDraft).
      */
-    private fun message(raw: String, requestedApp: String? = null, addressed: Boolean = false): ToolCall? {
+    private fun message(raw: String, requestedApp: String? = null, addressed: Boolean = false, appAfterText: Boolean = false): ToolCall? {
         var rest = raw
         var to = addressed
         // "my whatsapp" / "to my messenger" → app only, ask who.
@@ -298,14 +324,32 @@ object RuleMatcher {
             if (requestedApp != null && requestedApp != app) return null
             return call(if (app == "whatsapp") "send_whatsapp" else "send_sms", "app" to app.takeIf { a -> a == "messenger" })
         }
+        // "to my whatsapp hello" → the owner's own chat.
+        Regex("^(?:to )?my (?:own )?(whats ?app|messenger) (?:(?:saying|that says|say)\\s+|:\\s*)?(.+)$").find(rest)?.let {
+            val app = commsApp(it.groupValues[1])
+            if (requestedApp != null && requestedApp != app) return null
+            return call(if (app == "whatsapp") "send_whatsapp" else "send_sms", "contact" to "myself",
+                "text" to it.groupValues[2], "app" to app.takeIf { a -> a == "messenger" })
+        }
         if (rest.startsWith("to ")) { rest = rest.removePrefix("to "); to = true }
+        // "017 1234 5678 hello": the whole spoken number is the recipient.
+        Regex("^(\\+?[0-9][0-9 -]{3,}[0-9])(?:\\s+(?:(?:saying|that says|say)\\s+|:\\s*)?(\\D.*))?$").find(rest)?.takeIf { it.groupValues[1].count(Char::isDigit) >= 5 }?.let {
+            return call("send_sms".takeIf { requestedApp != "whatsapp" } ?: "send_whatsapp", "contact" to it.groupValues[1],
+                "text" to it.groupValues[2].trim().ifBlank { null }, "app" to requestedApp?.takeIf { a -> a == "messenger" })
+        }
         val delimiter = Regex("\\s+(?:saying|that says|say|that)(?:\\s+|$)|\\s*:\\s*").find(rest)
         var app = requestedApp
         val recipient: String
         val text: String
         if (delimiter != null) {
             var head = rest.substring(0, delimiter.range.first).trim()
-            text = rest.substring(delimiter.range.last + 1).trim()
+            var said = rest.substring(delimiter.range.last + 1).trim()
+            // "message rahim saying hi on whatsapp": with no app named yet, a trailing app word picks the app.
+            if (appAfterText) TRAIL_APP.find(said)?.let {
+                app = commsApp(it.groupValues[1])
+                said = said.substring(0, it.range.first).trim()
+            }
+            text = said
             Regex("^(.+?) (?:on|via|using) (whats ?app|messenger|sms)$").find(head)?.let {
                 if (app != null && app != commsApp(it.groupValues[2])) return null
                 app = commsApp(it.groupValues[2])

@@ -74,14 +74,26 @@ object ContactResolver {
             return candidates.getOrNull(index)
         }
         if (text.isEmpty()) return null
+        // The words of the question itself: "Rahim (number ending 0001)" or just "ending 0001".
+        Regex("(?:number )?ending(?: in| with)? ([0-9 ]{4,})$").find(text)?.let { end ->
+            val tail = end.groupValues[1].filter(Char::isDigit)
+            return candidates.filter { it.number.filter(Char::isDigit).endsWith(tail) }.singleOrNull()
+        }
         val exact = candidates.filter { clean(it.name) == text }
         if (exact.isNotEmpty()) return exact.singleOrNull()
+        // Spelled out ("r a h i m k h a n"): compare without spaces.
+        val squashed = spoken(text).replace(" ", "")
+        candidates.filter { clean(it.name).replace(" ", "") == squashed }.takeIf { it.isNotEmpty() }?.let { return it.singleOrNull() }
         val q = queryName(text)
         if (q.isEmpty()) return null
         return wholeName(q, candidates.filter { contact ->
             contactNames(contact).any { matches(q, it) || relationMatch(q, it) }
         }).singleOrNull()
     }
+
+    /** The choices with their numbers, shown on screen when the spoken choice failed twice. */
+    fun list(candidates: List<Contacts.Contact>): String =
+        candidates.mapIndexed { i, c -> "${i + 1}. ${c.name} – ${c.number}" }.joinToString("\n")
 
     fun question(query: String, candidates: List<Contacts.Contact>): String {
         val repeatedNames = candidates.groupingBy { clean(it.name) }.eachCount()
