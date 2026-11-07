@@ -126,7 +126,7 @@ internal class ToolSafetyGate {
                 Skills.isRisky(call.arg("name") ?: call.arg("query").orEmpty()) -> Risk.CONFIRM
             (locked || lockdown) && call.tool in setOf(
                 "read_messages", "read_chat", "read_notes", "list_reminders", "recall_facts",
-                "read_screen", "read_list", "read_notifications", "notification_summary",
+                "read_screen", "read_list", "read_notifications", "notification_summary", "calendar_read",
             ) -> Risk.VOICE_ID
             else -> Risk.SAFE
         }
@@ -163,6 +163,8 @@ internal class ToolSafetyGate {
             "redial" -> "Call the last number again"
             "unlock_phone" -> "Unlock your phone"
             "clear_notifications" -> "Clear all your notifications"
+            "calendar_move" -> "Move ${arg("query")?.let { "\"$it\"" } ?: "your next event"} to ${CalendarSpeech.moveSay(arg("date"), arg("time"), java.time.LocalDate.now())}"
+            "calendar_delete" -> "Delete ${arg("query")?.let { "\"$it\"" } ?: "your next event"} from your calendar"
             "cancel_alarm" -> arg("time")?.let(::spokenClock)?.let { "Turn off your $it alarm" } ?: "Cancel all your alarms and timers"
             "delete_reminder" -> when (val text = arg("text")) {
                 "all" -> "Delete all your reminders"

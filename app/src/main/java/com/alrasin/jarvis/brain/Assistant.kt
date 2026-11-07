@@ -599,6 +599,7 @@ class Assistant @Inject constructor(
                 ToolCall("toggle", mapOf("target" to "dnd", "state" to "off")),
                 ToolCall("set_brightness", mapOf("level" to "auto")),
                 ToolCall("device_status", mapOf("what" to "date")),
+                ToolCall("calendar_read"),
                 ToolCall("weather"),
                 ToolCall("list_reminders"),
                 ToolCall("notification_summary"),

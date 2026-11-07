@@ -50,6 +50,7 @@ class ToolRegistry @Inject constructor(
     val all: List<Tool> = buildList {
         addAll(appTools(context, apps))
         addAll(timeTools(context))
+        addAll(calendarTools(context))
         addAll(commsTools(context, contacts))
         addAll(callTools(context, contacts))
         add(chatReadTool(context, contacts, notifications))

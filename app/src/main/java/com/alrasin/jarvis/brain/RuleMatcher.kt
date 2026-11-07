@@ -2,7 +2,10 @@ package com.alrasin.jarvis.brain
 
 import com.alrasin.jarvis.actions.SelfAccount
 import com.alrasin.jarvis.core.ToolCall
+import java.time.DayOfWeek
+import java.time.LocalDate
 import java.time.LocalDateTime
+import java.time.temporal.TemporalAdjusters
 import java.time.format.DateTimeFormatter
 
 /**
@@ -69,7 +72,7 @@ object RuleMatcher {
         if (t.isEmpty()) return null
         val actionText = input.lowercase().trim().replace(Regex("\\s+"), " ")
             .replace(Regex("^(?:(?:hey |ok |okay )?(?:jarvis|jimi|jimmy)[, ]+|(?:please|pls|can you|could you|would you|will you|i want you to|i want to|i would like to|just|hey|ok|okay) )+"), "")
-        return talk(t) ?: comms(actionText) ?: media(actionText.trimEnd('.', '!', '?')) ?: maps(t) ?: appMap(t) ?: skills(t)
+        return talk(t) ?: calendar(t, now) ?: comms(actionText) ?: media(actionText.trimEnd('.', '!', '?')) ?: maps(t) ?: appMap(t) ?: skills(t)
             ?: knowledge(t)?.takeIf { it.tool == "web_search" || it.tool == "wiki_lookup" }
             ?: toggle(t) ?: time(normalize(input, keepClockColon = true), now) ?: notes(t, now) ?: media(t) ?: system(t) ?: screen(t)
             ?: notifications(t) ?: noisyTool(t, now) ?: knowledge(t) ?: memory(t, actionText) ?: apps(t)
@@ -181,6 +184,102 @@ object RuleMatcher {
         }
         return null
     }
+
+    private const val EV = "events?|meetings?|appointments?"
+    private const val WEEKDAY = "monday|tuesday|wednesday|thursday|friday|saturday|sunday"
+    private const val READ_DAY = "today|tonight|tomorrow|this week|next week|(?:on |this |next )?(?:$WEEKDAY)"
+
+    /** Phone calendar (ROADMAP §I.2): "what's tomorrow", "add a meeting with Sam on Friday at 3", "move my dentist to 5 pm". */
+    private fun calendar(t: String, now: LocalDateTime): ToolCall? {
+        val read = Regex("^(?:whats|what is)(?: on)? (tomorrow)$").find(t)
+            ?: Regex("^(?:whats|what is) on ($READ_DAY)$").find(t)
+            ?: Regex("^(?:what do i have|what have i got|do i have anything|whats happening|what is happening)(?: on| for)? ($READ_DAY)$").find(t)
+            ?: Regex("^(?:(?:whats|what is) (?:on |in )?|show (?:me )?|read (?:me )?|check |tell me )?(?:my |the )?(?:calendar|schedule|agenda)(?: for| on)?(?: ($READ_DAY))?$").find(t)
+            ?: Regex("^(?:do i have |are there |any |what )(?:any )?(?:$EV)(?: do i have)?(?: (?:on |for )?($READ_DAY))?$").find(t)
+        if (read != null) return readDay(read.groupValues[1], now.toLocalDate())
+        calendarAdd(t, now)?.let { return it }
+        Regex("^(?:move|reschedule|shift|push back|push|change|postpone) (?:my |the )?(.+?) (?:to|till|until) (.+)$").find(t)?.let { m ->
+            val subject = m.groupValues[1]
+            if (!t.startsWith("reschedule") && !t.startsWith("postpone") && !Regex("\\b(?:$EV|calendar)\\b").containsMatchIn(subject)) return@let
+            if (Regex("\\b(?:reminder|alarm|timer|note)s?\\b").containsMatchIn(subject)) return@let
+            val spec = m.groupValues[2]
+            val at = TimeParser.parse(spec, now) ?: return@let
+            val hasDay = Regex("\\b(?:today|tonight|tomorrow|$WEEKDAY|on (?:the )?\\d)").containsMatchIn(spec)
+            if (!hasDay && !at.hasTime) return@let
+            return call("calendar_move", "query" to eventQuery(subject),
+                "date" to if (hasDay) dayOf(spec, at.at, now).toString() else null, "time" to if (at.hasTime) at.at.format(HM) else null)
+        }
+        Regex("^(?:delete|remove|cancel|clear) (?:my |the )?(.+)$").find(t)?.let { m ->
+            val subject = m.groupValues[1]
+            if (!Regex("\\b(?:$EV)\\b|(?:from|on|in) my calendar$").containsMatchIn(subject)) return@let
+            if (Regex("\\b(?:reminder|alarm|timer|note)s?\\b").containsMatchIn(subject)) return@let
+            val day = Regex("\\b(today|tonight|tomorrow|(?:on )?(?:$WEEKDAY))\\b").find(subject)?.groupValues?.get(1)
+            return call("calendar_delete", "query" to eventQuery(subject), "date" to day?.let { readDayOf(it, now.toLocalDate()).first.toString() })
+        }
+        return null
+    }
+
+    /** "add a meeting with Sam tomorrow at 3 for 30 minutes", "put dentist on my calendar for friday at 10". */
+    private fun calendarAdd(t: String, now: LocalDateTime): ToolCall? {
+        val typed = Regex("^(?:add|create|schedule|put|book|make|set up|plan)(?: (?:an?|new|my|the))* ($EV)(?: (.*))?$").find(t)
+        val named = if (typed == null) Regex("^(?:add|put|save) (.+?) (?:to|on|in|into) (?:my |the )?calendar(?: (.*))?$").find(t) else null
+        if (typed == null && named == null) return null
+        val kind = typed?.groupValues?.get(1)?.removeSuffix("s")
+        var spec = (typed?.groupValues?.get(2) ?: listOf(named!!.groupValues[1], named.groupValues[2]).joinToString(" "))
+            .replace(Regex("\\b(?:to|on|in|into) (?:my |the )?calendar\\b"), " ").replace(Regex("\\s+"), " ").trim()
+        var minutes: Long? = null
+        Regex("\\bfor ((?:(?:\\d+|an?|half an?|1 and a half) (?:minutes?|mins?|hours?|hrs?)(?: and )?)+)").find(spec)?.let { d ->
+            minutes = TimeParser.duration(d.groupValues[1])?.div(60)
+            spec = spec.replaceRange(d.range, " ").replace(Regex("\\s+"), " ").trim()
+        }
+        val at = TimeParser.parse(spec, now)
+        var title = (at?.rest ?: spec).trim().replace(Regex("^(?:called|named|about|for|titled|:)\\s*"), "").removeSuffix(" at").removeSuffix(" on").trim()
+        if (kind != null && title.startsWith("with ")) title = "$kind $title"
+        if (title.isEmpty() && kind != null) title = kind
+        val hasDay = Regex("\\b(?:today|tonight|tomorrow|$WEEKDAY|on (?:the )?\\d)").containsMatchIn(spec)
+        val time = when {
+            at == null -> null
+            at.hasTime -> at.at.format(ISO)
+            hasDay -> dayOf(spec, at.at, now).toString()
+            else -> null
+        }
+        return call("calendar_add", "title" to title.replaceFirstChar { it.uppercase() }, "time" to time, "minutes" to minutes?.toString())
+    }
+
+    /** TimeParser moves "today" with no time to tomorrow once 9 AM passed; a calendar day is just the day said. */
+    private fun dayOf(spec: String, at: LocalDateTime, now: LocalDateTime) =
+        if (Regex("\\b(?:today|tonight)\\b").containsMatchIn(spec)) now.toLocalDate() else at.toLocalDate()
+
+    private fun readDay(word: String, today: LocalDate): ToolCall {
+        val (day, days) = readDayOf(word, today)
+        return call("calendar_read", "day" to day.takeIf { it != today }?.toString(), "days" to days.takeIf { it > 1 }?.toString())
+    }
+
+    /** Day word → first day + how many days. */
+    private fun readDayOf(word: String, today: LocalDate): Pair<LocalDate, Int> {
+        val w = word.trim().removePrefix("on ")
+        return when {
+            w.isEmpty() || w == "today" || w == "tonight" -> today to 1
+            w == "tomorrow" -> today.plusDays(1) to 1
+            w == "this week" -> today to 7
+            w == "next week" -> today.with(TemporalAdjusters.next(DayOfWeek.MONDAY)) to 7
+            else -> {
+                val name = w.substringAfterLast(' ')
+                val dow = DayOfWeek.valueOf(name.uppercase())
+                var d = today.plusDays(((dow.value - today.dayOfWeek.value + 7) % 7).toLong())
+                if (w.startsWith("next ") && d == today) d = d.plusDays(7)
+                d to 1
+            }
+        }
+    }
+
+    /** "my dentist appointment tomorrow" → "dentist appointment"; empty = the next event. */
+    private fun eventQuery(subject: String): String? = subject
+        .replace(Regex("\\b(?:from|on|in) (?:my |the )?calendar\\b"), " ")
+        .replace(Regex("\\b(?:today|tonight|tomorrow|(?:on |this |next )?(?:$WEEKDAY))\\b"), " ")
+        .replace(Regex("^(?:my|the|next|upcoming)\\s+"), "")
+        .replace(Regex("\\s+"), " ").trim()
+        .takeUnless { it.isEmpty() || it.matches(Regex("(?:my |the |next )?(?:$EV|calendar)")) }
 
     /** "stop the 11 am alarm", "cancel alarm at 7" → cancel only that alarm (24h time). */
     private fun oneAlarm(t: String, now: LocalDateTime): ToolCall? {
