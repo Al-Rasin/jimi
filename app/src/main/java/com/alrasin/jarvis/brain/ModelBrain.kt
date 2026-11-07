@@ -48,6 +48,7 @@ class ModelBrain @Inject constructor(
     private var chatModel: Llama? = null
     private var screenModel: Llama? = null
     private var unloadJob: Job? = null
+    @Volatile private var lastUsedAt = 0L
 
     /** Tools the small model may pick. Talk tools are rules-only. */
     private val llmTools by lazy { registry.all }
@@ -69,8 +70,18 @@ class ModelBrain @Inject constructor(
     /** Loads the tool model while the user is still talking (wake word, no cloud), hiding the ~3 s load. */
     fun preloadTools() = scope.launch { withModels { toolModel() } }
 
-    fun releaseModels() = scope.launch {
+    /**
+     * [force] = Android is about to kill apps (COMPLETE / onLowMemory). Without it, a model used in the last
+     * [KEEP_WARM_MS] stays: loading the chat model itself fires RUNNING_CRITICAL on the 4 GB phone, and
+     * unloading then cost a 4–5 s reload on every question (seen 2026-11-07).
+     */
+    fun releaseModels(force: Boolean = false) = scope.launch {
         lock.withLock {
+            val idle = System.currentTimeMillis() - lastUsedAt
+            if (!force && idle < KEEP_WARM_MS) {
+                JarvisLog.i("memory trim: models used ${idle / 1000} s ago, kept warm")
+                return@withLock
+            }
             unloadJob?.cancel()
             unloadJob = null
             closeModels()
@@ -112,6 +123,7 @@ class ModelBrain @Inject constructor(
         try {
             block()
         } finally {
+            lastUsedAt = System.currentTimeMillis()
             unloadJob = if (toolModel != null || chatModel != null || screenModel != null) scope.launch {
                 delay(IDLE_MS)
                 lock.withLock { closeModels() }
@@ -203,9 +215,15 @@ class ModelBrain @Inject constructor(
                 var firstPiece = true
                 var spoke = false
                 val started = System.currentTimeMillis()
+                var pieces = 0
+                var firstAt = 0L
+                var yielded = 0L
                 val out = runCatching {
                     m.generate(prompt, null, maxTokens = 120, stop = listOf("<|im_end|>", "<end_of_turn>")) { p ->
+                        pieces++
+                        if (spoke) yielded += com.alrasin.jarvis.voice.SpeechGate.yieldToVoice()
                         if (firstPiece) {
+                            firstAt = System.currentTimeMillis()
                             firstPiece = false
                             JarvisLog.i("latency: chat first token ${System.currentTimeMillis() - started} ms")
                         }
@@ -218,7 +236,9 @@ class ModelBrain @Inject constructor(
                         ChatFormat.clean(visibleAnswer.toString()).split(Regex("\\s+")).size < 80
                     }
                 }.onFailure { JarvisLog.e("chat model failed", it) }.getOrNull()
-                JarvisLog.i("llm chat ${System.currentTimeMillis() - started} ms (${m.file.name})")
+                val genMs = (System.currentTimeMillis() - firstAt - yielded).coerceAtLeast(1)
+                JarvisLog.i("llm chat ${System.currentTimeMillis() - started} ms (${m.file.name}), $pieces tokens, " +
+                    "${pieces * 1000 / genMs} t/s, waited for voice $yielded ms")
                 ChatFormat.clean(buf).takeIf { spoke && it.isNotBlank() }?.let(onSentence)
                 out?.let { ChatFormat.clean(it) }?.takeIf { it.isNotBlank() }?.let { ChatOut(it, spoke) }
             }
@@ -226,5 +246,6 @@ class ModelBrain @Inject constructor(
 
     companion object {
         private const val IDLE_MS = 120_000L
+        private const val KEEP_WARM_MS = 60_000L
     }
 }

@@ -32,12 +32,12 @@ class JarvisApp : Application() {
         // BACKGROUND (40) fires for this UI-less service all the time; unloading then cost a 3 s reload per command.
         if (level == ComponentCallbacks2.TRIM_MEMORY_RUNNING_CRITICAL || level >= ComponentCallbacks2.TRIM_MEMORY_COMPLETE) {
             JarvisLog.i("memory trim level $level: unloading LLMs")
-            models.get().releaseModels()
+            models.get().releaseModels(force = level >= ComponentCallbacks2.TRIM_MEMORY_COMPLETE)
         }
     }
 
     override fun onLowMemory() {
         super.onLowMemory()
-        models.get().releaseModels()
+        models.get().releaseModels(force = true)
     }
 }
