@@ -299,6 +299,9 @@ class Assistant @Inject constructor(
                     return runTool(call, input, "recipe")
                 }
             }
+            // "turn on wifi and then open youtube": every part a known tool → run them in order, no AI (§H.1).
+            val chain = chainPlan(text, rule, intent)
+            if (chain?.complete == true) return runChain(chain, input)
             webRouteCall(text, rule, intent)?.let { return runTool(it, input, "router") }
             ruleRouteCall(text, rule, intent)?.let {
                 if (smoke == null) draft.start(it, monotonicMillis())?.let { q -> return Reply(q, expectAnswer = true) }
@@ -312,6 +315,10 @@ class Assistant @Inject constructor(
                     val call = ToolCall("run_recipe", mapOf("name" to r.name, "app" to r.appName, "pkg" to r.pkg,
                         "risky" to r.risky.toString(), "params" to Json.write(params)))
                     return runTool(call, input, "recipe")
+                }
+                if (chain != null && chain.known.isNotEmpty() && !AgentRouting.needsScreen(text) && (smoke != null || !cloud.enabled())) {
+                    trace("chain_partial", ok = false)
+                    return Reply(TaskChain.partialReply(chain), tool = "chain")
                 }
                 if (!AgentRouting.needsMultiStep(text)) {
                     JarvisLog.i("route llm fallback: rule=${rule?.tool ?: "none"}, reason=${intent.reason}")
@@ -492,6 +499,27 @@ class Assistant @Inject constructor(
         }
     }
 
+    /** Runs a task chain step by step and speaks once at the end; a question (confirm, which contact) stops it. */
+    private suspend fun runChain(plan: TaskChain.Plan, input: Input): Reply {
+        JarvisLog.i("route chain: ${plan.steps.joinToString(" → ") { it.call!!.tool }}")
+        val says = ArrayList<String>()
+        for ((i, step) in plan.steps.withIndex()) {
+            val reply = runTool(step.call!!, input, "chain")
+            if (reply.text.isNotBlank()) says += reply.text
+            if (reply.expectAnswer) {
+                val left = plan.steps.drop(i + 1).joinToString(" and ") { it.text }
+                if (left.isNotEmpty()) says.add(says.size - 1, "Then I stopped before: $left.")
+                return reply.copy(text = says.joinToString(" "), tool = "chain")
+            }
+            if (step.call.tool in setOf("lock_phone", "unlock_phone") && i < plan.steps.lastIndex) {
+                says += "I stopped after changing the lock. Say the rest again."
+                break
+            }
+            if (step.call.tool == "open_app" && coroutineContext[SmokeSession] == null) kotlinx.coroutines.delay(800)
+        }
+        return Reply(says.joinToString(" "), tool = "chain")
+    }
+
     /** Runs each step and reports its actual result (PLAN 8.1–8.3). */
     private suspend fun runRoutine(name: String, input: Input): Reply {
         val steps = stepsFor(name) ?: return Reply("I don't have a routine called ${name.replace('_', ' ')}.", tool = "run_routine")
@@ -526,6 +554,16 @@ class Assistant @Inject constructor(
         private const val LATE_YES_MS = 180_000L
         private val MESSAGE_TOOLS = setOf("send_sms", "send_whatsapp")
         private val WEB_TOOLS = setOf("web_search", "weather", "news", "wiki_lookup", "read_page", "open_url")
+
+        /** Tools that can grab a whole "X and Y" sentence by one loose word, so a full chain beats them. */
+        private val LOOSE_TOOLS = setOf("toggle", "open_app", "set_volume", "set_brightness", "go_home", "go_back")
+
+        /** A chain plan when the sentence has parts; a matching non-loose rule for the whole sentence wins (it may own the "and"). */
+        internal fun chainPlan(text: String, rule: ToolCall?, intent: IntentRouter.Decision): TaskChain.Plan? {
+            if (intent.isConfident && intent.route == IntentRouter.Route.CHAT) return null
+            if (rule != null && rule.tool !in LOOSE_TOOLS && AgentRouting.acceptsSingleTool(text, rule.tool)) return null
+            return TaskChain.plan(text) { RuleMatcher.match(it) }
+        }
 
         internal fun ruleRouteCall(text: String, rule: ToolCall?, intent: IntentRouter.Decision): ToolCall? {
             if (intent.isConfident && intent.route == IntentRouter.Route.CHAT) return null
