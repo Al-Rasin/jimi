@@ -629,6 +629,8 @@ object RuleMatcher {
 
     private fun knowledge(t: String): ToolCall? {
         WeatherRequest.match(t)?.let { return it }
+        money(t)?.let { return it }
+        prayer(t)?.let { return it }
         if (t.matches(re("(?:re ?)?scan (?:my|this|the) (?:phone|device)(?: again)?"))) return call("phone_profile", "scan" to "true")
         if (t.matches(re("what do you know about (?:my|this) (?:phone|device)|(?:tell me )?about (?:my|this) phone|what apps do i have|which apps do i have"))) return call("phone_profile")
         if (t.matches(re("how many apps(?: do i have| are (?:there|installed)(?: on (?:my|this) phone)?| (?:are )?on (?:my|this) phone| have i (?:got|installed))?|(?:number|count) of (?:my )?apps|count (?:my )?apps"))) return call("phone_profile", "ask" to "apps")
@@ -649,6 +651,58 @@ object RuleMatcher {
         Regex("^(?:who is|who was|who were) (.+)$").find(t)?.let { return call("wiki_lookup", "topic" to it.groupValues[1]) }
         Regex("^(?:open|go to|visit) (?:the )?(?:website )?([a-z0-9]+(?: dot [a-z]+)+|[a-z0-9]+ (?:com|org|net|io|dev|bd))$").find(t)
             ?.let { return call("open_url", "url" to it.groupValues[1].replace(" dot ", ".").replace(Regex(" (com|org|net|io|dev|bd)$"), ".$1")) }
+        return null
+    }
+
+    private val moneyName = com.alrasin.jarvis.actions.Currency.NAME_PATTERN
+    private val moneyConvert = Regex(
+        "^(?:(?:whats|what is|how much is|how much are|convert|change|tell me)(?: the)? )?(?:(\\d+) )?($moneyName)" +
+            "(?: to| in| into| vs| versus)? ($moneyName)(?: (?:rate|exchange rate|rate today|today|now|price))?$",
+    )
+    private val moneyRate = Regex(
+        "^(?:(?:whats|what is|tell me|check)(?: the)? )?(?:todays |current )?(?:($moneyName) (?:rate|exchange rate|price)|" +
+            "(?:exchange )?rate (?:of|for) ($moneyName))(?: today| now| in bangladesh)?$",
+    )
+    private val moneyHowMany = Regex("^how many ($moneyName) (?:is|are|for|in|make) (?:(\\d+) )?($moneyName)$")
+
+    /** "100 dollars to taka", "dollar rate", "how many taka is 50 euro" (§J.8; info only, never a money action). */
+    private fun money(t: String): ToolCall? {
+        moneyConvert.find(t)?.let { m ->
+            if (m.groupValues[2] == m.groupValues[3]) return null
+            return call("currency", "from" to m.groupValues[2], "to" to m.groupValues[3], "amount" to m.groupValues[1])
+        }
+        moneyRate.find(t)?.let { m -> return call("currency", "from" to m.groupValues[1].ifEmpty { m.groupValues[2] }) }
+        moneyHowMany.find(t)?.let { m -> return call("currency", "from" to m.groupValues[3], "to" to m.groupValues[1], "amount" to m.groupValues[2]) }
+        return null
+    }
+
+    private val prayerWord = "(?:prayer|prayers|namaz|namaj|salah|salat|azan|adhan)"
+    private val prayerNames = mapOf(
+        "fajr" to "fajr", "fajar" to "fajr", "fozor" to "fajr", "fojor" to "fajr", "sunrise" to "sunrise",
+        "dhuhr" to "dhuhr", "zuhr" to "dhuhr", "zohr" to "dhuhr", "johr" to "dhuhr", "zuhur" to "dhuhr", "duhr" to "dhuhr", "zohor" to "dhuhr", "johor" to "dhuhr",
+        "asr" to "asr", "asar" to "asr", "maghrib" to "maghrib", "magrib" to "maghrib", "sunset" to "sunset",
+        "isha" to "isha", "esha" to "isha", "eshaa" to "isha", "ishaa" to "isha",
+    )
+    private val prayerName = prayerNames.keys.joinToString("|")
+    private val prayerAll = Regex(
+        "^(?:(?:whats|what are|tell me|show me|give me|read|check)(?: me)? )?(?:the )?(?:(todays|tomorrows) )?$prayerWord" +
+            "(?: (?:times?|schedule|timings?|time table|timetable))(?: (?:for )?(today|tomorrow))?$",
+    )
+    private val prayerOne = Regex(
+        "^(?:(?:when is|whens|what time is|at what time is|what time|time (?:of|for))(?: the)? )?(?:(todays|tomorrows) )?($prayerName)" +
+            "(?: $prayerWord)?(?: (?:time|waqt))?(?: (?:is )?(today|tomorrow))?$",
+    )
+    private val prayerNext = Regex("^(?:(?:whats|what is|when is|whens|tell me)(?: the)? )?next $prayerWord(?: time)?$")
+
+    /** Offline prayer times (§J.8): "prayer times", "when is maghrib", "fajr time tomorrow", "next prayer". */
+    private fun prayer(t: String): ToolCall? {
+        fun day(a: String, b: String) = if (a == "tomorrows" || b == "tomorrow") "tomorrow" else null
+        if (prayerNext.matches(t)) return call("prayer_times", "prayer" to "next")
+        prayerAll.find(t)?.let { return call("prayer_times", "day" to day(it.groupValues[1], it.groupValues[2])) }
+        prayerOne.find(t)?.let { m ->
+            if (' ' !in t) return null // a bare "sunset" / "fajr" is too vague
+            return call("prayer_times", "prayer" to prayerNames.getValue(m.groupValues[2]), "day" to day(m.groupValues[1], m.groupValues[3]))
+        }
         return null
     }
 

@@ -553,7 +553,7 @@ class Assistant @Inject constructor(
         private const val PENDING_MS = 30_000L
         private const val LATE_YES_MS = 180_000L
         private val MESSAGE_TOOLS = setOf("send_sms", "send_whatsapp")
-        private val WEB_TOOLS = setOf("web_search", "weather", "news", "wiki_lookup", "read_page", "open_url")
+        private val WEB_TOOLS = setOf("web_search", "weather", "news", "wiki_lookup", "read_page", "open_url", "currency", "prayer_times")
 
         /** Tools that can grab a whole "X and Y" sentence by one loose word, so a full chain beats them. */
         private val LOOSE_TOOLS = setOf("toggle", "open_app", "set_volume", "set_brightness", "go_home", "go_back")

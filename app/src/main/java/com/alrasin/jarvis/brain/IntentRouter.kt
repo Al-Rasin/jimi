@@ -71,7 +71,7 @@ object IntentRouter {
     )
     private val chatWords = setOf("joke", "story", "poem", "gravity", "meaning", "explain", "opinion", "advice", "feel", "think")
     private val webWords = setOf("search", "google", "online", "internet", "weather", "news", "headlines", "forecast")
-    private val webTools = setOf("web_search", "weather", "news")
+    private val webTools = setOf("web_search", "weather", "news", "currency")
     private val CAPABILITY_TOOLS = setOf("app_abilities", "app_limits", "phone_profile")
     private val capabilityQuestion = Regex("\\bwhat (?:can|could|do) you (?:do|help)\\b")
     private val launchRequest = Regex("^(?:open|launch|start|run|show)(?: the| my)? (.+?)(?: app| application)?$")

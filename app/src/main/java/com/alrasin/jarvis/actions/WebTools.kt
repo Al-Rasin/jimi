@@ -19,8 +19,11 @@ import java.util.concurrent.TimeUnit
 class Web {
     private val http = OkHttpClient.Builder().callTimeout(12, TimeUnit.SECONDS).build()
 
-    suspend fun get(url: String, userAgent: String = UA): String = withContext(Dispatchers.IO) {
-        http.newCall(Request.Builder().url(url).header("User-Agent", userAgent).build()).execute().use {
+    private val quick by lazy { http.newBuilder().callTimeout(4, TimeUnit.SECONDS).build() }
+
+    /** [fast] = 4 s limit, for small API answers that should come back in under 3 s (§J.8). */
+    suspend fun get(url: String, userAgent: String = UA, fast: Boolean = false): String = withContext(Dispatchers.IO) {
+        (if (fast) quick else http).newCall(Request.Builder().url(url).header("User-Agent", userAgent).build()).execute().use {
             if (!it.isSuccessful) throw HttpError(it.code)
             it.body!!.string()
         }
@@ -53,6 +56,7 @@ fun webTools(
     web: Web,
     weather: FastWeather = FastWeather(),
     here: suspend () -> CurrentLocation.Fix? = { null },
+    newsCache: AnswerCache<List<String>> = AnswerCache(TimeUnit.MINUTES.toMillis(30)),
     homeCity: suspend () -> String,
 ): List<Tool> {
 
@@ -102,16 +106,26 @@ fun webTools(
             else weather.get(place ?: homeCity(), tomorrow)
         },
         SimpleTool("news", "Top news headlines", listOf(arg("topic", "topic", false))) { c, _ ->
+            val topic = c.arg("topic")
+            val key = topic?.lowercase(java.util.Locale.ROOT).orEmpty()
+            fun answer(list: List<String>, lead: String = "Top headlines: ") =
+                if (list.isEmpty()) ToolResult.fail("No news found.")
+                else ToolResult.ok(lead + list.take(3).joinToString(". ") + ".", list.joinToString("\n") { "• $it" })
+            newsCache.fresh(key)?.let { return@SimpleTool answer(it) }
             runCatching {
-                val topic = c.arg("topic")
                 val url = if (topic == null) "https://news.google.com/rss?hl=en-BD&gl=BD&ceid=BD:en"
                 else "https://news.google.com/rss/search?q=${Web.enc(topic)}&hl=en-BD&gl=BD&ceid=BD:en"
-                val doc = Jsoup.parse(web.get(url), "", Parser.xmlParser())
+                val doc = Jsoup.parse(web.get(url, fast = true), "", Parser.xmlParser())
                 doc.select("item > title").map { it.text().substringBeforeLast(" - ") }.take(5)
             }.fold({ list ->
-                if (list.isEmpty()) ToolResult.fail("No news found.")
-                else ToolResult.ok("Top headlines: " + list.take(3).joinToString(". ") + ".", list.joinToString("\n") { "• $it" })
-            }, { webFailure("Google News", it) })
+                if (list.isNotEmpty()) newsCache.put(key, list)
+                answer(list)
+            }, { e ->
+                newsCache.stale(key, TimeUnit.DAYS.toMillis(1))?.let { (list, age) ->
+                    JarvisLog.e("news failed, using cache", e)
+                    answer(list, "I'm offline. Headlines ${AnswerCache.ageSay(age)}: ")
+                } ?: webFailure("Google News", e)
+            })
         },
         SimpleTool("web_search", "Search the web and read the top answer", listOf(arg("query", "what to search"))) { c, _ ->
             val q = c.arg("query") ?: return@SimpleTool ToolResult.fail("Search for what?")
