@@ -415,11 +415,20 @@ private class LiveRecipeScreen(
                 val below = s.items.filter { it.editable }.minByOrNull { it.top }?.bottom ?: 0
                 Skills.firstResult(s.items, below, s.height)?.let { Skills.Pick.Found(it) } ?: Skills.Pick.NotFound
             } else Skills.pickNamed(s.items, step.target)
-            val item = (pick as? Skills.Pick.Found)?.item ?: return false
+            val item = (pick as? Skills.Pick.Found)?.item ?: return ocrTap(step)
             if (Skills.isRisky(item.label) && !risky) return false
             item.node
         } ?: return false
         return UiQuery.tap(node)
+    }
+
+    /** Last try for a named tap: find the words on the pixels (§H.8) and tap their centre. */
+    private suspend fun ocrTap(step: RecipeStep): Boolean {
+        if (step.target.isBlank() || RecipeBook.isFirstResult(step.target)) return false
+        val item = (ScreenOcr.find(service, step.target) as? Skills.Pick.Found)?.item ?: return false
+        if (Skills.isRisky(item.label) && !risky) return false
+        val (x, y) = ScreenOcr.centre(item)
+        return UiQuery.tapAt(x, y)
     }
 
     private suspend fun field(step: RecipeStep): AccessibilityNodeInfo? =

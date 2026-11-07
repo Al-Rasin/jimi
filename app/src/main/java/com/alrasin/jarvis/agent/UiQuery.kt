@@ -201,6 +201,13 @@ object UiQuery {
         return RootInput.tap(rect.centerX(), rect.centerY()).ok
     }
 
+    /** Tap a screen point (OCR boxes have no node): gesture first, then root `input tap`. */
+    suspend fun tapAt(x: Int, y: Int): Boolean {
+        val service = JarvisAccessibilityService.instance
+        if (service != null && gestureTap(service, x, y)) return true
+        return RootInput.tap(x, y).ok
+    }
+
     /** Single-point tap gesture via dispatchGesture. Instrumented-only: needs a live AccessibilityService. */
     private suspend fun gestureTap(service: AccessibilityService, x: Int, y: Int): Boolean =
         suspendCancellableCoroutine { cont ->

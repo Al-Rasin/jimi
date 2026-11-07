@@ -253,6 +253,8 @@ fun skillTools(context: Context, planner: Planner, apps: AppList): List<Tool> = 
         for (i in 0..MAX_SCROLLS) {
             val screen = Skills.read(service) ?: break
             pick = Skills.pickNamed(screen.items, name)
+            // Flutter / game / WebView screens have no text in the tree: look with OCR before scrolling (§H.8).
+            if (pick is Skills.Pick.NotFound && i == 0) pick = ScreenOcr.find(service, name)
             if (pick !is Skills.Pick.NotFound || i == MAX_SCROLLS) break
             if (!scrollDown(service)) break
         }
@@ -302,8 +304,9 @@ private suspend fun tapPick(service: JarvisAccessibilityService, pick: Skills.Pi
     val item = (pick as? Skills.Pick.Found)?.item ?: return ToolResult.fail(Skills.say(pick, said))
     Skills.refuse(service, item, said)?.let { return ToolResult.fail(it) }
     val label = item.label.lineSequence().first()
-    val node = item.node ?: return ToolResult.fail("I couldn't tap $label.")
-    if (!UiQuery.tap(node)) return ToolResult.fail("I couldn't tap $label.")
+    val node = item.node
+    val ok = if (node != null) UiQuery.tap(node) else ScreenOcr.centre(item).let { (x, y) -> UiQuery.tapAt(x, y) }
+    if (!ok) return ToolResult.fail("I couldn't tap $label.")
     UiQuery.settle(service, tries = 4, pauseMs = 300)
     return ToolResult.ok("$verb $label.")
 }
