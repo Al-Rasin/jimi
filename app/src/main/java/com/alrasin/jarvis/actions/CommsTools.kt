@@ -12,6 +12,7 @@ import android.net.Uri
 import android.os.Build
 import android.provider.ContactsContract
 import android.telephony.SmsManager
+import com.alrasin.jarvis.brain.Reply
 import com.alrasin.jarvis.core.Risk
 import com.alrasin.jarvis.core.Tool
 import com.alrasin.jarvis.core.ToolResult
@@ -84,8 +85,8 @@ fun commsTools(context: Context, contacts: Contacts): List<Tool> = listOf(
         if (context.checkSelfPermission(Manifest.permission.CALL_PHONE) != PackageManager.PERMISSION_GRANTED)
             return@SimpleTool ToolResult.fail("I need the phone permission. Open Jarvis setup.")
         if (context.launch(Intent(Intent.ACTION_CALL, Uri.parse("tel:" + Uri.encode(p.number)))))
-            ToolResult.ok("Boss, I requested a call to ${c.arg("contact_name")?.takeIf { ContactResolver.number(who) != null } ?: p.name}.")
-        else ToolResult.fail("Boss, I couldn't open the phone app.")
+            Reply.done("I requested a call to ${c.arg("contact_name")?.takeIf { ContactResolver.number(who) != null } ?: p.name}.")
+        else Reply.failed("I couldn't open the phone app.")
     },
     SimpleTool("send_sms", "Send an SMS, or send a Messenger message with app=messenger", listOf(arg("contact", "name, nickname, relation or number"), arg("text", "message"), arg("app", "messaging app", required = false, choices = listOf("sms", "messenger"))), Risk.CONFIRM) { c, _ ->
         val who = c.require("contact", "To who?")
@@ -150,7 +151,7 @@ fun commsTools(context: Context, contacts: Contacts): List<Tool> = listOf(
         val i = Intent(Intent.ACTION_SENDTO, uri)
         c.arg("subject")?.let { i.putExtra(Intent.EXTRA_SUBJECT, it) }
         c.arg("body")?.let { i.putExtra(Intent.EXTRA_TEXT, it) }
-        if (context.launch(i)) ToolResult.ok("Boss, I opened email with the message ready. Tap send.") else ToolResult.fail("No mail app found.")
+        if (context.launch(i)) Reply.done("I opened email with the message ready. Tap send.") else ToolResult.fail("No mail app found.")
     },
 )
 
@@ -182,7 +183,7 @@ internal class SmsSentStatus(private val partCount: Int) {
 
 private suspend fun sendSms(context: Context, sms: SmsManager, contact: Contacts.Contact, text: String): ToolResult {
     val parts = sms.divideMessage(text)
-    if (parts.isEmpty()) return ToolResult.fail("Boss, the message is empty.")
+    if (parts.isEmpty()) return Reply.failed("the message is empty.")
     val action = "${context.packageName}.SMS_SENT.${UUID.randomUUID()}"
     val status = SmsSentStatus(parts.size)
     val result = CompletableDeferred<Boolean>()
@@ -209,14 +210,14 @@ private suspend fun sendSms(context: Context, sms: SmsManager, contact: Contacts
         }
         sms.sendMultipartTextMessage(contact.number, null, parts, callbacks, null)
         return when (withTimeoutOrNull(5_000) { result.await() }) {
-            true -> ToolResult.ok("Boss, message sent to ${contact.name}.")
-            false -> ToolResult.fail("Boss, the message wasn't fully sent.")
-            null -> ToolResult.fail("Boss, I requested the SMS, but couldn't confirm it was sent. Check Messages.")
+            true -> Reply.done("message sent to ${contact.name}.")
+            false -> Reply.failed("the message wasn't fully sent.")
+            null -> Reply.failed("I requested the SMS, but couldn't confirm it was sent. Check Messages.")
         }
     } catch (e: CancellationException) {
         throw e
     } catch (_: Exception) {
-        return ToolResult.fail("Boss, I couldn't confirm the SMS was sent. Check Messages.")
+        return Reply.failed("I couldn't confirm the SMS was sent. Check Messages.")
     } finally {
         if (registered) context.unregisterReceiver(receiver)
         callbacks.forEach { it.cancel() }

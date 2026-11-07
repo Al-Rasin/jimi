@@ -7,6 +7,7 @@ import android.net.Uri
 import android.provider.ContactsContract
 import android.telephony.PhoneNumberUtils
 import android.telephony.TelephonyManager
+import com.alrasin.jarvis.brain.Reply
 import com.alrasin.jarvis.core.ToolResult
 import com.alrasin.jarvis.core.isInstalled
 import com.alrasin.jarvis.core.launch
@@ -87,7 +88,7 @@ internal class AppCommunications(private val context: Context, private val conta
         val (pkg, label) = chat(app) ?: return ToolResult.fail("${chatLabel(app)} is not installed.")
         if (app == "whatsapp") {
             val mime = if (video) "vnd.android.cursor.item/vnd.com.whatsapp.video.call" else "vnd.android.cursor.item/vnd.com.whatsapp.voip.call"
-            if (openContactRow(person, pkg, mime)) return ToolResult.ok("Boss, I requested a $label ${if (video) "video" else "voice"} call to ${person.name}.")
+            if (openContactRow(person, pkg, mime)) return Reply.done("I requested a $label ${if (video) "video" else "voice"} call to ${person.name}.")
         }
         val service = requireScreen { return ToolResult.fail("Enable Jimi accessibility in Android settings so I can place the $label call.") }
         openConversation(person, app, pkg, service)?.let { return ToolResult.fail(it) }
@@ -95,7 +96,7 @@ internal class AppCommunications(private val context: Context, private val conta
         val ids = if (app == "whatsapp") listOf("$pkg:id/${if (video) "video_call" else "menuitem_conversation_call"}") else emptyList()
         if (!conversationMatches(service, pkg, person)) return ToolResult.fail("The $label conversation changed. No call was placed.")
         if (!service.clickExact(pkg, labels = labels, ids = ids)) return ToolResult.fail("I opened ${person.name}'s $label chat, but couldn't identify the ${if (video) "video" else "voice"} call button.")
-        return ToolResult.ok("Boss, I requested a $label ${if (video) "video" else "voice"} call to ${person.name}.")
+        return Reply.done("I requested a $label ${if (video) "video" else "voice"} call to ${person.name}.")
     }
 
     suspend fun message(person: Contacts.Contact, app: String, text: String): ToolResult {
@@ -107,7 +108,7 @@ internal class AppCommunications(private val context: Context, private val conta
             return ToolResult.fail("I couldn't enter the exact message in ${person.name}'s $label chat. Nothing was sent.")
         if (!conversationMatches(service, pkg, person)) return ToolResult.fail("The $label conversation changed. Nothing was sent.")
         tapSend(service, app, AppChat(pkg, label))?.let { return ToolResult.fail(it) }
-        return ToolResult.ok("Boss, I tapped send for ${person.name} in $label. Delivery isn't confirmed.")
+        return Reply.done("I tapped send for ${person.name} in $label. Delivery isn't confirmed.")
     }
 
     /** Opens [person]'s chat and reads their newest [count] bubbles (read_chat fallback when notifications have nothing). */
@@ -145,7 +146,7 @@ internal class AppCommunications(private val context: Context, private val conta
         if (app == "whatsapp" && !service.isSelfChat(pkg)) return ToolResult.fail("The WhatsApp chat changed. Nothing was sent.")
         // Messenger swaps the like button for Send only after the text is in.
         tapSend(service, app, AppChat(pkg, label))?.let { return ToolResult.fail(it) }
-        return ToolResult.ok("Boss, I sent it to your own $label chat.")
+        return Reply.done("I sent it to your own $label chat.")
     }
 
     private suspend fun openConversation(person: Contacts.Contact, app: String, pkg: String, service: JarvisAccessibilityService, text: String = ""): String? {

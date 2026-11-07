@@ -1,5 +1,7 @@
 package com.alrasin.jarvis.brain
 
+import com.alrasin.jarvis.core.ToolResult
+
 /** Name, tone and fixed replies (PLAN 5.3 / 10.3). Short replies; calls the user "Boss". */
 object Persona {
     const val NAME = "Jimi"
@@ -78,4 +80,10 @@ object Persona {
 
     const val CANT = "Sorry $ADDRESS, I can't do that yet."
     const val DIDNT_GET = "Sorry, I didn't catch that."
+}
+
+/** Tool replies that start with "Boss, …" (ROADMAP §L.5), so the address lives in one place. */
+object Reply {
+    fun done(say: String, data: String = "") = ToolResult.ok("${Persona.ADDRESS}, $say", data)
+    fun failed(say: String) = ToolResult.fail("${Persona.ADDRESS}, $say")
 }

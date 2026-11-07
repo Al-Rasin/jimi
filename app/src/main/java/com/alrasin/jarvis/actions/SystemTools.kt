@@ -18,6 +18,7 @@ import android.os.Environment
 import android.os.PowerManager
 import android.os.StatFs
 import android.provider.Settings
+import com.alrasin.jarvis.brain.Reply
 import com.alrasin.jarvis.core.JarvisLog
 import com.alrasin.jarvis.core.Risk
 import com.alrasin.jarvis.core.Tool
@@ -218,21 +219,21 @@ fun systemTools(context: Context, torch: Torch): List<Tool> {
             val target = c.require("target", "Turn what on or off?")
             if (target !in TOGGLE_TARGETS) return@SimpleTool ToolResult.fail("I can't switch $target.")
             if (target == "hotspot") {
-                return@SimpleTool if (set(target, true)) ToolResult.ok("Boss, I opened the hotspot page. Tap the switch.")
-                else ToolResult.fail("Boss, I couldn't open hotspot settings.")
+                return@SimpleTool if (set(target, true)) Reply.done("I opened the hotspot page. Tap the switch.")
+                else Reply.failed("I couldn't open hotspot settings.")
             }
             val before = isOn(target)
-            if (c.arg("state") == "status") return@SimpleTool before?.let { ToolResult.ok("Boss, ${nice(target)} is ${if (it) "on" else "off"}.") }
-                ?: ToolResult.fail("Boss, I can't read ${nice(target)}.")
+            if (c.arg("state") == "status") return@SimpleTool before?.let { Reply.done("${nice(target)} is ${if (it) "on" else "off"}.") }
+                ?: Reply.failed("I can't read ${nice(target)}.")
             val want = requestedToggleState(c.arg("state"), before)
-                ?: return@SimpleTool ToolResult.fail("Boss, I can't read ${nice(target)}. Say on or off.")
+                ?: return@SimpleTool Reply.failed("I can't read ${nice(target)}. Say on or off.")
             if (before == want) return@SimpleTool toggleTruth(nice(target), want, before)
             val requested = set(target, want)
-            if (!requested && settingsPage(target)) return@SimpleTool ToolResult.ok("Boss, I opened ${nice(target)} settings. Set it ${if (want) "on" else "off"} there.")
+            if (!requested && settingsPage(target)) return@SimpleTool Reply.done("I opened ${nice(target)} settings. Set it ${if (want) "on" else "off"} there.")
             var actual = isOn(target)
             // poll often so a quick switch is reported quickly; same 2 s ceiling as before
             if (actual != want) pollUntil(20, 100, delayFirst = true) { actual = isOn(target); actual == want }
-            if (actual != want && settingsPage(target)) ToolResult.ok("Boss, the change isn't confirmed. I opened ${nice(target)} settings; set it ${if (want) "on" else "off"} there.")
+            if (actual != want && settingsPage(target)) Reply.done("the change isn't confirmed. I opened ${nice(target)} settings; set it ${if (want) "on" else "off"} there.")
             else toggleTruth(nice(target), want, actual)
         },
         SimpleTool("set_brightness", "Screen brightness", listOf(arg("level", "0-100, up, down or auto"))) { c, _ ->
@@ -240,7 +241,7 @@ fun systemTools(context: Context, torch: Torch): List<Tool> {
             val target = when (val l = c.arg("level")) {
                 "auto" -> {
                     if (!writeSettings(Settings.System.SCREEN_BRIGHTNESS_MODE to 1) && settingsPage("brightness")) {
-                        return@SimpleTool ToolResult.ok("Boss, I opened display settings. Turn on auto brightness there.")
+                        return@SimpleTool Reply.done("I opened display settings. Turn on auto brightness there.")
                     }
                     val actual = runCatching { Settings.System.getInt(context.contentResolver, Settings.System.SCREEN_BRIGHTNESS_MODE) == 1 }.getOrNull()
                     return@SimpleTool toggleTruth("Auto brightness", true, actual)
@@ -250,13 +251,13 @@ fun systemTools(context: Context, torch: Torch): List<Tool> {
                 else -> (l?.toDoubleOrNull()?.toInt() ?: return@SimpleTool ToolResult.fail("What brightness?")) * maxBrightness / 100
             }.coerceIn(1, maxBrightness)
             if (!writeSettings(Settings.System.SCREEN_BRIGHTNESS_MODE to 0, Settings.System.SCREEN_BRIGHTNESS to target) && settingsPage("brightness")) {
-                return@SimpleTool ToolResult.ok("Boss, I opened display settings. Set brightness to ${target * 100 / maxBrightness} percent there.")
+                return@SimpleTool Reply.done("I opened display settings. Set brightness to ${target * 100 / maxBrightness} percent there.")
             }
             val actual = runCatching { Settings.System.getInt(context.contentResolver, Settings.System.SCREEN_BRIGHTNESS) }.getOrNull()
             val manual = runCatching { Settings.System.getInt(context.contentResolver, Settings.System.SCREEN_BRIGHTNESS_MODE) == 0 }.getOrDefault(false)
-            if (actual == null) ToolResult.fail("Boss, I couldn't verify brightness.")
-            else if (actual == target && manual) ToolResult.ok("Boss, brightness is ${actual * 100 / maxBrightness} percent.")
-            else ToolResult.fail("Boss, brightness reads ${actual * 100 / maxBrightness} percent. The change isn't confirmed.")
+            if (actual == null) Reply.failed("I couldn't verify brightness.")
+            else if (actual == target && manual) Reply.done("brightness is ${actual * 100 / maxBrightness} percent.")
+            else Reply.failed("brightness reads ${actual * 100 / maxBrightness} percent. The change isn't confirmed.")
         },
         SimpleTool("device_status", "Time, date, battery, storage or all", listOf(arg("what", "what to tell", choices = listOf("time", "date", "battery", "storage", "all")))) { c, _ ->
             val now = Date()
@@ -294,10 +295,10 @@ fun systemTools(context: Context, torch: Torch): List<Tool> {
         SimpleTool("lock_phone", "Lock the phone (screen off)") { _, _ ->
             val a = JarvisAccessibilityService.instance
             val requested = a?.lockScreen() == true || RootInput.key(223).ok
-            if (!requested) return@SimpleTool ToolResult.fail("Boss, I couldn't request a lock.")
+            if (!requested) return@SimpleTool Reply.failed("I couldn't request a lock.")
             delay(300)
-            if (context.isLocked()) ToolResult.ok("Boss, locked.")
-            else ToolResult.ok("Boss, I requested a screen lock.")
+            if (context.isLocked()) Reply.done("locked.")
+            else Reply.done("I requested a screen lock.")
         },
     )
 }
@@ -325,10 +326,10 @@ object Keyguard {
 
 fun unlockTool(context: Context, pin: suspend () -> String?) = SimpleTool("unlock_phone", "Unlock the phone", risk = Risk.VOICE_ID) { _, _ ->
     val p = pin()
-    if (!Keyguard.unlock(context, p)) return@SimpleTool ToolResult.fail("Boss, I couldn't request an unlock. Please unlock the phone yourself.")
+    if (!Keyguard.unlock(context, p)) return@SimpleTool Reply.failed("I couldn't request an unlock. Please unlock the phone yourself.")
     pollUntil(20, 100) { !context.isLocked() }   // PIN check can take a moment on MIUI
-    if (!context.isLocked()) ToolResult.ok("Boss, unlocked.")
-    else ToolResult.fail("Boss, the phone is still locked.")
+    if (!context.isLocked()) Reply.done("unlocked.")
+    else Reply.failed("the phone is still locked.")
 }
 
 internal fun requestedToggleState(request: String?, current: Boolean?): Boolean? = when (request) {
@@ -338,7 +339,7 @@ internal fun requestedToggleState(request: String?, current: Boolean?): Boolean?
 }
 
 internal fun toggleTruth(label: String, wanted: Boolean, actual: Boolean?): ToolResult = when {
-    actual == null -> ToolResult.fail("Boss, I requested the change, but couldn't verify $label.")
-    actual == wanted -> ToolResult.ok("Boss, $label is ${if (actual) "on" else "off"}.")
-    else -> ToolResult.fail("Boss, $label is still ${if (actual) "on" else "off"}.")
+    actual == null -> Reply.failed("I requested the change, but couldn't verify $label.")
+    actual == wanted -> Reply.done("$label is ${if (actual) "on" else "off"}.")
+    else -> Reply.failed("$label is still ${if (actual) "on" else "off"}.")
 }
