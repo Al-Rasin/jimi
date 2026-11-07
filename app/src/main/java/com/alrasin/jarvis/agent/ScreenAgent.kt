@@ -45,15 +45,23 @@ class ScreenAgent(
     data class Performed(val action: AgentAction, val element: ScreenElement?, val pkg: String)
     private val done = mutableListOf<Performed>()
     val performed: List<Performed> get() = done.toList()
-    val command: String get() = task
+    private var said = ""
+    val command: String get() = said
     var succeeded: Boolean = false
         private set
+    /** True when the task ended because the agent got lost (step limit, wrong element, failed action): worth an online lookup (§G.4). */
+    var stuck: Boolean = false
+        private set
+
+    val wasStopped: Boolean get() = stopped
 
     fun stop() { stopped = true; pending = null; hasPendingQuestion = false; activeJob?.cancel(Stopped()) }
 
-    suspend fun run(task: String): AgentResult {
+    /** [hint] (e.g. steps found online) is added to what the model sees; the app is opened from [task] alone. */
+    suspend fun run(task: String, hint: String = ""): AgentResult {
         if (stopped) return limitResult()
-        this.task = task
+        said = task
+        this.task = if (hint.isBlank()) task else "$task\n$hint"
         pending = null
         hasPendingQuestion = false
         steps = 0
@@ -61,13 +69,14 @@ class ScreenAgent(
         history.clear()
         done.clear()
         succeeded = false
+        stuck = false
         onStep(model.description)
         return bounded { openNamedApp(); loop() }
     }
 
     /** "open messenger and find …": Jimi opens the app itself; cloud models do not know package names. */
     private suspend fun openNamedApp() {
-        val app = START.find(task.trim())?.groupValues?.get(1) ?: return
+        val app = START.find(said.trim())?.groupValues?.get(1) ?: return
         val action = AgentAction.OpenApp(app)
         if (!screen.perform(action, ScreenSnapshot("", emptyList()))) return
         done += Performed(action, null, "")
@@ -157,7 +166,10 @@ class ScreenAgent(
                 }
                 else -> Unit
             }
-            if (!validTarget(action, snapshot)) return AgentResult("The model selected an unavailable screen element. Please ask again.")
+            if (!validTarget(action, snapshot)) {
+                stuck = true
+                return AgentResult("The model selected an unavailable screen element. Please ask again.")
+            }
             val question = AgentSafety.confirmation(action, snapshot)
             if (question != null) {
                 pending = Pending(action, snapshot)
@@ -165,11 +177,15 @@ class ScreenAgent(
             }
             if (!execute(action, snapshot)) {
                 // usually the screen moved between looking and tapping; look again once before giving up
-                if (stopped || failed++ >= 1) return AgentResult(if (stopped) "Screen task stopped." else "The screen action failed. Please ask again.")
+                if (stopped || failed++ >= 1) {
+                    stuck = !stopped
+                    return AgentResult(if (stopped) "Screen task stopped." else "The screen action failed. Please ask again.")
+                }
                 history += "Step $steps failed: the screen changed"
                 settle()
             }
         }
+        stuck = true
         return AgentResult("Stopped after $steps steps. The task may be incomplete.")
     }
 

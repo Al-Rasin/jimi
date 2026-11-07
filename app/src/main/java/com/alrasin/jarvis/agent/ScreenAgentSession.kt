@@ -21,6 +21,7 @@ class ScreenAgentSession @Inject constructor(
     @ApplicationContext private val context: Context,
     private val models: AgentModels,
     private val store: RecipeStore,
+    private val online: OnlineHelp,
 ) {
     private val gate = ToolSafetyGate()
     @Volatile private var agent: ScreenAgent? = null
@@ -41,16 +42,31 @@ class ScreenAgentSession @Inject constructor(
             val backend = models.create()
             model = backend
             panel = AgentPanel(context, ::stop)
-            val next = ScreenAgent(backend, AccessibilityAgentScreen(context), onStep = { step ->
-                JarvisLog.i("screen agent: $step")
-                panel?.show(step)
-            })
-            agent = next
+            val first = newAgent(backend)
             acting {
                 speak(backend.description)
-                next.run(task)
-            }.also { remember(next) }
+                val result = first.run(task)
+                if (first.stuck && agent === first) retryWithOnlineSteps(task, first, backend, speak) ?: result else result
+            }.also { agent?.let { remember(it) } }
         }
+
+    private fun newAgent(backend: AgentModel) = ScreenAgent(backend, AccessibilityAgentScreen(context), onStep = { step ->
+        JarvisLog.i("screen agent: $step")
+        panel?.show(step)
+    }).also { agent = it }
+
+    /** §G.4: the agent got lost, so look up the steps online and try once more with them. Null = no lookup / no steps. */
+    private suspend fun retryWithOnlineSteps(task: String, stuck: ScreenAgent, backend: AgentModel, speak: (String) -> Unit): AgentResult? {
+        if (!online.available()) return null
+        val pkg = stuck.performed.map { it.pkg }.firstOrNull { it.isNotBlank() && it != context.packageName }.orEmpty()
+        val appName = runCatching { context.packageManager.run { getApplicationLabel(getApplicationInfo(pkg, 0)).toString() } }.getOrDefault("")
+        panel?.show("Looking up the steps online…")
+        speak("I'm stuck. Let me look up how to do it online.")
+        val steps = online.lookup(task, appName, pkg)
+        if (steps.isEmpty() || stuck.wasStopped) return null
+        panel?.show("Found ${steps.size} steps online. Trying again.")
+        return newAgent(backend).run(task, OnlineSteps.hint(steps))
+    }
 
     suspend fun confirm(voiceConfirmed: Boolean, locked: Boolean, voiceOk: Boolean?): AgentResult =
         guarded(locked, voiceOk) {
