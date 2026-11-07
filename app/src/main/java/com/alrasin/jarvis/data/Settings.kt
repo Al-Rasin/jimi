@@ -35,6 +35,7 @@ class Settings @Inject constructor(@ApplicationContext private val context: Cont
     private val cloudFactsKey = booleanPreferencesKey("cloud_send_facts")
     private val voiceKey = stringPreferencesKey("voice")
     private val voiceSpeedKey = floatPreferencesKey("voice_speed")
+    private val onlineVoiceKey = booleanPreferencesKey("online_voice")
     private val assistantModeKey = stringPreferencesKey("assistant_mode")
     private val setupCompleteKey = booleanPreferencesKey("setup_complete")
 
@@ -85,6 +86,8 @@ class Settings @Inject constructor(@ApplicationContext private val context: Cont
     val voice: Flow<String> = context.dataStore.data.map { Voices.byId(VoiceDefaults.voice(it[voiceKey])).id }
     /** Speaking speed, 1.0 = normal. */
     val voiceSpeed: Flow<Float> = context.dataStore.data.map { VoiceDefaults.speed(it[voiceSpeedKey]) }
+    /** Google's online voice when the internet works (D-074). Off by default: it sends spoken text to Google. */
+    val onlineVoice: Flow<Boolean> = context.dataStore.data.map { it[onlineVoiceKey] ?: false }
     val chatModel: Flow<String> = context.dataStore.data.map {
         if (it[chatModelKey] == ChatModels.LFM) ChatModels.LFM else ChatModels.DEFAULT
     }
@@ -92,6 +95,7 @@ class Settings @Inject constructor(@ApplicationContext private val context: Cont
     suspend fun setChatModel(v: String) = context.dataStore.edit { it[chatModelKey] = v }
     suspend fun setVoice(v: String) = context.dataStore.edit { it[voiceKey] = Voices.byId(v).id }
     suspend fun setVoiceSpeed(v: Float) = context.dataStore.edit { it[voiceSpeedKey] = v }
+    suspend fun setOnlineVoice(v: Boolean) = context.dataStore.edit { it[onlineVoiceKey] = v }
     suspend fun setCloudEnabled(v: Boolean) = context.dataStore.edit { it[cloudKey] = v }
     suspend fun setCloudForChat(v: Boolean) = context.dataStore.edit { it[cloudChatKey] = v }
     suspend fun setCloudSendFacts(v: Boolean) = context.dataStore.edit { it[cloudFactsKey] = v }

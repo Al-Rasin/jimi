@@ -139,6 +139,7 @@ class AppViewModel @Inject constructor(
     val homeCity = settings.homeCity.state("Dhaka")
     val voice = settings.voice.state("piper-amy")
     val voiceSpeed = settings.voiceSpeed.state(1.10f)
+    val onlineVoice = settings.onlineVoice.state(false)
     val setupComplete = settings.setupComplete.map<Boolean, Boolean?> { it }.state(null)
     val assistantMode = settings.assistantMode.state(AssistantMode.BESIDE_GEMINI)
     val deviceFeatures = MutableStateFlow<List<DeviceFeature>>(emptyList())
@@ -296,6 +297,7 @@ class AppViewModel @Inject constructor(
 
     fun setVoice(id: String) = viewModelScope.launch { settings.setVoice(id) }
     fun setVoiceSpeed(v: Float) = viewModelScope.launch { settings.setVoiceSpeed(v) }
+    fun setOnlineVoice(v: Boolean) = viewModelScope.launch { settings.setOnlineVoice(v) }
     fun setChatModel(v: String) = viewModelScope.launch { settings.setChatModel(v) }
 
     /** Loads [v] just for a sample sentence (a few seconds the first time), then frees it. */
@@ -303,7 +305,7 @@ class AppViewModel @Inject constructor(
         if (trying.value != null) return
         trying.value = v.id
         viewModelScope.launch(Dispatchers.IO) {
-            runCatching { TextToSpeech(app, v, speed = voiceSpeed.value).use { it.speak("Hi Boss, I'm Jimi. How can I help?") } }
+            runCatching { TextToSpeech(app, v, speed = voiceSpeed.value).use { it.online = onlineVoice.value; it.speak("Hi Boss, I'm Jimi. How can I help?") } }
                 .onFailure { JarvisLog.e("try voice failed", it); _message.value = "Voice preview failed. Delete its download, then download it again." }
             trying.value = null
         }

@@ -143,6 +143,7 @@ class JarvisCoreService : LifecycleService() {
     @Volatile private var pendingCancel: Job? = null
     @Volatile private var playbackText = ""
     @Volatile private var voiceSpeed = 1.0f
+    @Volatile private var onlineVoice = false
     private val speech = Channel<Pair<Int, String>>(Channel.UNLIMITED)
     private val speechLeft = AtomicInteger(0)
     private var batteryWarnedAt = 100
@@ -218,6 +219,14 @@ class JarvisCoreService : LifecycleService() {
                         v.speed = s
                         warmPhrases(v)
                     }
+                }
+            }
+        }
+        lifecycleScope.launch(Dispatchers.IO) {
+            settings.onlineVoice.distinctUntilChanged().collect { on ->
+                ttsLock.withLock {
+                    onlineVoice = on
+                    readyVoice()?.online = on
                 }
             }
         }
@@ -325,6 +334,7 @@ class JarvisCoreService : LifecycleService() {
             ttsLock.withLock {
                 if (tts === next) loaded?.let {
                     it.speed = voiceSpeed
+                    it.online = onlineVoice
                     warmPhrases(it)
                 }
             }

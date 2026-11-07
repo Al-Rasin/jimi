@@ -559,6 +559,7 @@ private fun SettingsTab(vm: AppViewModel, onSetup: () -> Unit, onDeviceCheck: ()
 internal fun VoiceCard(vm: AppViewModel) {
     val current by vm.voice.collectAsStateWithLifecycle()
     val speed by vm.voiceSpeed.collectAsStateWithLifecycle()
+    val onlineVoice by vm.onlineVoice.collectAsStateWithLifecycle()
     val installed by vm.installedPacks.collectAsStateWithLifecycle()
     val downloads by vm.downloads.collectAsStateWithLifecycle()
     val trying by vm.trying.collectAsStateWithLifecycle()
@@ -597,6 +598,7 @@ internal fun VoiceCard(vm: AppViewModel) {
             Chip(if (open) "Hide voices" else "Change", selected = open) { open = !open }
         }
         JimiSlider(speed, vm::setVoiceSpeed, 0.8f..1.3f, steps = 9)
+        ToggleRow("Online voice", onlineVoice, "More natural with internet; sends spoken text to Google") { vm.setOnlineVoice(it) }
         if (open) {
             Voices.PHONE.forEach { VoiceRow(it) }
             Meta("Backup (if Google speech is missing)", Modifier.padding(top = 8.dp))

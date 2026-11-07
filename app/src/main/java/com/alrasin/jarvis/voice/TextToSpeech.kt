@@ -34,6 +34,10 @@ class TextToSpeech(
     @Volatile private var stopped = false
     /** 1.0 = normal; can change between sentences without reloading. */
     @Volatile var speed = speed
+    /** Phone engine only: use Google's online version of the voice when the internet works (D-074). */
+    var online: Boolean
+        get() = phone?.online ?: false
+        set(v) { phone?.online = v }
 
     init {
         phone = if (voice.pack.engine == Engine.ANDROID) AndroidTts(context, voice.id.removePrefix(Voices.ANDROID_PREFIX)) else null

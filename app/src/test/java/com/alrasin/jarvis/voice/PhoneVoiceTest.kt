@@ -20,4 +20,10 @@ class PhoneVoiceTest {
         assertEquals("google:en-gb-x-gbd-local", v.id)
         assertEquals(Engine.ANDROID, v.pack.engine)
     }
+
+    @Test
+    fun onlineVoiceIsTheSameSpeakersNetworkVersion() {
+        assertEquals("en-us-x-iob-network", AndroidTts.networkName("en-us-x-iob-local"))
+        assertEquals("en-gb-x-rjs-network", AndroidTts.networkName("en-gb-x-rjs-local"))
+    }
 }
