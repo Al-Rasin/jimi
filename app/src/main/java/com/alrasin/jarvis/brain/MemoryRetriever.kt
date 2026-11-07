@@ -1,6 +1,6 @@
 package com.alrasin.jarvis.brain
 
-import java.util.Locale
+import com.alrasin.jarvis.core.TextNorm
 import kotlin.math.ln
 
 object MemoryRetriever {
@@ -65,7 +65,7 @@ object MemoryRetriever {
             .map { it.first }
     }
 
-    private fun normalized(text: String) = text.lowercase(Locale.ROOT).replace(WHITESPACE, " ").trim()
+    private fun normalized(text: String) = TextNorm.squash(text)
 
     private fun tokens(text: String): List<String> {
         val clean = normalized(text).replace('’', '\'').replace(WIFI, "wifi")
@@ -74,7 +74,6 @@ object MemoryRetriever {
             .map { SYNONYMS[it] ?: it }.toList()
     }
 
-    private val WHITESPACE = Regex("\\s+")
     private val WIFI = Regex("\\bwi[ -]fi\\b")
     private val POSSESSIVE = Regex("'s\\b")
     private val WORD = Regex("[\\p{L}\\p{N}]+")

@@ -1,8 +1,10 @@
 package com.alrasin.jarvis.actions
 
+import com.alrasin.jarvis.core.TextNorm
+
 /** Picks the best name match for spoken text ("you tube" → "YouTube", "mom" → "Mom ❤"). */
 object Fuzzy {
-    fun clean(s: String) = s.lowercase().replace(Regex("[^a-z0-9]"), "")
+    fun clean(s: String) = TextNorm.alnum(s)
 
     /** Score 0..1 (1 = same). */
     fun score(query: String, name: String): Double {

@@ -1,6 +1,6 @@
 package com.alrasin.jarvis.voice
 
-import java.util.Locale
+import com.alrasin.jarvis.core.TextNorm
 
 class ScreenAgentInterrupt {
     private var candidate: String? = null
@@ -40,11 +40,9 @@ class ScreenAgentInterrupt {
     companion object {
         private val command = Regex("(?:(?:hey )?(?:jimi|jimmy) |hey )?(stop|cancel|panic)")
         private val punctuation = Regex("[\\p{Punct}\\p{P}]+")
-        private val whitespace = Regex("\\s+")
 
         fun phrase(text: String): String? = command.matchEntire(normalize(text))?.groupValues?.get(1)
 
-        private fun normalize(text: String): String = text.lowercase(Locale.ROOT)
-            .replace(punctuation, " ").trim().replace(whitespace, " ")
+        private fun normalize(text: String): String = TextNorm.squash(text.replace(punctuation, " "))
     }
 }

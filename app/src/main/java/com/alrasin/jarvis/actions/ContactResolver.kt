@@ -1,6 +1,6 @@
 package com.alrasin.jarvis.actions
 
-import java.util.Locale
+import com.alrasin.jarvis.core.TextNorm
 import java.text.Normalizer
 
 object ContactResolver {
@@ -120,7 +120,7 @@ object ContactResolver {
 
     private fun clean(text: String) = Normalizer.normalize(text, Normalizer.Form.NFD)
         .replace(Regex("\\p{InCombiningDiacriticalMarks}+"), "")
-        .lowercase(Locale.ROOT).replace(Regex("[^\\p{L}\\p{M}\\p{N}]+"), " ").trim()
+        .let(TextNorm::words)
 
     private fun queryName(text: String) = spoken(
         clean(text).replace(Regex("^(?:no |not that )?(?:i said |i mean |i meant |i told you )?(?:to )?"), "")

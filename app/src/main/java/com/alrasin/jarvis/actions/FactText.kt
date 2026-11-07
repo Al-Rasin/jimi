@@ -1,5 +1,7 @@
 package com.alrasin.jarvis.actions
 
+import com.alrasin.jarvis.core.TextNorm
+
 /** Cleans remembered facts so the fact list has no timestamps, filler or junk like ".." (§M.10). */
 internal object FactText {
     private val isoTime = Regex("\\b\\d{4}-\\d{2}-\\d{2}(?:[T ]\\d{1,2}:\\d{2}(?::\\d{2})?(?:\\.\\d+)?(?:Z|[+-]\\d{2}:?\\d{2})?)?\\b")
@@ -19,7 +21,7 @@ internal object FactText {
     }
 
     /** Lower case words only, for duplicate checks. */
-    fun key(text: String): String = text.lowercase().replace(Regex("[^\\p{L}\\p{N}]+"), " ").trim()
+    fun key(text: String): String = TextNorm.words(text)
 
     /** "My car is blue" → "my car"; null when the fact has no clear subject. */
     fun subject(text: String): String? = subject.find(key(text))?.groupValues?.get(1)

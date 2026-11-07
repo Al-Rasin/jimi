@@ -1,6 +1,7 @@
 package com.alrasin.jarvis.brain
 
 import com.alrasin.jarvis.actions.SelfAccount
+import com.alrasin.jarvis.core.TextNorm
 import com.alrasin.jarvis.core.ToolCall
 import java.time.DayOfWeek
 import java.time.LocalDate
@@ -70,7 +71,7 @@ object RuleMatcher {
     fun match(input: String, now: LocalDateTime = LocalDateTime.now()): ToolCall? {
         val t = normalize(input)
         if (t.isEmpty()) return null
-        val actionText = input.lowercase().trim().replace(Regex("\\s+"), " ")
+        val actionText = TextNorm.squash(input)
             .replace(Regex("^(?:(?:hey |ok |okay )?(?:jarvis|jimi|jimmy)[, ]+|(?:please|pls|can you|could you|would you|will you|i want you to|i want to|i would like to|just|hey|ok|okay) )+"), "")
         return talk(t) ?: calendar(t, now) ?: comms(actionText) ?: media(actionText.trimEnd('.', '!', '?')) ?: maps(t) ?: appMap(t) ?: skills(t)
             ?: knowledge(t)?.takeIf { it.tool == "web_search" || it.tool == "wiki_lookup" }

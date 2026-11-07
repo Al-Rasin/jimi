@@ -18,6 +18,7 @@ import com.alrasin.jarvis.agent.appmap.MapPlan
 import com.alrasin.jarvis.agent.appmap.Planner
 import com.alrasin.jarvis.core.JarvisLog
 import com.alrasin.jarvis.core.Json
+import com.alrasin.jarvis.core.TextNorm
 import com.alrasin.jarvis.core.Tool
 import com.alrasin.jarvis.core.ToolResult
 import com.alrasin.jarvis.core.launch
@@ -63,6 +64,7 @@ object RecipeBook {
     data class Match(val recipe: Recipe, val params: Map<String, String>)
 
     private val PARAM = Regex("\\{(\\w+)\\}")
+    private val TRAILING_PUNCT = Regex("[.!?,]+$")
     private const val FIRST_RESULT = "{first result}"
 
     fun fromCard(card: AppCard, pkg: String): List<Recipe> = card.tasks.map { task ->
@@ -82,7 +84,7 @@ object RecipeBook {
     }
 
     fun normalize(text: String): String =
-        text.lowercase().trim().replace(Regex("[.!?,]+$"), "").replace(Regex("\\s+"), " ").trim()
+        TextNorm.squash(text).replace(TRAILING_PUNCT, "").trim()
 
     /** Best recipe for what the user said, with its params filled. Null = none fits. */
     fun match(text: String, recipes: List<Recipe>): Match? {
