@@ -30,8 +30,17 @@ class SmoothSpeechTest {
         val buf = "There are several ways to answer this question"
         assertEquals(listOf("There are several ways to"), ChatFormat.speechChunks(buf).first)
         assertEquals(emptyList<String>(), ChatFormat.speechChunks(buf.substringBefore(" this"), spoke = true).first)
-        val (done, rest) = ChatFormat.speechChunks("$buf and many more ", spoke = true)
-        assertEquals(listOf("There are several ways to answer this question and many"), done)
-        assertEquals("more ", rest)
+        val long = "$buf and many more of them work well today "
+        assertEquals(emptyList<String>(), ChatFormat.speechChunks("$buf and many more ", spoke = true).first)
+        val (done, rest) = ChatFormat.speechChunks(long, spoke = true)
+        assertEquals(listOf("There are several ways to answer this question"), done)
+        assertEquals("and many more of them work well today ", rest)
+    }
+
+    @Test fun forcedCutWithoutJoiningWordKeepsAllWords() {
+        val buf = List(17) { "go" }.joinToString(" ") + " "
+        val (done, rest) = ChatFormat.speechChunks(buf, spoke = true)
+        assertEquals(listOf(List(16) { "go" }.joinToString(" ")), done)
+        assertEquals("go ", rest)
     }
 }

@@ -94,6 +94,7 @@ class Assistant @Inject constructor(
     /** Last routing step, so a crash reply can say what failed (ROADMAP §M.3). */
     private var stage = "start"
     private val history = ArrayDeque<Exchange>()
+    private var lastTurnAt = 0L
     /** Cloud answers only: safe to send back to the cloud as context (no tool data, D-035). */
     private val cloudHistory = ArrayDeque<Exchange>()
 
@@ -148,6 +149,10 @@ class Assistant @Inject constructor(
         smoke?.ok = false
         val text = input.heard.trim()
         stage = "start"
+        val now = System.currentTimeMillis()
+        // A new talk after a long break starts fresh, so old turns are not mixed into a new topic.
+        if (smoke == null && now - lastTurnAt > HISTORY_IDLE_MS) history.clear()
+        if (smoke == null) lastTurnAt = now
         val r = if (text.isEmpty()) Reply(Persona.DIDNT_GET) else runCatching { route(text, input, speak) }
             .onFailure { if (it is CancellationException) throw it; JarvisLog.e("assistant failed", it) }
             .getOrElse { smoke?.ok = false; smoke?.route = "error"; Reply(ReplyText.routeFailed(stage)) }
@@ -552,6 +557,7 @@ class Assistant @Inject constructor(
     companion object {
         private const val PENDING_MS = 30_000L
         private const val LATE_YES_MS = 180_000L
+        private const val HISTORY_IDLE_MS = 5 * 60_000L
         private val MESSAGE_TOOLS = setOf("send_sms", "send_whatsapp")
         private val WEB_TOOLS = setOf("web_search", "weather", "news", "wiki_lookup", "read_page", "open_url", "currency", "prayer_times")
 

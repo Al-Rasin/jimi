@@ -44,7 +44,7 @@ class MessengerFollowupTest {
 
     @Test fun expiredMessengerFollowupAsksInsteadOfChoosingAnotherApp() {
         remember()
-        now += 60_000
+        now += 5 * 60_000
         assertTrue(context.resolve("send it to mom too") is ConversationContext.Resolution.Clarify)
     }
 }

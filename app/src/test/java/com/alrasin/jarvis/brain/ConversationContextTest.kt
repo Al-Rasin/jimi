@@ -194,9 +194,9 @@ class ConversationContextTest {
         }
     }
 
-    @Test fun freshContextLivesUntilSixtySeconds() {
+    @Test fun freshContextLivesUntilFiveMinutes() {
         remember("call", "contact" to "Rahim")
-        now += 59_999
+        now += 299_999
         assertEquals("Rahim", tool("call him").args["contact"])
         now++
         assertNull(context.snapshot())
@@ -205,9 +205,9 @@ class ConversationContextTest {
 
     @Test fun resolutionDoesNotRefreshExpiry() {
         remember("set_volume", "level" to "40")
-        now += 50_000
+        now += 250_000
         tool("turn it up more")
-        now += 10_000
+        now += 50_000
         clarifies("turn it up more")
     }
 

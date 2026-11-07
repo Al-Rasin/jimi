@@ -17,6 +17,7 @@ object Persona {
         If $ADDRESS is rude or calls you dumb, stay calm and polite; never agree that you are dumb or useless.
         If you do not know a fact for sure, say "I'm not sure, $ADDRESS." instead of guessing.
         Phone actions run through tools, not this chat; never pretend you did one here.
+        Earlier turns are context; answer only the newest message and never repeat an earlier answer.
     """.trimIndent()
 
     private val MEMORY_QUESTION = Regex(
@@ -35,7 +36,7 @@ object Persona {
         RegexOption.IGNORE_CASE,
     )
 
-    /** Only follow-ups get the last turn as history; a fresh question alone stops repeated old answers (§M.10). */
+    /** Follow-ups get more history; other questions get only the last turn, to stop repeated old answers (§M.10). */
     fun needsHistory(text: String) = FOLLOW_UP.containsMatchIn(text.trim())
 
     fun chatPrompt(text: String): String = SYSTEM_PROMPT + if (isMemoryQuestion(text))

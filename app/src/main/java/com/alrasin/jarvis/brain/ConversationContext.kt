@@ -6,7 +6,7 @@ import java.util.Locale
 /** One completed turn, kept in memory only. Resolved tools still need the normal security gate. */
 class ConversationContext(
     private val clockMillis: () -> Long = { System.nanoTime() / 1_000_000 },
-    private val ttlMillis: Long = 60_000,
+    private val ttlMillis: Long = 5 * 60_000,
 ) {
     data class Snapshot(
         val lastTool: ToolCall?,

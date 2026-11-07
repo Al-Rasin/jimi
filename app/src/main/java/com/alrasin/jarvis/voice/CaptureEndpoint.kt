@@ -45,20 +45,29 @@ class CaptureEndpoint(
     }
 
     companion object {
+        /** Last words that mean "more is coming": wait longer so a thinking pause does not cut the command. */
         private val INCOMPLETE_ENDINGS = setOf(
-            "and", "or", "but", "because", "then", "to", "the", "a", "an", "for", "with",
-            "from", "of", "at", "in", "my", "your", "that", "which", "is", "are", "was",
+            "and", "or", "but", "because", "then", "to", "the", "a", "an", "for", "with", "about", "into",
+            "from", "of", "at", "in", "my", "your", "our", "his", "her", "their", "this", "some", "that",
+            "which", "is", "are", "was", "if", "when", "so", "like", "please", "can", "could", "will",
+            "would", "should", "do", "does", "did", "i", "we", "you", "me", "um", "uh", "umm", "hmm", "er",
             "call", "open", "play", "send", "set", "remind", "turn", "text", "message",
-            "search", "find", "tell", "what", "how",
+            "search", "find", "tell", "what", "how", "who", "where", "why", "say",
         )
+        private val SPACES = Regex("\\s+")
 
+        /**
+         * Silence that ends the command (D-073). Phone assistants wait about one second; a half-said
+         * sentence or a filler word ("um") waits two, like a person who sees you are still thinking.
+         */
         fun silenceMillis(text: String): Long {
-            val words = text.lowercase().trim().split(Regex("\\s+"))
+            val words = text.lowercase().trim().split(SPACES)
             val last = words.last().trimEnd('.', ',', '?', '!')
             return when {
-                last in INCOMPLETE_ENDINGS || text.trim().lowercase() in setOf("turn on", "turn off") -> 1_600
-                words.size <= 8 -> 700
-                else -> 1_200
+                last in INCOMPLETE_ENDINGS || text.trim().lowercase() in setOf("turn on", "turn off") -> 2_000
+                text.trimEnd().endsWith(',') -> 2_000
+                words.size <= 8 -> 1_000
+                else -> 1_400
             }
         }
     }

@@ -10,26 +10,26 @@ class CaptureEndpointTest {
     private fun CaptureEndpoint.advance(ms: Int, text: String = "", voice: Boolean = false) =
         accept(ms * 16, text, voice)
 
-    @Test fun shortCommandEndsAfterSevenHundredMilliseconds() {
+    @Test fun shortCommandEndsAfterOneSecond() {
         val endpoint = CaptureEndpoint()
         endpoint.advance(100, "turn on the flashlight", true)
-        assertNull(endpoint.advance(699, "turn on the flashlight"))
+        assertNull(endpoint.advance(999, "turn on the flashlight"))
         assertEquals(CaptureEndpoint.FinishReason.SILENCE, endpoint.advance(1, "turn on the flashlight"))
     }
 
     @Test fun unfinishedSentenceAllowsPauseAndContinuation() {
         val endpoint = CaptureEndpoint()
         endpoint.advance(100, "send a message to", true)
-        assertNull(endpoint.advance(1_200, "send a message to"))
+        assertNull(endpoint.advance(1_999, "send a message to"))
         assertNull(endpoint.advance(100, "send a message to mom", true))
-        assertEquals(CaptureEndpoint.FinishReason.SILENCE, endpoint.advance(700, "send a message to mom"))
+        assertEquals(CaptureEndpoint.FinishReason.SILENCE, endpoint.advance(1_000, "send a message to mom"))
     }
 
-    @Test fun longSentenceUsesTwelveHundredMilliseconds() {
+    @Test fun longSentenceUsesFourteenHundredMilliseconds() {
         val text = "please remind me to pick up the groceries tomorrow morning"
         val endpoint = CaptureEndpoint()
         endpoint.advance(100, text, true)
-        assertNull(endpoint.advance(1_199, text))
+        assertNull(endpoint.advance(1_399, text))
         assertEquals(CaptureEndpoint.FinishReason.SILENCE, endpoint.advance(1, text))
     }
 
@@ -73,7 +73,7 @@ class CaptureEndpointTest {
         endpoint.advance(100, "turn", true)
         endpoint.advance(600, "turn")
         assertNull(endpoint.advance(100, "turn on the flashlight"))
-        assertNull(endpoint.advance(699, "turn on the flashlight"))
+        assertNull(endpoint.advance(999, "turn on the flashlight"))
         assertEquals(CaptureEndpoint.FinishReason.SILENCE, endpoint.advance(1, "turn on the flashlight"))
     }
 
@@ -81,13 +81,13 @@ class CaptureEndpointTest {
         val endpoint = CaptureEndpoint()
         endpoint.advance(100, "call mom", true)
         assertNull(endpoint.advance(1_500, "call mom", true))
-        assertEquals(CaptureEndpoint.FinishReason.SILENCE, endpoint.advance(700, "call mom"))
+        assertEquals(CaptureEndpoint.FinishReason.SILENCE, endpoint.advance(1_000, "call mom"))
     }
 
     @Test fun overlapTextStartsCommandWithoutCountingPreRollAsElapsedTime() {
         val endpoint = CaptureEndpoint()
         endpoint.advance(0, "turn on the flashlight")
-        assertNull(endpoint.advance(699, "turn on the flashlight"))
+        assertNull(endpoint.advance(999, "turn on the flashlight"))
         assertEquals(CaptureEndpoint.FinishReason.SILENCE, endpoint.advance(1, "turn on the flashlight"))
     }
 
@@ -96,6 +96,13 @@ class CaptureEndpointTest {
         assertNull(endpoint.advance(19_999, "keep talking", true))
         assertEquals(CaptureEndpoint.FinishReason.MAX_LENGTH, endpoint.advance(1, "keep talking", true))
         assertEquals(CaptureEndpoint.FinishReason.MAX_LENGTH, endpoint.advance(1, ""))
+    }
+
+    @Test fun fillerWordOrCommaWaitsTwoSeconds() {
+        assertEquals(2_000L, CaptureEndpoint.silenceMillis("set an alarm for um"))
+        assertEquals(2_000L, CaptureEndpoint.silenceMillis("what is the weather,"))
+        assertEquals(2_000L, CaptureEndpoint.silenceMillis("tell me about"))
+        assertEquals(1_000L, CaptureEndpoint.silenceMillis("call mom"))
     }
 
     @Test fun vadRejectsSilenceLowNoiseAndDcOffset() {
@@ -121,7 +128,7 @@ class CaptureEndpointTest {
         assertTrue(vad.hasSpeech(speech))
         val endpoint = CaptureEndpoint()
         endpoint.advance(80, "turn on the flashlight", true)
-        repeat(8) { assertNull(endpoint.advance(80, "turn on the flashlight", vad.hasSpeech(fan))) }
+        repeat(12) { assertNull(endpoint.advance(80, "turn on the flashlight", vad.hasSpeech(fan))) }
         assertEquals(CaptureEndpoint.FinishReason.SILENCE, endpoint.advance(80, "turn on the flashlight", vad.hasSpeech(fan)))
     }
 

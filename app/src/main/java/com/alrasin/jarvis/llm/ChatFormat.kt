@@ -46,11 +46,12 @@ object ChatFormat {
     /**
      * Speech can start at a clause boundary while the rest of the sentence is generated. Before anything is
      * [spoke]n, 5 words are enough (fast first sound); after that pieces are longer, because every piece is
-     * said with its own tune and many small ones sound broken.
+     * said with its own tune and many small ones sound broken. A forced cut lands before a joining word
+     * ("and", "to", "which"...) so each piece ends where a person would breathe, not mid-phrase.
      */
     fun speechChunks(buf: String, spoke: Boolean = false): Pair<List<String>, String> {
         val clauseWords = if (spoke) 6 else 5
-        val cutWords = if (spoke) 10 else 5
+        val cutWords = if (spoke) 16 else 5
         val visible = buf.replace(Regex("<think>.*?</think>", RegexOption.DOT_MATCHES_ALL), "")
         if (visible.contains("<think>") || Regex("<[^>]*$").containsMatchIn(visible)) {
             return emptyList<String>() to visible
@@ -68,11 +69,28 @@ object ChatFormat {
         val remainder = pending.substring(start)
         val words = Regex("\\S+\\s+").findAll(remainder).take(cutWords).toList()
         if (words.size == cutWords) {
-            val end = words.last().range.last + 1
+            val end = phraseCut(words, spoke)
             out.add(remainder.substring(0, end).trim())
             return out to remainder.substring(end)
         }
         return out to remainder
+    }
+
+    /** Words that start a new phrase; a forced cut just before one sounds like a natural breath. */
+    private val JOINERS = setOf(
+        "and", "but", "or", "so", "because", "which", "that", "who", "when", "while", "if", "then",
+        "with", "to", "for", "in", "on", "at", "from",
+    )
+
+    /** End offset of a forced cut: before the last joining word (index 3+) once speaking, else after all words. */
+    private fun phraseCut(words: List<MatchResult>, spoke: Boolean): Int {
+        if (spoke) {
+            val joiner = (words.size - 1 downTo 3).firstOrNull {
+                words[it].value.trim().lowercase().trim { c -> !c.isLetter() } in JOINERS
+            }
+            if (joiner != null) return words[joiner].range.first
+        }
+        return words.last().range.last + 1
     }
 
     /** Drops think blocks, chat control tokens and "/no_think" echoes so they are never spoken or shown (§M.10). */
