@@ -229,7 +229,7 @@ class ModelBrain @Inject constructor(
                         }
                         visibleAnswer.append(p)
                         buf += p
-                        val (done, rest) = ChatFormat.speechChunks(buf)
+                        val (done, rest) = ChatFormat.speechChunks(buf, spoke)
                         done.forEach { s -> ChatFormat.clean(s).takeIf { it.isNotBlank() }?.let { JarvisLog.i("latency: chat clause ${System.currentTimeMillis() - started} ms")
                             onSentence(it); spoke = true } }
                         buf = rest

@@ -43,8 +43,14 @@ object ChatFormat {
         return out to buf.substring(start)
     }
 
-    /** Speech can start at a clause boundary while the rest of the sentence is generated. */
-    fun speechChunks(buf: String): Pair<List<String>, String> {
+    /**
+     * Speech can start at a clause boundary while the rest of the sentence is generated. Before anything is
+     * [spoke]n, 5 words are enough (fast first sound); after that pieces are longer, because every piece is
+     * said with its own tune and many small ones sound broken.
+     */
+    fun speechChunks(buf: String, spoke: Boolean = false): Pair<List<String>, String> {
+        val clauseWords = if (spoke) 6 else 5
+        val cutWords = if (spoke) 10 else 5
         val visible = buf.replace(Regex("<think>.*?</think>", RegexOption.DOT_MATCHES_ALL), "")
         if (visible.contains("<think>") || Regex("<[^>]*$").containsMatchIn(visible)) {
             return emptyList<String>() to visible
@@ -54,14 +60,14 @@ object ChatFormat {
         var start = 0
         Regex("[,;:]\\s+").findAll(pending).forEach { boundary ->
             val clause = pending.substring(start, boundary.range.first + 1).trim()
-            if (clause.split(Regex("\\s+")).size >= 5) {
+            if (clause.split(Regex("\\s+")).size >= clauseWords) {
                 out.add(clause)
                 start = boundary.range.last + 1
             }
         }
         val remainder = pending.substring(start)
-        val words = Regex("\\S+\\s+").findAll(remainder).take(5).toList()
-        if (words.size == 5) {
+        val words = Regex("\\S+\\s+").findAll(remainder).take(cutWords).toList()
+        if (words.size == cutWords) {
             val end = words.last().range.last + 1
             out.add(remainder.substring(0, end).trim())
             return out to remainder.substring(end)

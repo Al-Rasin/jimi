@@ -190,7 +190,7 @@ class CloudBrain @Inject constructor(
         val out = runCatching {
             p.stream(system, history.takeLast(HISTORY), query, CHAT_TOKENS) { piece ->
                 if (first) { first = false; JarvisLog.i("latency: cloud first text ${System.currentTimeMillis() - t0} ms") }
-                val (done, rest) = ChatFormat.speechChunks(buf + piece)
+                val (done, rest) = ChatFormat.speechChunks(buf + piece, spoke)
                 done.forEach { s -> ChatFormat.clean(s).takeIf { it.isNotBlank() }?.let { onSentence(it); spoke = true } }
                 buf = rest
             }

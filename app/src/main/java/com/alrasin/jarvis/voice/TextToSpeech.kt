@@ -13,6 +13,8 @@ import com.k2fsa.sherpa.onnx.OfflineTtsModelConfig
 import com.k2fsa.sherpa.onnx.OfflineTtsSupertonicModelConfig
 import com.k2fsa.sherpa.onnx.OfflineTtsVitsModelConfig
 import java.io.File
+import java.util.concurrent.Executors
+import java.util.concurrent.TimeUnit
 import kotlin.math.sqrt
 
 /**
@@ -100,7 +102,7 @@ class TextToSpeech(
         for (chunk in chunks) {
             if (stopped) return false
             val audio = generate(chunk)
-            if (stopped || !playPcm(audio.samples, audio.sampleRate) { stopped }) return false
+            if (stopped || !playPcm(audio.samples, audio.sampleRate, SpeechText.pauseAfterMs(chunk)) { stopped }) return false
         }
         return !stopped
     }
@@ -122,45 +124,166 @@ class TextToSpeech(
         private const val SUPERTONIC_STEPS = 3
         private const val ESPEAK = "espeak-ng-data"
 
-        /** Quiet audio added after each sentence so the last sound is not cut when the track stops. */
-        private const val TAIL_MS = 120
+        /**
+         * One long-lived audio stream for all speech. A new track per piece made a gap and a click at
+         * every piece (track start-up is 100-300 ms on MIUI). Pieces are written back to back instead,
+         * so the voice flows like one recording.
+         */
         private val playbackLock = Any()
+        private val writeLock = Any()
         private var playbackEpoch = 0L
-        private data class Playback(val pcm: FloatArray, val rate: Int)
-        private val activeTracks = mutableMapOf<AudioTrack, Playback>()
+        private var stream: Stream? = null
+        /** Return this early from [playPcm] so the next piece is written before this one ends. */
+        private const val LEAD_MS = 150
+        private const val BUFFER_MS = 500
+        /** Free the speaker this long after the last piece. */
+        private const val IDLE_MS = 2_000L
+        private const val STOP_RELEASE_MS = 300L
+        private val releaser = Executors.newSingleThreadScheduledExecutor { r ->
+            Thread(r, "tts-release").apply { isDaemon = true }
+        }
+
+        private class Segment(val start: Long, val pcm: FloatArray)
+        private class Stream(val track: AudioTrack, val rate: Int) {
+            /** Frames given to the track so far. */
+            var written = 0L
+            val segments = ArrayDeque<Segment>()
+            @Volatile var lastUse = System.currentTimeMillis()
+            /** Frames played; the raw value is an unsigned 32-bit counter. */
+            fun head(): Long = track.playbackHeadPosition.toLong() and 0xffffffffL
+        }
 
         val isPlaying: Boolean
-            get() = synchronized(playbackLock) { activeTracks.isNotEmpty() }
+            get() {
+                synchronized(playbackLock) {
+                    val s = stream ?: return false
+                    return runCatching { s.head() < s.written }.getOrDefault(false)
+                }
+            }
 
         /** RMS near the playback head; queued speech must not suppress a quiet microphone window. */
         val playbackEnergy: Float
-            get() = synchronized(playbackLock) {
-                activeTracks.maxOfOrNull { (track, audio) ->
-                    val start = track.playbackHeadPosition.coerceIn(0, audio.pcm.size)
-                    val end = (start + audio.rate / 50).coerceAtMost(audio.pcm.size)
+            get() {
+                synchronized(playbackLock) {
+                    val s = stream ?: return 0f
+                    val head = runCatching { s.head() }.getOrElse { return 0f }
+                    while (s.segments.isNotEmpty() && s.segments.first().let { it.start + it.pcm.size } <= head) {
+                        s.segments.removeFirst()
+                    }
+                    val seg = s.segments.firstOrNull()?.takeIf { head >= it.start } ?: return 0f
+                    val from = (head - seg.start).toInt()
+                    val to = (from + s.rate / 50).coerceAtMost(seg.pcm.size)
                     var energy = 0.0
-                    for (i in start until end) energy += audio.pcm[i] * audio.pcm[i]
-                    sqrt(energy / (end - start).coerceAtLeast(1)).toFloat()
-                } ?: 0f
+                    for (i in from until to) energy += seg.pcm[i] * seg.pcm[i]
+                    return sqrt(energy / (to - from).coerceAtLeast(1)).toFloat()
+                }
             }
 
         /** Does not wait for native synthesis or the service's TTS lock. */
-        fun stopPlayback() = synchronized(playbackLock) {
-            playbackEpoch++
-            activeTracks.keys.forEach { track -> runCatching { track.stop() } }
-            activeTracks.clear()
+        fun stopPlayback() {
+            synchronized(playbackLock) {
+                playbackEpoch++
+                val s = stream ?: return
+                stream = null
+                runCatching { s.track.pause(); s.track.flush(); s.track.stop() }
+                // a writer may still hold the track for a moment; release after it sees the new epoch
+                releaser.schedule({ synchronized(playbackLock) { runCatching { s.track.release() } } },
+                    STOP_RELEASE_MS, TimeUnit.MILLISECONDS)
+            }
         }
 
         /**
-         * Plays mono float PCM on the assistant audio stream; blocks until done or [stop] returns true.
-         * Waits on the real playback position (not the clock): on MIUI a track can start 200+ ms late,
-         * and a clock-based wait then stopped it before the last words were heard.
+         * Plays mono float PCM on the assistant audio stream, then [pauseMs] of silence; blocks until it
+         * is nearly done or [stop] returns true. Waits on the real playback position (not the clock): on
+         * MIUI a track can start 200+ ms late. [onStarted] runs when this piece is first heard.
          */
-        fun playPcm(pcm: FloatArray, rate: Int, onStarted: () -> Unit = {}, stop: () -> Boolean = { false }): Boolean {
+        fun playPcm(
+            pcm: FloatArray,
+            rate: Int,
+            pauseMs: Int = 0,
+            onStarted: () -> Unit = {},
+            stop: () -> Boolean = { false },
+        ): Boolean {
             val epoch = synchronized(playbackLock) { playbackEpoch }
             if (stop()) return false
-            if (pcm.isEmpty()) return true
-            val samples = pcm.copyOf(pcm.size + rate * TAIL_MS / 1000)
+            val samples = PcmShape.shape(pcm, rate, pauseMs)
+            if (samples.isEmpty()) return true
+            synchronized(writeLock) {
+                val s = streamFor(rate, epoch, stop) ?: return cancel(epoch, stop)
+                fun live() = epoch == playbackEpoch && stream === s
+                val start = synchronized(playbackLock) {
+                    if (!live()) return cancel(epoch, stop)
+                    val played = runCatching { s.head() }.getOrDefault(0L)
+                    while (s.segments.firstOrNull()?.let { it.start + it.pcm.size <= played } == true) s.segments.removeFirst()
+                    s.written.also {
+                        s.written += samples.size
+                        s.segments.addLast(Segment(it, samples))
+                    }
+                }
+                val end = start + samples.size
+                var started = false
+                fun heard(head: Long) {
+                    if (!started && head > start) { started = true; onStarted() }
+                }
+                var offset = 0
+                while (offset < samples.size) {
+                    val (wrote, head) = synchronized(playbackLock) {
+                        if (!live()) return cancel(epoch, stop)
+                        s.lastUse = System.currentTimeMillis()
+                        val n = s.track.write(samples, offset, samples.size - offset, AudioTrack.WRITE_NON_BLOCKING)
+                        if (n > 0 && s.track.playState != AudioTrack.PLAYSTATE_PLAYING) s.track.play()
+                        n to s.head()
+                    }
+                    if (wrote < 0 || stop()) return cancel(epoch, stop, error = wrote < 0)
+                    offset += wrote
+                    heard(head)
+                    if (wrote == 0) Thread.sleep(10)
+                }
+                // done when only LEAD_MS is left, so the next piece follows with no gap
+                val done = maxOf(end - rate * LEAD_MS / 1000, start + 1)
+                var deadline = 0L
+                while (true) {
+                    val head = synchronized(playbackLock) {
+                        if (!live()) return cancel(epoch, stop)
+                        s.lastUse = System.currentTimeMillis()
+                        s.head()
+                    }
+                    if (stop()) return cancel(epoch, stop)
+                    heard(head)
+                    if (head >= done) break
+                    if (deadline == 0L) deadline = System.currentTimeMillis() + (end - head) * 1000 / rate + 2000
+                    if (System.currentTimeMillis() > deadline) break   // playback stuck; do not hang the reply
+                    Thread.sleep(10)
+                }
+                if (!started) onStarted()
+                releaseWhenIdle()
+                return true
+            }
+        }
+
+        /** The open stream, or a new one; a stream at another sample rate is played out first. */
+        private fun streamFor(rate: Int, epoch: Long, stop: () -> Boolean): Stream? {
+            var deadline = 0L
+            while (true) {
+                synchronized(playbackLock) {
+                    if (epoch != playbackEpoch) return null
+                    val s = stream ?: return openStream(rate).also { stream = it }
+                    if (s.rate == rate) return s.also { it.lastUse = System.currentTimeMillis() }
+                    val head = runCatching { s.head() }.getOrDefault(s.written)
+                    if (deadline == 0L) deadline = System.currentTimeMillis() + (s.written - head) * 1000 / s.rate + 2000
+                    if (head >= s.written || System.currentTimeMillis() > deadline) {
+                        stream = null
+                        runCatching { s.track.stop() }
+                        runCatching { s.track.release() }
+                    }
+                }
+                if (stop()) return null
+                Thread.sleep(10)
+            }
+        }
+
+        private fun openStream(rate: Int): Stream {
+            val min = AudioTrack.getMinBufferSize(rate, AudioFormat.CHANNEL_OUT_MONO, AudioFormat.ENCODING_PCM_FLOAT)
             val track = AudioTrack.Builder()
                 .setAudioAttributes(
                     AudioAttributes.Builder()
@@ -175,38 +298,32 @@ class TextToSpeech(
                         .setChannelMask(AudioFormat.CHANNEL_OUT_MONO)
                         .build()
                 )
-                .setTransferMode(AudioTrack.MODE_STATIC)
-                .setBufferSizeInBytes(samples.size * 4)
+                .setTransferMode(AudioTrack.MODE_STREAM)
+                .setBufferSizeInBytes(maxOf(min, rate * 4 * BUFFER_MS / 1000))
                 .build()
-            try {
-                track.write(samples, 0, samples.size, AudioTrack.WRITE_BLOCKING)
+            return Stream(track, rate)
+        }
+
+        /** Our own [stop] (not [stopPlayback]) ended the piece: silence the stream too, as before. */
+        private fun cancel(epoch: Long, stop: () -> Boolean, error: Boolean = false): Boolean {
+            if (error) JarvisLog.e("tts: audio write failed")
+            if (synchronized(playbackLock) { epoch == playbackEpoch } && (error || stop())) stopPlayback()
+            return false
+        }
+
+        private fun releaseWhenIdle() {
+            releaser.schedule({
                 synchronized(playbackLock) {
-                    if (epoch != playbackEpoch || stop()) return false
-                    track.play()
-                    activeTracks[track] = Playback(samples, rate)
-                }
-                fun cancelled() = stop() || synchronized(playbackLock) { epoch != playbackEpoch }
-                // give up only if playback is stuck (2 s more than the audio length)
-                val end = System.currentTimeMillis() + samples.size * 1000L / rate + 2000
-                var started = false
-                while (!cancelled() && track.playbackHeadPosition < samples.size && System.currentTimeMillis() < end) {
-                    if (!started && track.playbackHeadPosition > 0) {
-                        started = true
-                        onStarted()
-                    }
-                    Thread.sleep(20)
-                }
-                return !cancelled()
-            } finally {
-                synchronized(playbackLock) {
-                    activeTracks.remove(track)
-                    try {
-                        runCatching { track.stop() }
-                    } finally {
-                        track.release()
+                    val s = stream ?: return@synchronized
+                    val idle = System.currentTimeMillis() - s.lastUse >= IDLE_MS &&
+                        runCatching { s.head() >= s.written }.getOrDefault(true)
+                    if (idle) {
+                        stream = null
+                        runCatching { s.track.stop() }
+                        runCatching { s.track.release() }
                     }
                 }
-            }
+            }, IDLE_MS + 100, TimeUnit.MILLISECONDS)
         }
 
         private fun copyEspeakData(context: Context): File {

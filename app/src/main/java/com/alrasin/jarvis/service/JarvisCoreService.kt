@@ -221,7 +221,8 @@ class JarvisCoreService : LifecycleService() {
                 }
             }
         }
-        val audio = Channel<Triple<Int, String, PhraseCache.Audio>>(1)
+        // a few pieces made ahead, so a slow piece does not leave the speaker silent
+        val audio = Channel<Triple<Int, String, PhraseCache.Audio>>(AUDIO_AHEAD)
         lifecycleScope.launch(Dispatchers.IO) {
             for ((epoch, s) in speech) {
                 val made = try {
@@ -242,7 +243,7 @@ class JarvisCoreService : LifecycleService() {
                     if (epoch == speechEpoch) {
                         playbackText = text
                         playbackActive = true
-                        TextToSpeech.playPcm(a.samples, a.sampleRate, onStarted = {
+                        TextToSpeech.playPcm(a.samples, a.sampleRate, SpeechText.pauseAfterMs(text), onStarted = {
                             synchronized(speechState) {
                                 if (epoch == speechEpoch && epoch == timedCommandEpoch && text !in FILLERS) {
                                     _reply.value = (_reply.value + " " + text).trim()
@@ -423,8 +424,12 @@ class JarvisCoreService : LifecycleService() {
 
     private fun say(text: String, epoch: Int = speechEpoch) {
         val chunks = if (cachedAudio.containsKey(SpeechText.normalize(text))) listOf(SpeechText.normalize(text))
-            else SpeechText.chunks(text, maxWords = if (phoneEngineVoice) PHONE_VOICE_WORDS else 5,
-                firstWords = if (epoch == timedCommandEpoch && firstAudioEpoch != epoch && speechLeft.get() == 0) 2 else 5)
+            else {
+                // Each piece gets its own tune, so short pieces sound broken. Only the reply's first piece is short (fast start).
+                val max = if (phoneEngineVoice) PHONE_VOICE_WORDS else VOICE_WORDS
+                val replyStart = epoch == timedCommandEpoch && firstAudioEpoch != epoch && speechLeft.get() == 0
+                SpeechText.chunks(text, maxWords = max, firstWords = if (!replyStart) max else if (phoneEngineVoice) 3 else 2)
+            }
         synchronized(speechState) {
             if (epoch != speechEpoch) return
             for (chunk in chunks) {
@@ -1156,8 +1161,10 @@ class JarvisCoreService : LifecycleService() {
         private const val WAKE_COOLDOWN_MS = 2_000L
         private const val NEAR_MIN = 0.2f
         private const val NEAR_COOLDOWN_MS = 30_000L
-        /** Words per spoken piece for the Google voice (~0.6 s to make); Piper needs 5 to start fast. */
-        private const val PHONE_VOICE_WORDS = 14
+        /** Most words per spoken piece: Google voice makes ~25 words in ~1 s; Piper ~10 words in ~2 s (3 s of speech). */
+        private const val PHONE_VOICE_WORDS = 25
+        private const val VOICE_WORDS = 10
+        private const val AUDIO_AHEAD = 3
         private const val PRE_ROLL_SAMPLES = 16_000   // 1 s before the wake: "…jimi turn" → "turn" is kept
         private const val ENROLL_SECONDS = 8
         private const val ENROLL_CHUNKS = ENROLL_SECONDS * WakeWordDetector.SAMPLE_RATE / WakeWordDetector.CHUNK

@@ -117,19 +117,27 @@ object SpeechText {
         return if (value.any(Char::isLetterOrDigit)) value else ""
     }
 
+    /**
+     * Splits [text] into pieces made one at a time by the voice. Each piece is said with its own tune
+     * (a falling end), so pieces are whole sentences where possible. Only the start is short, for a fast
+     * first sound: [firstWords], then 3x that, then [maxWords], so the next piece is ready before the last ends.
+     */
     fun chunks(text: String, maxWords: Int = 20, firstWords: Int = maxWords): List<String> {
         require(maxWords > 0) { "maxWords must be positive" }
         require(firstWords > 0) { "firstWords must be positive" }
         val clean = normalize(text)
         if (clean.isBlank()) return emptyList()
-        var first = true
-        return clean.split(Regex("(?<=[.!?])\\s+")).flatMap { sentence ->
-            val words = sentence.split(Regex("\\s+"))
+        var made = 0
+        return clean.split(SENTENCE_END).flatMap { sentence ->
+            val words = sentence.split(SPACES)
             val result = mutableListOf<String>()
             var start = 0
             while (start < words.size) {
-                val limit = if (first) minOf(firstWords, maxWords) else maxWords
-                first = false
+                val limit = when (made++) {
+                    0 -> minOf(firstWords, maxWords)
+                    1 -> minOf(firstWords * 3, maxWords)
+                    else -> maxWords
+                }
                 var end = minOf(start + limit, words.size)
                 if (end < words.size) {
                     val comma = (start + minOf(12, limit) - 1 until end)
@@ -142,6 +150,22 @@ object SpeechText {
             result
         }
     }
+
+    /**
+     * Silence after a piece, like a person breathing at punctuation. The voice's own edge silence is cut
+     * (see [PcmShape]), so this is the only gap between pieces.
+     */
+    fun pauseAfterMs(text: String): Int = when (text.trimEnd().lastOrNull()) {
+        '.', '!', '?' -> SENTENCE_PAUSE_MS
+        ',', ';', ':' -> CLAUSE_PAUSE_MS
+        else -> WORD_PAUSE_MS
+    }
+
+    const val SENTENCE_PAUSE_MS = 280
+    const val CLAUSE_PAUSE_MS = 140
+    const val WORD_PAUSE_MS = 40
+    private val SENTENCE_END = Regex("(?<=[.!?])\\s+")
+    private val SPACES = Regex("\\s+")
 
     private fun link(value: String): String = "link" + value.takeLastWhile { it in ".,!?;:" }
 
