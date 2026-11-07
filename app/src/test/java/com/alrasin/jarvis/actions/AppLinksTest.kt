@@ -61,4 +61,14 @@ class AppLinksTest {
         assertEquals("https://www.instagram.com/some.user/", AppLinks.instagram("some.user")[1].uri)
         assertTrue(AppLinks.telegram("rahim?x=1").isEmpty())
     }
+
+    @Test fun routePreviewAndDistanceWords() {
+        val r = AppLinks.route("Gulshan 2", AppLinks.Travel.WALK)
+        assertEquals("https://www.google.com/maps/dir/?api=1&destination=Gulshan%202&travelmode=walking", r[0].uri)
+        assertEquals(AppLinks.MAPS, r[0].pkg)
+        assertEquals("Gulshan 2 is about 800 metres away in a straight line.", AppLinks.distanceSay("Gulshan 2", 790f))
+        assertEquals("Uttara is about 6.3 km away in a straight line.", AppLinks.distanceSay("Uttara", 6_270f))
+        assertEquals("Cox's Bazar is about 292 km away in a straight line.", AppLinks.distanceSay("Cox's Bazar", 291_800f))
+        assertEquals("Shop is about 50 metres away in a straight line.", AppLinks.distanceSay("Shop", 10f))
+    }
 }

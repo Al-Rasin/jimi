@@ -49,4 +49,17 @@ class MapsRuleTest {
         assertNotEquals("open_map", RuleMatcher.match("navigate to youtube")?.tool)
         assertEquals("app_go", RuleMatcher.match("navigate to privacy in whatsapp")?.tool)
     }
+
+    @Test fun howFar() {
+        assertEquals(mapOf("place" to "gulshan 2", "mode" to "distance"), args("how far is Gulshan 2"))
+        assertEquals("airport", args("what's the distance to the airport")["place"])
+        assertEquals("walk", args("how far is the mosque on foot")["travel"])
+        assertEquals("distance", args("how long does it take to get to uttara")["mode"])
+    }
+
+    @Test fun spaceQuestionsAreNotMaps() {
+        assertNotEquals("open_map", RuleMatcher.match("how far is the moon")?.tool)
+        assertNotEquals("open_map", RuleMatcher.match("how far is dhaka from chittagong")?.tool)
+        assertNotEquals("open_map", RuleMatcher.match("how far is it")?.tool)
+    }
 }

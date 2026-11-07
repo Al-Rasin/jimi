@@ -568,12 +568,16 @@ object RuleMatcher {
 
     /** Maps (§H.2): "navigate to gulshan 2", "walking directions to the mosque", "show dhanmondi lake on the map". */
     private fun maps(t: String): ToolCall? {
-        val travel = "walking|walk|on foot|driving|drive|car|cycling|bicycle|bike|motorbike|motorcycle|scooter"
+        val travel = "walking|walk|on foot|foot|driving|drive|car|cycling|bicycle|bike|motorbike|motorcycle|scooter"
         Regex("^(?:(?:get|give me|show me|start) )?(?:($travel) )?(?:directions|route|navigation|the way) to (.+?)(?: (?:by|on) ($travel))?$").find(t)?.let {
             return navigate(it.groupValues[2], it.groupValues[1].ifEmpty { it.groupValues[3] })
         }
         Regex("^(?:navigate|(walk|drive|cycle|ride)) (?:me )?to (.+?)(?: (?:by|on) ($travel))?$").find(t)?.let {
             return navigate(it.groupValues[2], it.groupValues[1].ifEmpty { it.groupValues[3] })
+        }
+        Regex("^(?:how far(?: away)? is|whats the distance to|what is the distance to|distance to|how far (?:is it|am i) (?:to|from)|how long (?:does it take |will it take )?to (?:get|go) to) (?:the )?(.+?)(?: from here)?(?: (?:by|on) ($travel))?$").find(t)?.let {
+            val p = place(it.groupValues[1])?.takeUnless { p -> NOT_ON_MAP.containsMatchIn(p) } ?: return null
+            return navigate(p, it.groupValues[2])?.let { c -> call("open_map", "place" to p, "mode" to "distance", "travel" to c.arg("travel")) }
         }
         Regex("^how (?:do i|can i|to|do we|can we) (?:get|go) to (.+?)(?: (?:by|on) ($travel))?$").find(t)?.let {
             return navigate(it.groupValues[1], it.groupValues[2])
@@ -586,6 +590,9 @@ object RuleMatcher {
         }
         return null
     }
+
+    // "how far is the moon from earth" is a question for the brain, not a map.
+    private val NOT_ON_MAP = Regex("\\bfrom\\b|^(?:it|that|this|there)$|\\b(?:moon|sun|mars|earth|space|planet|stars?|galaxy|jupiter|venus|saturn|mercury|pluto|universe)\\b")
 
     private fun navigate(place: String, travel: String): ToolCall? {
         val p = place(place) ?: return null

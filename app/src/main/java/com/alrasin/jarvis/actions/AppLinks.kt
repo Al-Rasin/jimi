@@ -30,7 +30,9 @@ object AppLinks {
     /** [pkg] null = any app that handles it. [query] set = put it in the SearchManager.QUERY extra. */
     data class Link(val action: String, val uri: String?, val pkg: String?, val query: String? = null)
 
-    enum class Travel(val code: String) { DRIVE("d"), WALK("w"), BIKE("b"), TWO_WHEELER("l") }
+    enum class Travel(val code: String, val web: String) {
+        DRIVE("d", "driving"), WALK("w", "walking"), BIKE("b", "bicycling"), TWO_WHEELER("l", "two-wheeler"),
+    }
 
     /** Percent-encoding for a URI query part (space = %20, not +). */
     fun enc(s: String): String = URLEncoder.encode(s.trim(), "UTF-8").replace("+", "%20")
@@ -64,6 +66,24 @@ object AppLinks {
     }
 
     /** Show [place] on a map: Google Maps, any geo: app, then the Maps web page. */
+    /** Route preview with distance and time, without starting directions ("how far is X"). */
+    fun route(place: String, mode: Travel = Travel.DRIVE): List<Link> {
+        val p = place.trim()
+        if (p.isEmpty()) return emptyList()
+        val dir = "https://www.google.com/maps/dir/?api=1&destination=${enc(p)}&travelmode=${mode.web}"
+        return listOf(Link(VIEW, dir, MAPS), Link(VIEW, dir, null)) + mapSearch(p)
+    }
+
+    /** "Gulshan 2 is about 6.3 km away in a straight line." */
+    fun distanceSay(place: String, meters: Float): String {
+        val d = when {
+            meters < 1_000 -> "${(Math.round(meters / 50f) * 50).coerceAtLeast(50)} metres"
+            meters < 10_000 -> String.format(java.util.Locale.ROOT, "%.1f km", meters / 1_000f)
+            else -> "${Math.round(meters / 1_000f)} km"
+        }
+        return "${place.trim()} is about $d away in a straight line."
+    }
+
     fun mapSearch(place: String): List<Link> {
         val p = place.trim()
         if (p.isEmpty()) return emptyList()
