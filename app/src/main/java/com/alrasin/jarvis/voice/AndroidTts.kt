@@ -53,6 +53,7 @@ class AndroidTts(context: Context, private val voiceName: String?) : AutoCloseab
         val voice = voiceName?.let { n -> voices.firstOrNull { it.name == n } }
         localVoice = voice
         netVoice = voiceName?.let { n -> voices.firstOrNull { it.name == networkName(n) } }
+        JarvisLog.i("phone voice $voiceName: online version ${if (netVoice != null) "found" else "missing"}")
         if (voice != null) t.voice = voice else t.language = Locale.US
         return t
     }
