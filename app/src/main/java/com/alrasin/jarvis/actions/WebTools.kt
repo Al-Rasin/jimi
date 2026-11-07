@@ -128,7 +128,7 @@ fun webTools(
             })
         },
         SimpleTool("web_search", "Search the web and read the top answer", listOf(arg("query", "what to search"))) { c, _ ->
-            val q = c.arg("query") ?: return@SimpleTool ToolResult.fail("Search for what?")
+            val q = c.require("query", "Search for what?")
             runCatching { search(q) }.fold({ res ->
                 if (res.isEmpty()) ToolResult.fail("I found nothing for $q.")
                 else {
@@ -145,7 +145,7 @@ fun webTools(
             }, { webFailure("the web", it) })
         },
         SimpleTool("read_page", "Read the main text of a web page", listOf(arg("url", "page address"))) { c, ctx ->
-            val rawUrl = c.arg("url") ?: return@SimpleTool ToolResult.fail("Which page?")
+            val rawUrl = c.require("url", "Which page?")
             val url = normalizeUrl(rawUrl) ?: return@SimpleTool ToolResult.fail("That isn't a valid web address.")
             val question = ctx.heard.replace(Regex("(?i)https?://\\S+|www\\.\\S+"), "")
                 .replace(rawUrl, "", ignoreCase = true).trim()
@@ -155,7 +155,7 @@ fun webTools(
             runCatching { readPage(url, question, generalReading) }.getOrElse { webFailure("that page", it) }
         },
         SimpleTool("wiki_lookup", "Short Wikipedia summary", listOf(arg("topic", "topic"))) { c, _ ->
-            val topic = c.arg("topic") ?: return@SimpleTool ToolResult.fail("Look up what?")
+            val topic = c.require("topic", "Look up what?")
             suspend fun wiki(url: String): Any? = Json.parse(
                 runCatching { web.get(url, Web.WIKI_UA) }.getOrElse { if (it is Web.HttpError && it.code < 500) throw it else web.get(url, Web.WIKI_UA) },
             )

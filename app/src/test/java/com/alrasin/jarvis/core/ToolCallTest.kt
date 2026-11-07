@@ -10,6 +10,20 @@ class ToolCallTest {
         listOf("missing", "empty", "spaces").forEach { assertNull(call.arg(it)) }
     }
 
+    @Test fun requireReturnsArgOrAsks() {
+        val call = ToolCall("open_app", mapOf("app" to "YouTube", "blank" to " "))
+        assertEquals("YouTube", call.require("app", "Which app?"))
+        val e = runCatching { call.require("blank", "Which app?") }.exceptionOrNull()
+        assertEquals("Which app?", (e as MissingArg).ask)
+    }
+
+    @Test fun simpleToolTurnsMissingArgIntoAsk() = kotlinx.coroutines.runBlocking {
+        val tool = com.alrasin.jarvis.actions.SimpleTool("t", "d") { c, _ -> ToolResult.ok(c.require("x", "X what?")) }
+        val ctx = ToolContext(android.content.ContextWrapper(null), "", false)
+        assertEquals(ToolResult.fail("X what?"), tool.run(ToolCall("t"), ctx))
+        assertEquals(ToolResult.ok("hi"), tool.run(ToolCall("t", mapOf("x" to "hi")), ctx))
+    }
+
     @Test fun argumentsPreserveSpeechAndCase() {
         val text = "  Set it to Fifty percent, Please!  "
         val call = ToolCall("create_note", mapOf("text" to text))

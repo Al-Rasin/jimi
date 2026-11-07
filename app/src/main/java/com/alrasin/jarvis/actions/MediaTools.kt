@@ -24,7 +24,7 @@ fun mediaTools(context: Context): List<Tool> {
         SimpleTool("play_media", "Search YouTube, YouTube Music or Spotify and select the first video or song to play",
             listOf(arg("query", "song, artist or video search text"), arg("app", "preferred installed player; omit to choose an installed player",
                 required = false, choices = listOf("youtube", "youtube_music", "spotify")))) { c, _ ->
-            val query = c.arg("query") ?: return@SimpleTool ToolResult.fail("What should I play?")
+            val query = c.require("query", "What should I play?")
             playSearch(context, query, c.arg("app"))
         },
         SimpleTool("media_control", "Pause, play, next or previous for music/video", listOf(arg("action", "what to do", choices = listOf("play", "pause", "next", "previous")))) { c, _ ->

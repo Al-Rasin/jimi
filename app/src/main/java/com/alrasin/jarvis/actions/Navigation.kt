@@ -26,7 +26,7 @@ fun navigationTool(context: Context, location: CurrentLocation): Tool =
             arg("travel", "how to travel when navigating", required = false, choices = listOf("drive", "walk", "bike", "motorbike")),
         ),
     ) { c, _ ->
-        val place = c.arg("place") ?: return@SimpleTool ToolResult.fail("Which place?")
+        val place = c.require("place", "Which place?")
         val travel = AppLinks.travel(c.arg("travel"))
         when (c.arg("mode")) {
             "navigate" -> {

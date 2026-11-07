@@ -314,7 +314,7 @@ fun recipeTools(context: Context, planner: Planner, apps: AppList, store: Recipe
             arg("risky", "true when the recipe sends, pays, calls or deletes", required = false),
         ),
     ) { c, _ ->
-        val name = c.arg("name") ?: return@SimpleTool ToolResult.fail("Which recipe?")
+        val name = c.require("name", "Which recipe?")
         val pkg = c.arg("pkg")
         val appName = c.arg("app")
         val recipe = store.all().firstOrNull { r ->

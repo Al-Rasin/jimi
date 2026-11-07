@@ -11,7 +11,7 @@ import com.alrasin.jarvis.core.launch
 /** "search X in Play Store" opens Play Store results by deep link (§M.8, §H.2), not a web search. */
 fun storeSearchTool(context: Context): Tool =
     SimpleTool("store_search", "Search apps in the Google Play Store and show the results", listOf(arg("query", "app or game to look for"))) { c, _ ->
-        val query = c.arg("query") ?: return@SimpleTool ToolResult.fail("Search the Play Store for what?")
+        val query = c.require("query", "Search the Play Store for what?")
         val opened = context.isInstalled(PLAY_STORE) &&
             context.launch(Intent(Intent.ACTION_VIEW, Uri.parse(storeSearchUri(query))).setPackage(PLAY_STORE))
         if (opened || context.launch(Intent(Intent.ACTION_VIEW, Uri.parse(storeWebUri(query))))) {

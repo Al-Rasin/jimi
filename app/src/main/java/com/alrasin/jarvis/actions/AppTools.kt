@@ -68,12 +68,12 @@ class AppList(private val context: Context) {
 
 fun appTools(context: Context, apps: AppList): List<Tool> = listOf(
     SimpleTool("open_app", "Open an app by name", listOf(arg("app", "app name, e.g. YouTube"))) { c, _ ->
-        val name = c.arg("app") ?: return@SimpleTool ToolResult.fail("Which app?")
+        val name = c.require("app", "Which app?")
         val label = if (name.lowercase() in setOf("settings", "phone settings")) "settings" else apps.find(name)?.label ?: name
         if (context.openApp(apps, name)) ToolResult.ok("Boss, I opened $label.") else ToolResult.fail("I can't find or open $label.")
     },
     SimpleTool("close_app", "Close (force stop) an app", listOf(arg("app", "app name"))) { c, _ ->
-        val name = c.arg("app") ?: return@SimpleTool ToolResult.fail("Which app?")
+        val name = c.require("app", "Which app?")
         val app = apps.find(name) ?: return@SimpleTool ToolResult.fail("I can't find an app called $name.")
         if (app.pkg == context.packageName) return@SimpleTool ToolResult.fail("I can't close myself.")
         val r = RootShell.run("am force-stop ${app.pkg}")
@@ -83,7 +83,7 @@ fun appTools(context: Context, apps: AppList): List<Tool> = listOf(
         } else ToolResult.fail("Couldn't close ${app.label}.")
     },
     SimpleTool("open_url", "Open a website", listOf(arg("url", "web address, e.g. google.com"))) { c, _ ->
-        var url = c.arg("url") ?: return@SimpleTool ToolResult.fail("Which website?")
+        var url = c.require("url", "Which website?")
         if (!url.startsWith("http")) url = "https://$url"
         if (context.launch(Intent(Intent.ACTION_VIEW, Uri.parse(url)))) ToolResult.ok("Boss, I opened the link for ${Uri.parse(url).host}.")
         else ToolResult.fail("No browser found.")

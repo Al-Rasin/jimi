@@ -59,8 +59,8 @@ fun calendarTools(context: Context): List<Tool> {
                 arg("minutes", "how long in minutes (default 60)", required = false),
             ),
         ) { c, _ ->
-            val title = c.arg("title") ?: return@SimpleTool ToolResult.fail("What should I call the event?")
-            val time = c.arg("time") ?: return@SimpleTool ToolResult.fail("When is \"$title\"?")
+            val title = c.require("title", "What should I call the event?")
+            val time = c.require("time", "When is \"$title\"?")
             if (!cal.allowed()) return@SimpleTool noAccess()
             val whenAt = CalendarSpeech.parseStart(time) ?: return@SimpleTool ToolResult.fail("I didn't get when \"$title\" is.")
             val minutes = (c.arg("minutes")?.toLongOrNull() ?: 60).coerceIn(5, 24 * 60)

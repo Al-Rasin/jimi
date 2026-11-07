@@ -22,7 +22,7 @@ fun screenTools(context: Context): List<Tool> {
             ToolResult.ok(text.lines().take(12).joinToString(". ").take(600), text)
         },
         SimpleTool("tap", "Tap a button or text on the screen", listOf(arg("text", "visible text of the button"))) { c, _ ->
-            val t = c.arg("text") ?: return@SimpleTool ToolResult.fail("Tap what?")
+            val t = c.require("text", "Tap what?")
             val acc = a() ?: return@SimpleTool noA
             if (acc.clickText(t)) return@SimpleTool ToolResult.ok("Tapped $t.")
             val item = (ScreenOcr.find(acc, t) as? Skills.Pick.Found)?.item
@@ -32,7 +32,7 @@ fun screenTools(context: Context): List<Tool> {
             if (UiQuery.tapAt(x, y)) ToolResult.ok("Tapped $t.") else ToolResult.fail("I can't tap $t.")
         },
         SimpleTool("type_text", "Type text into the focused box", listOf(arg("text", "text to type"))) { c, _ ->
-            val t = c.arg("text") ?: return@SimpleTool ToolResult.fail("Type what?")
+            val t = c.require("text", "Type what?")
             val acc = a() ?: return@SimpleTool noA
             if (acc.typeText(t)) ToolResult.ok("Typed.") else ToolResult.fail("I can't find a text box.")
         },

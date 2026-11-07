@@ -33,7 +33,7 @@ fun timeTools(context: Context): List<Tool> = listOf(
             arg("date", "yyyy-MM-dd if not the next time", required = false),
         ),
     ) { c, _ ->
-        val time = c.arg("time") ?: return@SimpleTool ToolResult.fail("For what time?")
+        val time = c.require("time", "For what time?")
         val plan = try {
             resolveAlarm(time, c.arg("date"), c.arg("repeat"), LocalDateTime.now())
         } catch (e: NumberFormatException) {

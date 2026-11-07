@@ -24,7 +24,7 @@ fun chatReadTool(context: Context, contacts: Contacts, notifications: Notificati
         arg("count", "how many messages, 1 to 10", required = false),
     ),
 ) { c, _ ->
-    val who = c.arg("contact") ?: return@SimpleTool ToolResult.fail("Whose messages?")
+    val who = c.require("contact", "Whose messages?")
     val app = c.arg("app")?.lowercase()?.replace(" ", "")
     if (app != null && app !in APP_NAMES) return@SimpleTool ToolResult.fail("I can read WhatsApp, Messenger or SMS chats.")
     val count = (c.arg("count")?.toIntOrNull() ?: 1).coerceIn(1, 10)

@@ -283,6 +283,6 @@ fun settingTool(pages: SettingsPages) = SimpleTool(
     "setting", "Open any phone setting by name, or turn a setting on/off that the toggle tool does not cover",
     listOf(arg("name", "setting name, e.g. dark mode, nfc, language"), arg("state", "open, on, off, or status to only read it", required = false, choices = listOf("open", "on", "off", "status"))),
 ) { c, _ ->
-    val name = c.arg("name") ?: return@SimpleTool ToolResult.fail("Which setting?")
+    val name = c.require("name", "Which setting?")
     pages.run(name, c.arg("state"))
 }

@@ -33,7 +33,7 @@ fun dataTools(
     var lastFactId: Long? = null
     return listOf(
         SimpleTool("create_note", "Save a note", listOf(arg("text", "note text"))) { c, _ ->
-            val t = c.arg("text") ?: return@SimpleTool ToolResult.fail("What should I note?")
+            val t = c.require("text", "What should I note?")
             notes.insert(Note(timeMs = System.currentTimeMillis(), text = t))   // kept for "read my notes"
             val app = noteApp?.save(t)
             when {
@@ -51,7 +51,7 @@ fun dataTools(
             "create_reminder", "Remind at a time",
             listOf(arg("text", "what to remind"), arg("time", "yyyy-MM-ddTHH:mm"), arg("repeat", "none, daily or weekly", false, listOf("none", "daily", "weekly"))),
         ) { c, _ ->
-            val text = c.arg("text") ?: return@SimpleTool ToolResult.fail("Remind you about what?")
+            val text = c.require("text", "Remind you about what?")
             val at = c.arg("time")?.let { runCatching { LocalDateTime.parse(it) }.getOrNull() }
                 ?: return@SimpleTool ToolResult.fail("When should I remind you?")
             val ms = at.atZone(ZoneId.systemDefault()).toInstant().toEpochMilli()
@@ -70,7 +70,7 @@ fun dataTools(
             )
         },
         SimpleTool("delete_reminder", "Delete a reminder", listOf(arg("text", "which reminder, or all"))) { c, _ ->
-            val q = c.arg("text") ?: return@SimpleTool ToolResult.fail("Which reminder?")
+            val q = c.require("text", "Which reminder?")
             val list = reminders.pending()
             val del = if (q == "all") list else listOfNotNull(Fuzzy.best(q, list, { it.text }, min = 0.5))
             if (del.isEmpty()) return@SimpleTool ToolResult.fail("I can't find that reminder.")
@@ -91,7 +91,7 @@ fun dataTools(
             ToolResult.ok(if (old.isEmpty()) "I'll remember that." else "Updated. $t.")
         },
         SimpleTool("forget_fact", "Forget a remembered fact", listOf(arg("text", "which fact"))) { c, _ ->
-            val q = c.arg("text") ?: return@SimpleTool ToolResult.fail("Forget what?")
+            val q = c.require("text", "Forget what?")
             val candidate = MemoryRetriever.selectForgetting(
                 q,
                 memory.all().map { MemoryRetriever.Memory(it.id, it.text, it.timeMs) },

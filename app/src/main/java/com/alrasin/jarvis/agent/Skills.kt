@@ -209,7 +209,7 @@ fun skillTools(context: Context, planner: Planner, apps: AppList): List<Tool> = 
         "Search for something inside an app (its own search box). Without an app, searches in the app on screen.",
         listOf(arg("query", "what to search for"), arg("app", "app name", required = false)),
     ) { c, _ ->
-        val query = c.arg("query") ?: return@SimpleTool ToolResult.fail("What should I search for?")
+        val query = c.require("query", "What should I search for?")
         searchInApp(context, planner, apps, query, c.arg("app"), useLink = true)
     },
     SimpleTool(
@@ -217,7 +217,7 @@ fun skillTools(context: Context, planner: Planner, apps: AppList): List<Tool> = 
         "Find a person or item inside an app and open it (search, then tap the match), e.g. a chat in Messenger.",
         listOf(arg("query", "who or what to find"), arg("app", "app name", required = false)),
     ) { c, _ ->
-        val query = c.arg("query") ?: return@SimpleTool ToolResult.fail("Who should I find?")
+        val query = c.require("query", "Who should I find?")
         // The screen search, not a deep link: the result list must be on screen to open the match (§M.9).
         val searched = searchInApp(context, planner, apps, query, c.arg("app"), useLink = false)
         if (!searched.ok) return@SimpleTool searched
@@ -249,7 +249,7 @@ fun skillTools(context: Context, planner: Planner, apps: AppList): List<Tool> = 
         "Tap the button or item with this name on the screen; scrolls to find it.",
         listOf(arg("name", "text or label of the thing to tap")),
     ) { c, _ ->
-        val name = c.arg("name") ?: return@SimpleTool ToolResult.fail("Tap what?")
+        val name = c.require("name", "Tap what?")
         val service = JarvisAccessibilityService.instance ?: return@SimpleTool ToolResult.fail(NO_SERVICE)
         var pick: Skills.Pick = Skills.Pick.NotFound
         for (i in 0..MAX_SCROLLS) {
@@ -267,7 +267,7 @@ fun skillTools(context: Context, planner: Planner, apps: AppList): List<Tool> = 
         "Switch to a tab in the app on screen (bottom or top bar), e.g. Calls, Library, Home.",
         listOf(arg("name", "tab name")),
     ) { c, _ ->
-        val name = c.arg("name") ?: return@SimpleTool ToolResult.fail("Which tab?")
+        val name = c.require("name", "Which tab?")
         val service = JarvisAccessibilityService.instance ?: return@SimpleTool ToolResult.fail(NO_SERVICE)
         val screen = Skills.read(service) ?: return@SimpleTool ToolResult.fail("I can't read the screen.")
         tapPick(service, Skills.pickTab(screen.items, name, screen.height), name, "Opened")
@@ -283,7 +283,7 @@ fun skillTools(context: Context, planner: Planner, apps: AppList): List<Tool> = 
         "Turn on or off the switch or checkbox next to a label on the screen.",
         listOf(arg("name", "label next to the switch"), arg("state", "on or off", required = false, choices = listOf("on", "off"))),
     ) { c, _ ->
-        val name = c.arg("name") ?: return@SimpleTool ToolResult.fail("Which switch?")
+        val name = c.require("name", "Which switch?")
         val want = when (c.arg("state")?.lowercase()) { "on" -> true; "off" -> false; else -> null }
         val service = JarvisAccessibilityService.instance ?: return@SimpleTool ToolResult.fail(NO_SERVICE)
         val screen = Skills.read(service) ?: return@SimpleTool ToolResult.fail("I can't read the screen.")

@@ -1,6 +1,7 @@
 package com.alrasin.jarvis.actions
 
 import com.alrasin.jarvis.core.ArgSpec
+import com.alrasin.jarvis.core.MissingArg
 import com.alrasin.jarvis.core.Risk
 import com.alrasin.jarvis.core.Tool
 import com.alrasin.jarvis.core.ToolCall
@@ -15,7 +16,12 @@ class SimpleTool(
     override val risk: Risk = Risk.SAFE,
     private val block: suspend (ToolCall, ToolContext) -> ToolResult,
 ) : Tool {
-    override suspend fun run(call: ToolCall, ctx: ToolContext): ToolResult = block(call, ctx)
+    override suspend fun run(call: ToolCall, ctx: ToolContext): ToolResult =
+        try {
+            block(call, ctx)
+        } catch (e: MissingArg) {
+            ToolResult.fail(e.ask)
+        }
 }
 
 fun arg(name: String, description: String, required: Boolean = true, choices: List<String>? = null) =

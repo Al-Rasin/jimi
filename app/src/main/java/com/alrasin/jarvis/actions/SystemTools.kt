@@ -215,7 +215,7 @@ fun systemTools(context: Context, torch: Torch): List<Tool> {
             "toggle", "Turn a phone feature on or off",
             listOf(arg("target", "feature", choices = TOGGLE_TARGETS), arg("state", "on, off, toggle, or status to only read it", choices = listOf("on", "off", "toggle", "status"))),
         ) { c, _ ->
-            val target = c.arg("target") ?: return@SimpleTool ToolResult.fail("Turn what on or off?")
+            val target = c.require("target", "Turn what on or off?")
             if (target !in TOGGLE_TARGETS) return@SimpleTool ToolResult.fail("I can't switch $target.")
             if (target == "hotspot") {
                 return@SimpleTool if (set(target, true)) ToolResult.ok("Boss, I opened the hotspot page. Tap the switch.")

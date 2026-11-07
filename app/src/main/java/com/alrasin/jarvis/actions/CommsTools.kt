@@ -69,7 +69,7 @@ class Contacts(private val context: Context) {
 
 fun commsTools(context: Context, contacts: Contacts): List<Tool> = listOf(
     SimpleTool("call", "Call a contact by phone, WhatsApp or Messenger; set video=true for an app video call", listOf(arg("contact", "name, nickname, relation or number"), arg("app", "calling app", required = false, choices = listOf("phone", "whatsapp", "messenger")), arg("video", "video call instead of voice", required = false, choices = listOf("true", "false"))), Risk.CONFIRM) { c, _ ->
-        val who = c.arg("contact") ?: return@SimpleTool ToolResult.fail("Call who?")
+        val who = c.require("contact", "Call who?")
         val app = c.arg("app")?.lowercase() ?: "phone"
         if (app !in listOf("phone", "whatsapp", "messenger")) return@SimpleTool ToolResult.fail("I can call using phone, WhatsApp or Messenger.")
         val video = c.arg("video")?.lowercase() ?: "false"
@@ -88,8 +88,8 @@ fun commsTools(context: Context, contacts: Contacts): List<Tool> = listOf(
         else ToolResult.fail("Boss, I couldn't open the phone app.")
     },
     SimpleTool("send_sms", "Send an SMS, or send a Messenger message with app=messenger", listOf(arg("contact", "name, nickname, relation or number"), arg("text", "message"), arg("app", "messaging app", required = false, choices = listOf("sms", "messenger"))), Risk.CONFIRM) { c, _ ->
-        val who = c.arg("contact") ?: return@SimpleTool ToolResult.fail("To who?")
-        val text = c.arg("text") ?: return@SimpleTool ToolResult.fail("What should I say?")
+        val who = c.require("contact", "To who?")
+        val text = c.require("text", "What should I say?")
         val app = c.arg("app")?.lowercase() ?: "sms"
         if (app !in listOf("sms", "messenger")) return@SimpleTool ToolResult.fail("Choose SMS or Messenger for this message.")
         if (SelfAccount.isSelf(who)) return@SimpleTool if (app == "messenger") AppCommunications(context, contacts).messageSelf(app, text)
@@ -106,8 +106,8 @@ fun commsTools(context: Context, contacts: Contacts): List<Tool> = listOf(
         sendSms(context, sms, p, text)
     },
     SimpleTool("send_whatsapp", "Open the contact's WhatsApp conversation and send the exact message using accessibility", listOf(arg("contact", "name, nickname, relation or number"), arg("text", "message")), Risk.CONFIRM) { c, _ ->
-        val who = c.arg("contact") ?: return@SimpleTool ToolResult.fail("To who?")
-        val text = c.arg("text") ?: return@SimpleTool ToolResult.fail("What should I say?")
+        val who = c.require("contact", "To who?")
+        val text = c.require("text", "What should I say?")
         if (SelfAccount.isSelf(who)) return@SimpleTool AppCommunications(context, contacts).messageSelf("whatsapp", text)
         val p = when (val match = contacts.resolve(who)) {
             is ContactResolver.Resolution.Found -> match.contact
