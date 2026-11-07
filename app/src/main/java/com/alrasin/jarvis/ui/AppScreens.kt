@@ -638,6 +638,36 @@ private fun KeyRow(spec: KeyRowSpec, saved: Boolean, onSave: (String) -> Unit, o
     }
 }
 
+/** Tasks taught by hand ("learn order coffee" … "done", §H.6): rename or delete. */
+@Composable
+private fun TaughtCard(vm: AppViewModel) {
+    val taught by vm.taught.collectAsStateWithLifecycle()
+    LaunchedEffect(Unit) { vm.loadTaught() }
+    if (taught.isEmpty()) return
+    var editing by remember { mutableStateOf<Long?>(null) }
+    var draft by remember { mutableStateOf("") }
+    RowsCard(title = "Learned tasks") {
+        taught.forEachIndexed { i, r ->
+            if (i > 0) RowDivider()
+            if (editing == r.id) {
+                OutlinedTextField(draft, { draft = it }, Modifier.fillMaxWidth(), singleLine = true)
+                Row {
+                    Chip("Save") { vm.renameTaught(r, draft); editing = null }
+                    Spacer(Modifier.width(6.dp))
+                    Chip("Cancel") { editing = null }
+                }
+            } else {
+                val steps = r.stepsJson.split("\"do\"").size - 1
+                ItemRow(r.name, "say \"${r.say.substringBefore('\n')}\" · $steps steps") {
+                    Chip("Rename") { draft = r.name; editing = r.id }
+                    Spacer(Modifier.width(6.dp))
+                    Chip("Delete") { vm.deleteTaught(r.id) }
+                }
+            }
+        }
+    }
+}
+
 /** What Jimi knows per app, what it can't do, and its questions waiting for a yes/no (ROADMAP §J.7). */
 @Composable
 private fun AppKnowledgeCards(vm: AppViewModel) {
@@ -654,6 +684,7 @@ private fun AppKnowledgeCards(vm: AppViewModel) {
             }
         }
     }
+    TaughtCard(vm)
     if (apps.isEmpty()) {
         EmptyState("No apps yet", "Say \"learn WhatsApp\" and I'll map it.")
         return

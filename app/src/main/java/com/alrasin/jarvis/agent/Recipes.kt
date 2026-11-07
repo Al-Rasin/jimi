@@ -52,7 +52,7 @@ data class Recipe(
     val params: List<String>,
     val steps: List<RecipeStep>,
     val risky: Boolean,
-    /** "card" | "agent". */
+    /** "card" | "agent" | "taught". */
     val source: String,
     val minVersion: Long = 0L,
     val maxVersion: Long = 0L,
@@ -94,10 +94,16 @@ object RecipeBook {
             for (pattern in r.say) {
                 val p = normalize(pattern)
                 val literal = PARAM.split(p).joinToString(" ")
-                if (literal.split(' ').count { it.isNotBlank() } < 2) continue
+                // Taught recipes ("learn order coffee") may be one word: the user picked it, and the fit is exact.
+                val minWords = if (r.source == TeachBook.SOURCE) 1 else 2
+                if (literal.split(' ').count { it.isNotBlank() } < minWords) continue
                 if (r.source == "card" && !namesApp(r, said) && !namesApp(r, p)) continue
                 val params = fit(p, said) ?: continue
-                val score = literal.count { !it.isWhitespace() } * 2 + if (r.source == "agent") 1 else 0
+                val score = literal.count { !it.isWhitespace() } * 2 + when (r.source) {
+                    TeachBook.SOURCE -> 2
+                    "agent" -> 1
+                    else -> 0
+                }
                 if (score > bestScore) {
                     bestScore = score
                     best = Match(r, params)

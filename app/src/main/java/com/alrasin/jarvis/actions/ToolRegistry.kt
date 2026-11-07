@@ -6,6 +6,8 @@ import com.alrasin.jarvis.agent.appmap.Planner
 import com.alrasin.jarvis.agent.appmap.learnTool
 import com.alrasin.jarvis.agent.appmap.mapTools
 import com.alrasin.jarvis.agent.RecipeStore
+import com.alrasin.jarvis.agent.TeachSession
+import com.alrasin.jarvis.agent.teachTools
 import com.alrasin.jarvis.agent.recipeTools
 import com.alrasin.jarvis.agent.skillTools
 import com.alrasin.jarvis.core.Secrets
@@ -38,6 +40,7 @@ class ToolRegistry @Inject constructor(
     planner: Planner,
     recipes: RecipeStore,
     explorer: AppExplorer,
+    teach: TeachSession,
 ) {
     val apps = AppList(context)
     val contacts = Contacts(context)
@@ -65,6 +68,7 @@ class ToolRegistry @Inject constructor(
         addAll(skillTools(context, planner, apps))
         addAll(recipeTools(context, planner, apps, recipes))
         add(learnTool(context, explorer, planner, apps))
+        addAll(teachTools(context, teach, recipes))
     }
 
     private val byName = all.associateBy { it.name }.also {

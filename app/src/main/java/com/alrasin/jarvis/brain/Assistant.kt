@@ -11,6 +11,10 @@ import com.alrasin.jarvis.agent.AgentResult
 import com.alrasin.jarvis.agent.AgentRouting
 import com.alrasin.jarvis.agent.RecipeStore
 import com.alrasin.jarvis.agent.ScreenAgentSession
+import com.alrasin.jarvis.agent.RecipeBook
+import com.alrasin.jarvis.agent.TeachBook
+import com.alrasin.jarvis.agent.TeachCommand
+import com.alrasin.jarvis.agent.TeachSession
 import com.alrasin.jarvis.core.JarvisLog
 import com.alrasin.jarvis.core.SmokeSession
 import kotlin.coroutines.coroutineContext
@@ -50,6 +54,7 @@ class Assistant @Inject constructor(
     private val cloud: CloudBrain,
     private val screenAgent: ScreenAgentSession,
     private val recipes: RecipeStore,
+    private val teach: TeachSession,
 ) {
     data class Input(
         val heard: String,
@@ -176,6 +181,7 @@ class Assistant @Inject constructor(
         }
         val routingStarted = System.nanoTime()
         val rule = RuleMatcher.match(text)
+        if (smoke == null && rule?.tool != "panic") teachCall(text, rule)?.let { return runTool(it, input, "teach") }
         if (rule?.tool in setOf("panic", "cancel")) return runTool(rule!!, input, "rule")
         if (smoke == null && screenAgent.hasPendingQuestion) {
             return screenReply(screenAgent.answer(text, input.locked, input.voiceOk))
@@ -284,6 +290,15 @@ class Assistant @Inject constructor(
         if (!forced && !contextualQuestion) {
             val intent = IntentRouter.classify(text, rule)
             JarvisLog.i("route ${intent.route} ${intent.confidence}: ${intent.reason}")
+            // A task the user taught by hand beats rules: they named it themselves (§H.6).
+            if (smoke == null && RecipeBook.match(text, teach.taught().map { RecipeBook.fromRow(it, it.pkg) }) != null) {
+                recipes.find(text)?.takeIf { it.recipe.source == TeachBook.SOURCE }?.let { (r, params) ->
+                    JarvisLog.i("route taught recipe ${r.name}")
+                    val call = ToolCall("run_recipe", mapOf("name" to r.name, "app" to r.appName, "pkg" to r.pkg,
+                        "risky" to r.risky.toString(), "params" to Json.write(params)))
+                    return runTool(call, input, "recipe")
+                }
+            }
             webRouteCall(text, rule, intent)?.let { return runTool(it, input, "router") }
             ruleRouteCall(text, rule, intent)?.let {
                 if (smoke == null) draft.start(it, monotonicMillis())?.let { q -> return Reply(q, expectAnswer = true) }
@@ -347,6 +362,9 @@ class Assistant @Inject constructor(
     }
 
     private fun monotonicMillis() = System.nanoTime() / 1_000_000
+
+    private fun teachCall(text: String, rule: ToolCall?): ToolCall? =
+        teachCallFor(text, rule, teach.active) { RuleMatcher.appNameMatches?.invoke(it) == true }
 
     private fun contextLine(): String {
         val now = LocalDateTime.now()
@@ -512,6 +530,17 @@ class Assistant @Inject constructor(
         internal fun ruleRouteCall(text: String, rule: ToolCall?, intent: IntentRouter.Decision): ToolCall? {
             if (intent.isConfident && intent.route == IntentRouter.Route.CHAT) return null
             return rule?.takeIf { AgentRouting.acceptsSingleTool(text, it.tool) }
+        }
+
+        /** Teach mode commands: done / cancel while recording, or "learn order coffee" to start. */
+        internal fun teachCallFor(text: String, rule: ToolCall?, active: Boolean, isApp: (String) -> Boolean): ToolCall? {
+            if (active) when (TeachCommand.duringTeach(text)) {
+                TeachCommand.Cmd.Done -> return ToolCall("teach_done", emptyMap())
+                TeachCommand.Cmd.Cancel -> return ToolCall("teach_cancel", emptyMap())
+                else -> Unit
+            }
+            if (rule != null && rule.tool != "learn_app") return null
+            return TeachCommand.startOrNull(text, isApp)?.let { ToolCall("teach_start", mapOf("task" to it.name)) }
         }
 
         internal fun webRouteCall(text: String, rule: ToolCall?, intent: IntentRouter.Decision): ToolCall? {

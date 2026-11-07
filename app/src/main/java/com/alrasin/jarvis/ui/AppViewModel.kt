@@ -74,6 +74,8 @@ class AppViewModel @Inject constructor(
     private val cloud: dagger.Lazy<com.alrasin.jarvis.brain.CloudBrain>,
     private val appMap: AppMapDao,
     private val appCards: AppCards,
+    private val recipeDao: com.alrasin.jarvis.data.RecipeDao,
+    private val teach: com.alrasin.jarvis.agent.TeachSession,
 ) : AndroidViewModel(app) {
     private val secrets get() = secretsProvider.get()
     private val speaker get() = speakerProvider.get()
@@ -100,6 +102,24 @@ class AppViewModel @Inject constructor(
     val pendingAsks = appMap.pendingAsks().state(emptyList())
     fun answerAsk(id: Long, yes: Boolean) = viewModelScope.launch(Dispatchers.IO) {
         appMap.setAskStatus(id, if (yes) AppAskQueue.APPROVED else AppAskQueue.DENIED)
+    }
+    /** Tasks the user taught by hand (§H.6), for rename / delete on the App knowledge page. */
+    private val _taught = kotlinx.coroutines.flow.MutableStateFlow<List<com.alrasin.jarvis.data.RecipeRow>>(emptyList())
+    val taught: kotlinx.coroutines.flow.StateFlow<List<com.alrasin.jarvis.data.RecipeRow>> = _taught
+    fun loadTaught() = viewModelScope.launch(Dispatchers.IO) {
+        _taught.value = recipeDao.all().filter { it.source == com.alrasin.jarvis.agent.TeachBook.SOURCE }
+    }
+    fun renameTaught(row: com.alrasin.jarvis.data.RecipeRow, newName: String) = viewModelScope.launch(Dispatchers.IO) {
+        val name = com.alrasin.jarvis.agent.RecipeBook.normalize(newName).take(60)
+        if (name.length < 2) return@launch
+        recipeDao.rename(row.id, name, com.alrasin.jarvis.agent.TeachBook.renamedSay(row.say, name))
+        teach.refresh()
+        loadTaught()
+    }
+    fun deleteTaught(id: Long) = viewModelScope.launch(Dispatchers.IO) {
+        recipeDao.delete(id)
+        teach.refresh()
+        loadTaught()
     }
     val spokenWake = settings.spokenWake.state(true)
     val followUp = settings.followUp.state(true)

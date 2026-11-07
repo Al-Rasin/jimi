@@ -15,6 +15,7 @@ import com.alrasin.jarvis.actions.a11y.replaceNodeText
 import com.alrasin.jarvis.agent.appmap.AppCards
 import com.alrasin.jarvis.agent.appmap.AppLearner
 import com.alrasin.jarvis.agent.appmap.AppWatcher
+import com.alrasin.jarvis.agent.TeachSession
 import com.alrasin.jarvis.core.JarvisLog
 import com.alrasin.jarvis.notify.ChatHistory
 import dagger.hilt.android.AndroidEntryPoint
@@ -30,11 +31,12 @@ import kotlin.coroutines.resume
 class JarvisAccessibilityService : AccessibilityService() {
     @Inject lateinit var appLearner: AppLearner
     @Inject lateinit var appCards: AppCards
+    @Inject lateinit var teachSession: TeachSession
     private var watcher: AppWatcher? = null
 
     override fun onServiceConnected() {
         instance = this
-        watcher = AppWatcher(this, appLearner)
+        watcher = AppWatcher(this, appLearner).also { it.teach = teachSession }
         // Built-in app cards → starting app map (ROADMAP §J.3). Cheap after the first run (version check).
         CoroutineScope(Dispatchers.IO).launch { appCards.loadInstalled() }
         JarvisLog.i("accessibility connected")

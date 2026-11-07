@@ -6,6 +6,9 @@ import android.os.Looper
 import android.provider.Settings
 import android.view.accessibility.AccessibilityEvent
 import android.view.accessibility.AccessibilityNodeInfo
+import com.alrasin.jarvis.agent.TeachEvent
+import com.alrasin.jarvis.agent.TeachNode
+import com.alrasin.jarvis.agent.TeachSession
 import com.alrasin.jarvis.core.isLocked
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -24,8 +27,12 @@ class AppWatcher(private val service: AccessibilityService, private val learner:
     private val windowClass = ConcurrentHashMap<String, String>()
     private val snapshot = Runnable { snapshot() }
 
+    /** Set by the service; while teaching, user taps and typing are passed on (ROADMAP §H.6). */
+    var teach: TeachSession? = null
+
     fun onEvent(event: AccessibilityEvent) {
         val pkg = event.packageName?.toString() ?: return
+        teach?.takeIf { it.active }?.let { t -> runCatching { teachEvent(event, pkg) }.getOrNull()?.let(t::onEvent) }
         when (event.eventType) {
             AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED -> {
                 event.className?.toString()?.takeIf { it.isNotBlank() }?.let { windowClass[pkg] = it }
@@ -99,6 +106,33 @@ class AppWatcher(private val service: AccessibilityService, private val learner:
         val cls = n.className?.toString().orEmpty()
         val childInList = inList || LIST_CLASSES.any { cls.endsWith(it) }
         for (i in 0 until n.childCount) collect(n.getChild(i), cls, childInList, out)
+    }
+
+    private fun teachEvent(event: AccessibilityEvent, pkg: String): TeachEvent? {
+        if (event.eventType != AccessibilityEvent.TYPE_VIEW_CLICKED && event.eventType != AccessibilityEvent.TYPE_VIEW_TEXT_CHANGED) return null
+        if (!watching(pkg)) return null
+        val n = event.source ?: return null
+        val raw = rawNode(n)
+        val node = TeachNode(
+            id = raw.resourceId, text = raw.text.ifBlank { if (raw.editable) "" else childLabel(n) }, desc = raw.desc,
+            hint = raw.hint, className = raw.className, editable = raw.editable, password = raw.password, inList = raw.inList,
+        )
+        return if (event.eventType == AccessibilityEvent.TYPE_VIEW_CLICKED) TeachEvent.Click(pkg, node)
+        else if (raw.editable && !raw.password) TeachEvent.Typed(pkg, node, event.text.joinToString(" ").trim())
+        else null
+    }
+
+    /** A clickable row often has no text itself; its first labelled child names it. */
+    private fun childLabel(n: AccessibilityNodeInfo, depth: Int = 0): String {
+        if (depth > 3) return ""
+        for (i in 0 until n.childCount) {
+            val c = n.getChild(i) ?: continue
+            if (c.isEditable || c.isPassword) continue
+            val own = c.text?.toString()?.trim().orEmpty().ifBlank { c.contentDescription?.toString()?.trim().orEmpty() }
+            if (own.isNotBlank()) return own.take(80)
+            childLabel(c, depth + 1).takeIf { it.isNotBlank() }?.let { return it }
+        }
+        return ""
     }
 
     private fun rawNode(n: AccessibilityNodeInfo): ScreenStructure.RawNode {

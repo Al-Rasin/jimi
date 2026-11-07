@@ -80,4 +80,5 @@ interface RecipeDao {
     @Query("SELECT * FROM recipes ORDER BY timeMs DESC") suspend fun all(): List<RecipeRow>
     @Query("DELETE FROM recipes WHERE id = :id") suspend fun delete(id: Long)
     @Query("DELETE FROM recipes WHERE pkg = :pkg AND say = :say") suspend fun deleteSame(pkg: String, say: String)
+    @Query("UPDATE recipes SET name = :name, say = :say WHERE id = :id") suspend fun rename(id: Long, name: String, say: String)
 }
