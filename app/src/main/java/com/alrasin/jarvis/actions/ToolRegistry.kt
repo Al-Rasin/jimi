@@ -61,6 +61,7 @@ class ToolRegistry @Inject constructor(
         addAll(notificationTools(notifications))
         addAll(webTools(Web(), FastWeather(context), { location.get() }) { settings.homeCity.first() })
         add(storeSearchTool(context))
+        add(navigationTool(context))
         add(myLocationTool(location))
         add(phoneProfileTool(profile) { all.size })
         add(settingTool(SettingsPages(context)))

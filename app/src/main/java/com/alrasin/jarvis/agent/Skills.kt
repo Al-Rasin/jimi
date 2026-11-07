@@ -5,6 +5,7 @@ import android.content.Intent
 import android.graphics.Rect
 import android.net.Uri
 import android.view.accessibility.AccessibilityNodeInfo
+import com.alrasin.jarvis.actions.AppLinks
 import com.alrasin.jarvis.actions.AppList
 import com.alrasin.jarvis.actions.Fuzzy
 import com.alrasin.jarvis.actions.JarvisAccessibilityService
@@ -15,6 +16,7 @@ import com.alrasin.jarvis.actions.a11y.findFirst
 import com.alrasin.jarvis.actions.a11y.label
 import com.alrasin.jarvis.actions.a11y.scroll
 import com.alrasin.jarvis.actions.arg
+import com.alrasin.jarvis.actions.openFirst
 import com.alrasin.jarvis.agent.appmap.AppCard
 import com.alrasin.jarvis.agent.appmap.Planner
 import com.alrasin.jarvis.core.JarvisLog
@@ -336,13 +338,22 @@ private suspend fun searchInApp(
 
 /** Card says "search via deep link": open it with the query filled in. Null = no link, use the screen. */
 internal fun searchByLink(context: Context, app: Planner.App, query: String): ToolResult? {
-    val card = app.card ?: return null
-    val task = card.search?.deepLink?.takeIf { it.isNotBlank() } ?: return null
-    val link = card.deepLinks.firstOrNull { it.task == task } ?: return null
+    if (cardSearchLink(context, app, query)) return ToolResult.ok("Searching $query in ${app.name}.")
+    // §H.2: no card link (or it failed) → the links table, then ACTION_SEARCH / WEB_SEARCH sent to this app.
+    val screenPath = app.card?.search?.selectors.isNullOrEmpty().not()
+    val used = context.openFirst(AppLinks.search(app.pkg, query, universal = !screenPath))
+    JarvisLog.i("search_in_app ${app.pkg}: links table ${used?.let { it.uri ?: it.action } ?: "none"}")
+    return if (used != null) ToolResult.ok("Searching $query in ${app.name}.") else null
+}
+
+private fun cardSearchLink(context: Context, app: Planner.App, query: String): Boolean {
+    val card = app.card ?: return false
+    val task = card.search?.deepLink?.takeIf { it.isNotBlank() } ?: return false
+    val link = card.deepLinks.firstOrNull { it.task == task } ?: return false
     val uri = Uri.parse(Skills.fillLink(link.uri, query))
     val opened = context.launch(Intent(link.action, uri).setPackage(app.pkg)) || context.launch(Intent(link.action, uri))
     JarvisLog.i("search_in_app ${app.pkg}: deep link ${if (opened) "ok" else "failed"}")
-    return if (opened) ToolResult.ok("Searching $query in ${app.name}.") else null
+    return opened
 }
 
 /** Tap the search box (card selectors first, then any search box / magnifier), type, press enter. */

@@ -69,7 +69,7 @@ object RuleMatcher {
         if (t.isEmpty()) return null
         val actionText = input.lowercase().trim().replace(Regex("\\s+"), " ")
             .replace(Regex("^(?:(?:hey |ok |okay )?(?:jarvis|jimi|jimmy)[, ]+|(?:please|pls|can you|could you|would you|will you|i want you to|i want to|i would like to|just|hey|ok|okay) )+"), "")
-        return talk(t) ?: comms(actionText) ?: media(actionText.trimEnd('.', '!', '?')) ?: appMap(t) ?: skills(t)
+        return talk(t) ?: comms(actionText) ?: media(actionText.trimEnd('.', '!', '?')) ?: maps(t) ?: appMap(t) ?: skills(t)
             ?: knowledge(t)?.takeIf { it.tool == "web_search" || it.tool == "wiki_lookup" }
             ?: toggle(t) ?: time(normalize(input, keepClockColon = true), now) ?: notes(t, now) ?: media(t) ?: system(t) ?: screen(t)
             ?: notifications(t) ?: noisyTool(t, now) ?: knowledge(t) ?: memory(t, actionText) ?: apps(t)
@@ -564,6 +564,49 @@ object RuleMatcher {
         }
         Regex("^forget(?: that| about)? (.+)$").find(t)?.let { return call("forget_fact", "text" to it.groupValues[1]) }
         return null
+    }
+
+    /** Maps (§H.2): "navigate to gulshan 2", "walking directions to the mosque", "show dhanmondi lake on the map". */
+    private fun maps(t: String): ToolCall? {
+        val travel = "walking|walk|on foot|driving|drive|car|cycling|bicycle|bike|motorbike|motorcycle|scooter"
+        Regex("^(?:(?:get|give me|show me|start) )?(?:($travel) )?(?:directions|route|navigation|the way) to (.+?)(?: (?:by|on) ($travel))?$").find(t)?.let {
+            return navigate(it.groupValues[2], it.groupValues[1].ifEmpty { it.groupValues[3] })
+        }
+        Regex("^(?:navigate|(walk|drive|cycle|ride)) (?:me )?to (.+?)(?: (?:by|on) ($travel))?$").find(t)?.let {
+            return navigate(it.groupValues[2], it.groupValues[1].ifEmpty { it.groupValues[3] })
+        }
+        Regex("^how (?:do i|can i|to|do we|can we) (?:get|go) to (.+?)(?: (?:by|on) ($travel))?$").find(t)?.let {
+            return navigate(it.groupValues[1], it.groupValues[2])
+        }
+        Regex("^(?:show|find|search|locate|search for|look for|where is)(?: me)? (?:the )?(.+?) (?:on|in) (?:the )?(?:google )?maps?$").find(t)?.let {
+            return place(it.groupValues[1])?.let { p -> call("open_map", "place" to p, "mode" to "show") }
+        }
+        Regex("^(?:open )?(?:google )?maps? (?:and )?(?:search|find|show)(?: for)? (.+)$").find(t)?.let {
+            return place(it.groupValues[1])?.let { p -> call("open_map", "place" to p, "mode" to "show") }
+        }
+        return null
+    }
+
+    private fun navigate(place: String, travel: String): ToolCall? {
+        val p = place(place) ?: return null
+        val mode = when {
+            travel.isEmpty() -> null
+            Regex("walk|foot").containsMatchIn(travel) -> "walk"
+            Regex("motor|scooter").containsMatchIn(travel) -> "motorbike"
+            Regex("bike|bicycle|cycl|ride").containsMatchIn(travel) -> "bike"
+            else -> "drive"
+        }
+        return call("open_map", "place" to p, "mode" to "navigate", "travel" to mode)
+    }
+
+    /** Not a place: phone screens ("navigate to wifi settings") and app names stay with the app/screen tools. */
+    private fun place(raw: String): String? {
+        val p = raw.trim().removePrefix("the ").trim()
+        if (p.isEmpty() || Regex("\\b(?:settings?|page|screen|tab|menu|app|home ?screen)$").containsMatchIn(p)) return null
+        if (appNameMatches?.invoke(p) == true) return null
+        val inApp = Regex(" (?:in|on|inside) (?:the )?(.+?)(?: app)?$").find(p)?.groupValues?.get(1)
+        if (inApp != null && !inApp.matches(Regex("(?:google )?maps?")) && appNameMatches?.invoke(inApp) == true) return null
+        return p
     }
 
     /** App map (ROADMAP §J.4): "open privacy settings in whatsapp", "what can you do in youtube". */
