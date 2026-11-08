@@ -1,6 +1,6 @@
 # Benchmarks (Phase 0)
 
-Real measurements from the target phone. Model choices in DECISIONS.md must be based on this file.
+Real measurements from the target phone. Model choices are based on these numbers.
 
 ## Device (Phase 0.1 — measured 2026-10-21)
 | Item | Value |

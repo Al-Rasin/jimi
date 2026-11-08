@@ -105,7 +105,7 @@ Risk examples: `chat` SAFE, `set_alarm` SAFE, `send_whatsapp` CONFIRM, `call` CO
 | FunctionGemma 270M Q8/Q4 | 200–550 MB | always (warm) |
 | Chat model 0.6B–1B Q4 | 500–900 MB | on demand, unload after idle 5 min |
 | Embedder (RAG) | 30–100 MB | on demand |
-Total target while idle: **< 1.2 GB**. Real numbers go in DECISIONS after Phase 0.
+Total target while idle: **< 1.2 GB**. Real numbers are in BENCHMARKS.md.
 
 ## 6. Data (Room tables)
 `conversation_turn`, `notification_log` (+ label: kept/cleared/auto), `note`, `reminder`,
