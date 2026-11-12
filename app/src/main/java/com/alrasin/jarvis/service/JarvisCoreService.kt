@@ -17,7 +17,6 @@ import com.alrasin.jarvis.brain.Assistant
 import com.alrasin.jarvis.brain.CloudBrain
 import com.alrasin.jarvis.brain.ModelBrain
 import com.alrasin.jarvis.core.JarvisLog
-import com.alrasin.jarvis.core.backgroundWork
 import com.alrasin.jarvis.core.isLocked
 import com.alrasin.jarvis.data.Settings
 import com.alrasin.jarvis.data.WakeEventDao
@@ -40,28 +39,21 @@ import com.alrasin.jarvis.voice.ScreenAgentInterrupt
 import com.alrasin.jarvis.voice.Chimes
 import com.alrasin.jarvis.voice.PhraseCache
 import com.alrasin.jarvis.voice.SpeechText
-import com.alrasin.jarvis.voice.Engine
 import com.alrasin.jarvis.voice.TextToSpeech
 import com.alrasin.jarvis.voice.WakeFeedback as WakeFeedbackSignal
 import com.alrasin.jarvis.voice.Wav
 import com.alrasin.jarvis.voice.WakeModels
 import com.alrasin.jarvis.voice.WakeWordDetector
-import com.alrasin.jarvis.voice.Voices
 import dagger.hilt.android.AndroidEntryPoint
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.Job
-import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.sync.Mutex
-import kotlinx.coroutines.sync.withLock
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.atomic.AtomicReference
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -106,11 +98,6 @@ class JarvisCoreService : LifecycleService() {
     /** Set to "follow_up" or "tap": the mic loop opens a command session without the wake word. */
     @Volatile private var listenRequest: String? = null
     @Volatile private var spokenWake = true
-    @Volatile private var cachedAudio: Map<String, PhraseCache.Audio> = emptyMap()
-    /** Optional recorded wake reply pushed by hand to `files/sounds/wake_ack.wav`; used instead of the spoken "Uh-huh." */
-    @Volatile private var wakeClip: PhraseCache.Audio? = null
-    /** Google phone voice loaded: it is fast enough to speak whole phrases, which sounds more natural (D-054). */
-    @Volatile private var phoneEngineVoice = false
     @Volatile private var commandStartedAt = 0L
     @Volatile private var timedCommandEpoch = -1
     @Volatile private var firstReplyReadyAt = 0L
@@ -122,20 +109,18 @@ class JarvisCoreService : LifecycleService() {
     @Volatile private var speakerThreshold = Settings.DEFAULT_SPEAKER_THRESHOLD
     /** Set by the Settings tab: the mic loop records [ENROLL_CHUNKS] of the owner's voice for voice ID. */
     @Volatile private var enrollRequested = false
-    @Volatile private var tts: Deferred<TextToSpeech?>? = null
     private var voiceJob: Job? = null
-    /** Generating and closing a voice must not overlap (native code). */
-    private val ttsLock = Mutex()
-    private var phrases: PhraseCache? = null
-    private var phraseWarm: Job? = null
+    private val voice by lazy {
+        VoiceBox(this, lifecycleScope) {
+            !speaking && speechLeft.get() == 0 && listenRequest == null && _phase.value == PHASE_WAKE
+        }
+    }
     @Volatile private var speechEpoch = 0
     private val speechState = Any()
     private val thinkingCue = ThinkingCue()
     @Volatile private var replyJob: Job? = null
     @Volatile private var pendingCancel: Job? = null
     @Volatile private var playbackText = ""
-    @Volatile private var voiceSpeed = 1.0f
-    @Volatile private var onlineVoice = false
     private val speech = Channel<Pair<Int, String>>(Channel.UNLIMITED)
     private val speechLeft = AtomicInteger(0)
     private var listenJob: Job? = null
@@ -200,38 +185,18 @@ class JarvisCoreService : LifecycleService() {
     private fun ensureVoice() {
         if (voiceJob != null) return
         lifecycleScope.launch { settings.spokenWake.collect { spokenWake = it } }
-        lifecycleScope.launch(Dispatchers.IO) { wakeClip = loadWakeClip() }
+        lifecycleScope.launch(Dispatchers.IO) { voice.loadWakeClip() }
         voiceJob = lifecycleScope.launch(Dispatchers.IO) {
-            settings.voice.distinctUntilChanged().collect { id -> switchVoice(id) }
+            settings.voice.distinctUntilChanged().collect { id -> voice.switchVoice(id) }
         }
-        lifecycleScope.launch(Dispatchers.IO) {
-            settings.voiceSpeed.distinctUntilChanged().collect { s ->
-                ttsLock.withLock {
-                    voiceSpeed = s
-                    cachedAudio = emptyMap()
-                    readyVoice()?.let { v ->
-                        v.speed = s
-                        warmPhrases(v)
-                    }
-                }
-            }
-        }
-        lifecycleScope.launch(Dispatchers.IO) {
-            settings.onlineVoice.distinctUntilChanged().collect { on ->
-                ttsLock.withLock {
-                    onlineVoice = on
-                    readyVoice()?.online = on
-                }
-            }
-        }
+        lifecycleScope.launch(Dispatchers.IO) { settings.voiceSpeed.distinctUntilChanged().collect { voice.setSpeed(it) } }
+        lifecycleScope.launch(Dispatchers.IO) { settings.onlineVoice.distinctUntilChanged().collect { voice.setOnline(it) } }
         // a few pieces made ahead, so a slow piece does not leave the speaker silent
         val audio = Channel<Triple<Int, String, PhraseCache.Audio>>(AUDIO_AHEAD)
         lifecycleScope.launch(Dispatchers.IO) {
             for ((epoch, s) in speech) {
                 val made = try {
-                    cachedAudio[SpeechText.normalize(s)] ?: ttsLock.withLock {
-                        if (epoch == speechEpoch) tts?.await()?.let { v -> audioFor(v, s) } else null
-                    }
+                    voice.make(s) { epoch == speechEpoch }
                 } catch (t: Throwable) {
                     JarvisLog.e("speak failed", t)
                     null
@@ -277,114 +242,10 @@ class JarvisCoreService : LifecycleService() {
         lifecycleScope.launch(Dispatchers.IO) { ProcessGuard.run(this@JarvisCoreService) }
     }
 
-    /** Loads voice [id] (falls back to the built-in voice if it is not downloaded or fails), then frees the old one. */
-    private suspend fun switchVoice(id: String) {
-        var old: Deferred<TextToSpeech?>? = null
-        val next = ttsLock.withLock {
-            currentCoroutineContext().ensureActive()
-            old = tts
-            phraseWarm?.cancel()
-            phrases = null
-            cachedAudio = emptyMap()
-            // Teardown must be able to await and release a native voice even if loading is cancelled.
-            lifecycleScope.async(Dispatchers.IO + NonCancellable) {
-                val v = Voices.byId(id).takeIf { Voices.installed(this@JarvisCoreService, it.pack) } ?: Voices.byId(Voices.BUILT_IN)
-                runCatching { TextToSpeech(this@JarvisCoreService, v, speed = voiceSpeed) }
-                    .recoverCatching { if (v.id == Voices.BUILT_IN) throw it else TextToSpeech(this@JarvisCoreService, speed = voiceSpeed) }
-                    .onSuccess { JarvisLog.i("voice: ${it.voice.id}"); phoneEngineVoice = it.voice.pack.engine == Engine.ANDROID }
-                    .onFailure { JarvisLog.e("voice not loaded (run tools/fetch_speech.sh)", it) }
-                    .getOrNull()
-            }.also { tts = it }
-        }
-        try {
-            val loaded = next.await()
-            ttsLock.withLock {
-                if (tts === next) loaded?.let {
-                    it.speed = voiceSpeed
-                    it.online = onlineVoice
-                    warmPhrases(it)
-                }
-            }
-        } finally {
-            withContext(NonCancellable + Dispatchers.IO) {
-                old?.await()?.let { o -> ttsLock.withLock { o.close() } }
-            }
-        }
-    }
-
-    /** Common short replies come from [PhraseCache] (made once per voice + speed), the rest is made now. */
-    private fun audioFor(v: TextToSpeech, text: String): PhraseCache.Audio {
-        val spoken = SpeechText.normalize(text)
-        val common = spoken in COMMON_PHRASES
-        var cache = if (common) phrases?.takeIf { it.voiceId == v.voice.id && it.speed == v.speed } else null
-        cachedAudio[spoken]?.let { return it }
-        cache?.get(spoken)?.let {
-            cachedAudio = cachedAudio + (spoken to it)
-            return it
-        }
-        val made = com.alrasin.jarvis.voice.SpeechGate.synth { v.generate(spoken) }
-        if (common && cache == null) {
-            cache = PhraseCache(File(cacheDir, "phrases"), v.voice.id, v.speed, made.sampleRate)
-            phrases = cache
-        }
-        cache?.put(spoken, made.samples, made.sampleRate)
-        val audio = PhraseCache.Audio(made.samples, made.sampleRate)
-        if (common) cachedAudio = cachedAudio + (spoken to audio)
-        return audio
-    }
-
-    /** Warm only feedback on a disposable, single-thread engine; replies never share its lock. */
-    private fun warmPhrases(v: TextToSpeech) {
-        phraseWarm?.cancel()
-        val speed = v.speed
-        val voice = v.voice
-        val cache = PhraseCache(File(cacheDir, "phrases"), voice.id, speed, v.sampleRate)
-        phrases = cache
-        phraseWarm = lifecycleScope.launch(Dispatchers.IO) {
-            fun idle() = !speaking && speechLeft.get() == 0 && listenRequest == null &&
-                _phase.value == PHASE_WAKE && readyVoice() === v && v.speed == speed
-            for (text in PhraseCache.COMMON) {
-                ensureActive()
-                val key = SpeechText.normalize(text)
-                cache.get(key)?.let { audio ->
-                    ttsLock.withLock {
-                        if (readyVoice() === v && v.speed == speed) cachedAudio = cachedAudio + (key to audio)
-                    }
-                }
-            }
-            val missing = FEEDBACK_PHRASES.filter { cache.get(SpeechText.normalize(it)) == null }
-            if (missing.isEmpty()) return@launch
-            while (isActive && !idle()) delay(200)
-            ensureActive()
-            backgroundWork {
-                TextToSpeech(this@JarvisCoreService, voice, threads = 1, speed = speed).use { warmer ->
-                    for (text in missing) {
-                        if (!isActive || !idle()) break
-                        val made = warmer.generate(text)
-                        if (!isActive || !idle()) break
-                        cache.put(SpeechText.normalize(text), made.samples, made.sampleRate)
-                    }
-                }
-            }
-            for (text in missing) {
-                ensureActive()
-                cache.get(SpeechText.normalize(text))?.let { audio ->
-                    ttsLock.withLock {
-                        if (readyVoice() === v && v.speed == speed)
-                            cachedAudio = cachedAudio + (SpeechText.normalize(text) to audio)
-                    }
-                }
-            }
-        }
-    }
-
-    @OptIn(ExperimentalCoroutinesApi::class)
-    private fun readyVoice(): TextToSpeech? = tts?.takeIf { it.isCompleted }?.getCompleted()
-
     private fun acknowledgeWake(tone: Chimes) {
         // While the user talks: open the cloud connection, or load the local tool model when the cloud is not usable.
         lifecycleScope.launch(Dispatchers.IO) { if (cloud.enabled()) cloud.warm() else models.preloadTools() }
-        val audio = wakeClip ?: cachedAudio[SpeechText.normalize("Uh-huh.")]
+        val audio = voice.wakeAudio()
         if (!spokenWake || audio == null) { tone.wake(); return }
         val epoch = speechEpoch
         lifecycleScope.launch(Dispatchers.IO) {
@@ -392,20 +253,13 @@ class JarvisCoreService : LifecycleService() {
         }
     }
 
-    private fun loadWakeClip(): PhraseCache.Audio? = runCatching {
-        val file = File(getExternalFilesDir(null) ?: filesDir, "sounds/wake_ack.wav")
-        if (!file.isFile) return null
-        val pcm = Wav.read(file)
-        if (pcm.isEmpty()) null else PhraseCache.Audio(FloatArray(pcm.size) { pcm[it] / 32768f }, Wav.sampleRate(file))
-    }.onFailure { JarvisLog.e("wake clip failed", it) }.getOrNull()
-
     private fun say(text: String, epoch: Int = speechEpoch) {
-        val chunks = if (cachedAudio.containsKey(SpeechText.normalize(text))) listOf(SpeechText.normalize(text))
+        val chunks = if (voice.isCached(text)) listOf(SpeechText.normalize(text))
             else {
                 // Each piece gets its own tune, so short pieces sound broken. Only the reply's first piece is short (fast start).
-                val max = if (phoneEngineVoice) PHONE_VOICE_WORDS else VOICE_WORDS
+                val max = if (voice.phoneEngine) PHONE_VOICE_WORDS else VOICE_WORDS
                 val replyStart = epoch == timedCommandEpoch && firstAudioEpoch != epoch && speechLeft.get() == 0
-                SpeechText.chunks(text, maxWords = max, firstWords = if (!replyStart) max else if (phoneEngineVoice) 3 else 2)
+                SpeechText.chunks(text, maxWords = max, firstWords = if (!replyStart) max else if (voice.phoneEngine) 3 else 2)
             }
         synchronized(speechState) {
             if (epoch != speechEpoch) return
@@ -464,7 +318,7 @@ class JarvisCoreService : LifecycleService() {
 
     /** Runs one command through the assistant and speaks the answer. Then maybe listens for a follow-up. */
     private fun ask(text: String, raw: String, source: String, wakeId: Long?, audioPath: String?, audio: ShortArray?, refine: (suspend () -> String)? = null) = synchronized(speechState) {
-        phraseWarm?.cancel()
+        voice.stopWarming()
         shutUp()
         var epoch = speechEpoch
         agentInterrupt.set(null)
@@ -758,7 +612,7 @@ class JarvisCoreService : LifecycleService() {
                 synchronized(speechState) {
                     if (thinkingCue.take(SystemClock.elapsedRealtime(), speechEpoch, _phase.value == PHASE_THINKING)) {
                         val filler = FILLERS[fillerIndex++ % FILLERS.size]
-                        if (cachedAudio.containsKey(SpeechText.normalize(filler))) say(filler, speechEpoch)
+                        if (voice.isCached(filler)) say(filler, speechEpoch)
                     }
                 }
                 if (command != null && commandEpoch != captureEpoch) {
@@ -1005,23 +859,14 @@ class JarvisCoreService : LifecycleService() {
         shutUp()
         speechEpoch++
         voiceJob?.cancel()
-        phraseWarm?.cancel()
-        CoroutineScope(Dispatchers.IO).launch {
-            ttsLock.withLock {
-                val voice = tts
-                tts = null
-                runCatching { voice?.await()?.close() }.onFailure { JarvisLog.e("voice close failed", it) }
-            }
-        }
+        voice.close()
         wakeLock?.takeIf { it.isHeld }?.release()
         _running.value = false
         super.onDestroy()
     }
 
     companion object {
-        private val FILLERS = listOf("Let me check.", "On it.", "Hmm, one sec.")
-        private val FEEDBACK_PHRASES = FILLERS + "Uh-huh."
-        private val COMMON_PHRASES = PhraseCache.COMMON.map(SpeechText::normalize).toSet()
+        private val FILLERS = VoiceBox.FILLERS
         const val ACTION_STOP = "com.alrasin.jarvis.STOP"
         const val ACTION_MISSED = "com.alrasin.jarvis.MISSED"
         const val ACTION_SAY = "com.alrasin.jarvis.SAY"
