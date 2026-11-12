@@ -55,6 +55,7 @@ object ToolShortlist {
         "notifications" to listOf("read_notifications", "notification_summary", "clear_notifications"),
         "missed" to listOf("daily_summary", "missed_calls", "read_messages"),
         "summary" to listOf("daily_summary", "notification_summary"),
+        "copy" to listOf("copy_text"), "clipboard" to listOf("read_clipboard", "copy_text"), "copied" to listOf("read_clipboard"),
         "open" to listOf("open_app", "open_url", "open_result"), "launch" to listOf("open_app"), "start" to listOf("open_app"),
         "app" to listOf("open_app", "close_app"), "close" to listOf("close_app"), "kill" to listOf("close_app"),
         "website" to listOf("open_url"), "site" to listOf("open_url"), "search" to listOf("web_search", "search_in_app"), "find" to listOf("find_in_app", "search_in_app"), "google" to listOf("web_search"),

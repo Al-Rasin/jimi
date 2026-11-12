@@ -239,6 +239,9 @@ object RuleMatcher {
     private fun screen(t: String): ToolCall? {
         when {
             t.matches(SCREEN_WHOLE_RE) -> return call("read_screen")
+            t.matches(COPY_ANSWER_WHOLE_RE) -> return call("copy_text")
+            t.matches(COPY_SCREEN_WHOLE_RE) -> return call("copy_text", "source" to "screen")
+            t.matches(READ_CLIPBOARD_WHOLE_RE) -> return call("read_clipboard")
             t.matches(SCREEN_WHOLE_RE_2) -> return call("go_back")
             t.matches(SCREEN_WHOLE_RE_3) -> return call("go_home")
             t.matches(SCREEN_WHOLE_RE_4) -> return call("open_recents")

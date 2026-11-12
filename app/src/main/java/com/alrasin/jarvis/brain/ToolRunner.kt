@@ -61,6 +61,10 @@ internal class ToolRunner(
                 return Reply("Okay.", tool = "cancel", endConversation = true)
             }
             "repeat_last" -> return Reply(state.lastReply.ifEmpty { "I haven't said anything yet." }, tool = "repeat_last")
+            "copy_text" -> if (call.arg("text").isNullOrBlank() && call.arg("source") != "screen") {
+                if (state.lastReply.isBlank()) return Reply("I haven't said anything to copy yet.", tool = "copy_text")
+                call = call.copy(args = call.args + ("text" to state.lastReply))
+            }
             "run_routine" -> return runRoutine(call.arg("name") ?: "", input)
             "panic" -> return panic(input)
         }

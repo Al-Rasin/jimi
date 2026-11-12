@@ -59,6 +59,7 @@ class ToolRegistry @Inject constructor(
         addAll(systemTools(context, Torch(context)))
         add(unlockTool(context) { secrets.get(Secrets.PIN) })
         addAll(screenTools(context))
+        addAll(clipboardTools(context))
         addAll(dataTools(notes, reminders, scheduler, memory, noteApp = NoteApp(context)))
         addAll(notificationTools(notifications))
         add(dailySummaryTool(context, contacts, notifications))
