@@ -31,6 +31,7 @@
     <uses-permission android:name="android.permission.CALL_PHONE" />
     <uses-permission android:name="android.permission.SEND_SMS" />
     <uses-permission android:name="android.permission.READ_SMS" />
+    <uses-permission android:name="android.permission.RECEIVE_SMS" />
     <uses-permission android:name="android.permission.READ_PHONE_STATE" />
     <uses-permission android:name="android.permission.READ_CALL_LOG" />
     <uses-permission android:name="android.permission.WRITE_CONTACTS" />
@@ -141,6 +142,16 @@
         <receiver
             android:name=".service.WakeFeedbackReceiver"
             android:exported="false" />
+
+        <!-- Find my phone (#30): secret SMS from a trusted number. -->
+        <receiver
+            android:name=".service.FindPhoneReceiver"
+            android:exported="true"
+            android:permission="android.permission.BROADCAST_SMS">
+            <intent-filter>
+                <action android:name="android.provider.Telephony.SMS_RECEIVED" />
+            </intent-filter>
+        </receiver>
 
         <receiver
             android:name=".service.BootReceiver"

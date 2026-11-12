@@ -69,6 +69,10 @@ internal fun SettingsTab(vm: AppViewModel, onSetup: () -> Unit, onDeviceCheck: (
     LaunchedEffect(chatModel) { vm.refreshModels() }
     var cityText by remember(city) { mutableStateOf(city) }
     var pin by remember { mutableStateOf("") }
+    val findWordSet by vm.findWordSet.collectAsStateWithLifecycle()
+    val findNumbers by vm.findNumbers.collectAsStateWithLifecycle()
+    var findWord by remember { mutableStateOf("") }
+    var findList by remember(findNumbers) { mutableStateOf(findNumbers) }
     var tool by remember { mutableStateOf("device_status") }
     var args by remember { mutableStateOf("{\"what\":\"battery\"}") }
 
@@ -116,6 +120,15 @@ internal fun SettingsTab(vm: AppViewModel, onSetup: () -> Unit, onDeviceCheck: (
                     OutlinedTextField(pin, { pin = it.filter(Char::isDigit) }, Modifier.weight(1f), label = { Text("PIN (empty = remove)") }, singleLine = true)
                     FilledTonalButton(onClick = { vm.setPin(pin); pin = "" }) { Text("Save") }
                 }
+            }
+        }
+        "find" -> SubPage("Find my phone", close) {
+            RowsCard {
+                Hint("SMS the secret word from a trusted number: phone rings loud, flashes and replies with its location.")
+                OutlinedTextField(findWord, { findWord = it }, Modifier.fillMaxWidth(),
+                    label = { Text(if (findWordSet) "Secret word (saved; empty = keep)" else "Secret word (4+ letters)") }, singleLine = true)
+                OutlinedTextField(findList, { findList = it }, Modifier.fillMaxWidth(), label = { Text("Trusted numbers, comma separated") })
+                FilledTonalButton(onClick = { vm.setFindPhone(findWord, findList); findWord = "" }) { Text("Save") }
             }
         }
         "cloud" -> SubPage("Cloud AI", close) {
@@ -192,6 +205,8 @@ internal fun SettingsTab(vm: AppViewModel, onSetup: () -> Unit, onDeviceCheck: (
                 NavRow("Voice ID", if (voiceId) "On" else "Off") { page = "voiceid" }
                 RowDivider()
                 NavRow("Phone PIN", if (pinSet) "Saved" else "Not set") { page = "pin" }
+                RowDivider()
+                NavRow("Find my phone", if (findWordSet && findNumbers.isNotBlank()) "On" else "Off") { page = "find" }
             }
             RowsCard {
                 NavRow("Cloud AI", if (cloudOn) "On" else "Off") { page = "cloud" }

@@ -209,6 +209,9 @@ class AppViewModel @Inject constructor(
     /** Result line of the last button (setup, export, tool run). */
     val message: StateFlow<String> = _message
     val pinSet = MutableStateFlow(false)
+    /** Find my phone (#30): word saved, trusted numbers (shown so the user can edit them). */
+    val findWordSet = MutableStateFlow(false)
+    val findNumbers = MutableStateFlow("")
     val modelStatus = MutableStateFlow("Checking models…")
     private var player: MediaPlayer? = null
 
@@ -218,6 +221,8 @@ class AppViewModel @Inject constructor(
             secrets.put(Secrets.OLD_KIMI_KEY, null)   // Kimi removed (D-065)
             refreshKeys()
             pinSet.value = secrets.has(Secrets.PIN)
+            findWordSet.value = secrets.has(Secrets.FIND_WORD)
+            findNumbers.value = secrets.get(Secrets.FIND_NUMBERS).orEmpty()
         }
         refreshDeviceCheck()
         refreshModels()
@@ -344,6 +349,14 @@ class AppViewModel @Inject constructor(
         secrets.put(Secrets.PIN, pin.trim().ifEmpty { null })
         pinSet.value = secrets.has(Secrets.PIN)
         _message.value = if (pinSet.value) "PIN saved (encrypted)." else "PIN removed."
+    }
+
+    fun setFindPhone(word: String, numbers: String) = viewModelScope.launch(Dispatchers.IO) {
+        if (word.isNotBlank()) secrets.put(Secrets.FIND_WORD, word.trim())
+        secrets.put(Secrets.FIND_NUMBERS, numbers.trim().ifEmpty { null })
+        findWordSet.value = secrets.has(Secrets.FIND_WORD)
+        findNumbers.value = numbers.trim()
+        _message.value = "Find my phone saved (encrypted)."
     }
 
     fun rootSetup() = viewModelScope.launch(Dispatchers.IO) {

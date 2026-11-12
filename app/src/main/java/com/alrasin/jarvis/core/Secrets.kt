@@ -50,6 +50,9 @@ class Secrets @Inject constructor(@ApplicationContext context: Context) {
         private const val ALIAS = "jarvis_secrets"
         private const val MODE = "AES/GCM/NoPadding"
         const val PIN = "pin"
+        /** Find my phone (#30): secret word and trusted numbers. */
+        const val FIND_WORD = "find_word"
+        const val FIND_NUMBERS = "find_numbers"
         const val CLOUD_KEY = "cloud_api_key"
         /** Kimi was removed (D-065); only used to delete an old saved key. */
         const val OLD_KIMI_KEY = "kimi_api_key"
