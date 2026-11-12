@@ -3,26 +3,19 @@ package com.alrasin.jarvis.service
 import com.alrasin.jarvis.agent.appmap.AppMapFreshness
 import android.Manifest
 import android.annotation.SuppressLint
-import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
-import android.content.IntentFilter
 import android.content.pm.PackageManager
 import android.content.pm.ServiceInfo
-import android.os.BatteryManager
 import android.os.PowerManager
 import android.os.SystemClock
-import android.telephony.TelephonyManager
 import androidx.lifecycle.LifecycleService
 import androidx.lifecycle.lifecycleScope
-import com.alrasin.jarvis.actions.CallText
-import com.alrasin.jarvis.actions.RootShell
 import com.alrasin.jarvis.agent.ScreenAgentSession
 import com.alrasin.jarvis.actions.ToolRegistry
 import com.alrasin.jarvis.brain.Assistant
 import com.alrasin.jarvis.brain.CloudBrain
 import com.alrasin.jarvis.brain.ModelBrain
-import com.alrasin.jarvis.brain.Persona
 import com.alrasin.jarvis.core.JarvisLog
 import com.alrasin.jarvis.core.backgroundWork
 import com.alrasin.jarvis.core.isLocked
@@ -145,8 +138,10 @@ class JarvisCoreService : LifecycleService() {
     @Volatile private var onlineVoice = false
     private val speech = Channel<Pair<Int, String>>(Channel.UNLIMITED)
     private val speechLeft = AtomicInteger(0)
-    private var batteryWarnedAt = 100
     private var listenJob: Job? = null
+    private val alerts by lazy {
+        PhoneAlerts(this, lifecycleScope, { settings.listeningEnabled.first() }, { registry.contacts.nameFor(it) }) { announce(it) }
+    }
     private var wakeLock: PowerManager.WakeLock? = null
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
@@ -277,36 +272,9 @@ class JarvisCoreService : LifecycleService() {
         lifecycleScope.launch { settings.showPanel.collect { showPanel = it } }
         lifecycleScope.launch { settings.voiceId.collect { voiceId = it } }
         lifecycleScope.launch { settings.speakerThreshold.collect { speakerThreshold = it } }
-        registerReceiver(battery, IntentFilter(Intent.ACTION_BATTERY_CHANGED))
-        registerReceiver(ringing, IntentFilter(TelephonyManager.ACTION_PHONE_STATE_CHANGED))
+        alerts.register()
         mapFreshness.start()
-        lifecycleScope.launch(Dispatchers.IO) { protectFromLowMemoryKiller() }
-    }
-
-    /**
-     * MIUI's low-memory killer took the service down when another app opened (signal 9 on the phone).
-     * With root, lower our oom_score_adj (and the Google voice's). Android rewrites it when the process state changes, so repeat.
-     */
-    private suspend fun protectFromLowMemoryKiller() {
-        if (!RootShell.available) return
-        val path = "/proc/${android.os.Process.myPid()}/oom_score_adj"
-        while (currentCoroutineContext().isActive) {
-            RootShell.run("[ \$(cat $path) -gt $OOM_ADJ ] && echo $OOM_ADJ > $path || true")
-            // The Google voice runs in its own process; when MIUI killed it mid-answer, phrases timed out and were lost.
-            RootShell.run("for p in \$(pidof com.google.android.tts); do f=/proc/\$p/oom_score_adj; [ \$(cat \$f) -gt $OOM_ADJ ] && echo $OOM_ADJ > \$f; done; true")
-            keepOverlayAllowed()
-            delay(30_000)
-        }
-    }
-
-    /**
-     * MIUI sometimes turns "display over other apps" off (seen 2026-10-23); then Android blocks the
-     * wake panel from opening in the background. Root turns it back on.
-     */
-    private suspend fun keepOverlayAllowed() {
-        if (android.provider.Settings.canDrawOverlays(this)) return
-        JarvisLog.i("overlay permission lost; granting again")
-        RootShell.run("appops set $packageName SYSTEM_ALERT_WINDOW allow", "appops set --uid $packageName SYSTEM_ALERT_WINDOW allow")
+        lifecycleScope.launch(Dispatchers.IO) { ProcessGuard.run(this@JarvisCoreService) }
     }
 
     /** Loads voice [id] (falls back to the built-in voice if it is not downloaded or fails), then frees the old one. */
@@ -493,37 +461,6 @@ class JarvisCoreService : LifecycleService() {
             }
         }
     }
-
-    private val battery = object : BroadcastReceiver() {
-        override fun onReceive(context: Context, intent: Intent) {
-            val level = intent.getIntExtra(BatteryManager.EXTRA_LEVEL, -1) * 100 /
-                intent.getIntExtra(BatteryManager.EXTRA_SCALE, 100).coerceAtLeast(1)
-            val plugged = intent.getIntExtra(BatteryManager.EXTRA_PLUGGED, 0) != 0
-            if (plugged || level > 20) { batteryWarnedAt = 100; return }
-            val step = if (level <= 5) 5 else 15
-            if (level <= step && batteryWarnedAt > step) {
-                batteryWarnedAt = step
-                announce("${Persona.ADDRESS}, battery is at $level percent. Please charge me.")
-            }
-        }
-    }
-
-    /** Says who is calling (ROADMAP B §I.1). The number only comes with READ_CALL_LOG; Android sends the broadcast twice, so say it once per ring. */
-    private val ringing = object : BroadcastReceiver() {
-        override fun onReceive(context: Context, intent: Intent) {
-            if (intent.getStringExtra(TelephonyManager.EXTRA_STATE) != TelephonyManager.EXTRA_STATE_RINGING) { ringAnnounced = false; return }
-            @Suppress("DEPRECATION")
-            val number = intent.getStringExtra(TelephonyManager.EXTRA_INCOMING_NUMBER) ?: return
-            if (ringAnnounced) return
-            ringAnnounced = true
-            lifecycleScope.launch {
-                if (!settings.listeningEnabled.first()) return@launch   // Jimi is off: stay quiet
-                val name = withContext(Dispatchers.IO) { if (number.isBlank()) "" else registry.contacts.nameFor(number) }
-                announce(CallText.ringing(name))
-            }
-        }
-    }
-    private var ringAnnounced = false
 
     /** Runs one command through the assistant and speaks the answer. Then maybe listens for a follow-up. */
     private fun ask(text: String, raw: String, source: String, wakeId: Long?, audioPath: String?, audio: ShortArray?, refine: (suspend () -> String)? = null) = synchronized(speechState) {
@@ -1062,8 +999,7 @@ class JarvisCoreService : LifecycleService() {
     @OptIn(ExperimentalCoroutinesApi::class)
     override fun onDestroy() {
         listenJob?.cancel()
-        runCatching { unregisterReceiver(battery) }
-        runCatching { unregisterReceiver(ringing) }
+        alerts.unregister()
         mapFreshness.stop()
         speech.close()
         shutUp()
@@ -1086,8 +1022,6 @@ class JarvisCoreService : LifecycleService() {
         private val FILLERS = listOf("Let me check.", "On it.", "Hmm, one sec.")
         private val FEEDBACK_PHRASES = FILLERS + "Uh-huh."
         private val COMMON_PHRASES = PhraseCache.COMMON.map(SpeechText::normalize).toSet()
-        /** -1000 = never kill; -800 keeps us above ordinary apps but still killable if the phone is desperate. */
-        private const val OOM_ADJ = -800
         const val ACTION_STOP = "com.alrasin.jarvis.STOP"
         const val ACTION_MISSED = "com.alrasin.jarvis.MISSED"
         const val ACTION_SAY = "com.alrasin.jarvis.SAY"
