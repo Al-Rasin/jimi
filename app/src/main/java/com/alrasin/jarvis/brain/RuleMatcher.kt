@@ -254,6 +254,7 @@ object RuleMatcher {
 
     private fun notifications(t: String): ToolCall? = when {
         t.matches(NOTIFICATIONS_WHOLE_RE) -> call("clear_notifications")
+        t.matches(DAILY_SUMMARY_WHOLE_RE) -> call("daily_summary")
         t.matches(NOTIFICATIONS_WHOLE_RE_2) -> call("notification_summary")
         t.matches(NOTIFICATIONS_WHOLE_RE_3) -> call("read_notifications")
         else -> null

@@ -53,6 +53,18 @@ private const val KEY_CALL = 5
 private const val KEY_ENDCALL = 6
 private const val MISSED_WINDOW_MS = 24 * 60 * 60 * 1000L
 
+/** Names (or "Unknown number") of missed callers since [since], newest first; null without call log permission. */
+fun missedCallers(context: Context, contacts: Contacts, since: Long): List<String>? {
+    if (context.checkSelfPermission(Manifest.permission.READ_CALL_LOG) != PackageManager.PERMISSION_GRANTED) return null
+    val numbers = context.contentResolver.query(CallLog.Calls.CONTENT_URI, arrayOf(CallLog.Calls.NUMBER),
+        "${CallLog.Calls.TYPE} = ? AND ${CallLog.Calls.DATE} > ?", arrayOf(CallLog.Calls.MISSED_TYPE.toString(), since.toString()),
+        "${CallLog.Calls.DATE} DESC")?.use { c ->
+        buildList { while (c.moveToNext()) add(c.getString(0).orEmpty()) }
+    }.orEmpty()
+    JarvisLog.i("missed calls: ${numbers.size}")
+    return numbers.map { if (it.isBlank()) "Unknown number" else contacts.nameFor(it) }
+}
+
 fun callTools(context: Context, contacts: Contacts): List<Tool> {
     fun granted(p: String) = context.checkSelfPermission(p) == PackageManager.PERMISSION_GRANTED
     val telecom = context.getSystemService(TelecomManager::class.java)
@@ -121,15 +133,9 @@ fun callTools(context: Context, contacts: Contacts): List<Tool> {
             }
         },
         SimpleTool("missed_calls", "Say who called and was missed in the last day", emptyList(), Risk.SAFE) { _, _ ->
-            if (!granted(Manifest.permission.READ_CALL_LOG)) return@SimpleTool ToolResult.fail("I need the call log permission. Open Jarvis setup.")
-            val since = System.currentTimeMillis() - MISSED_WINDOW_MS
-            val numbers = context.contentResolver.query(CallLog.Calls.CONTENT_URI, arrayOf(CallLog.Calls.NUMBER),
-                "${CallLog.Calls.TYPE} = ? AND ${CallLog.Calls.DATE} > ?", arrayOf(CallLog.Calls.MISSED_TYPE.toString(), since.toString()),
-                "${CallLog.Calls.DATE} DESC")?.use { c ->
-                buildList { while (c.moveToNext()) add(c.getString(0).orEmpty()) }
-            }.orEmpty()
-            JarvisLog.i("missed calls: ${numbers.size}")
-            ToolResult.ok(CallText.missedSummary(numbers.map { if (it.isBlank()) "Unknown number" else contacts.nameFor(it) }))
+            val names = missedCallers(context, contacts, System.currentTimeMillis() - MISSED_WINDOW_MS)
+                ?: return@SimpleTool ToolResult.fail("I need the call log permission. Open Jarvis setup.")
+            ToolResult.ok(CallText.missedSummary(names))
         },
         SimpleTool("call_back", "Call back the last missed or incoming caller", emptyList(), Risk.CONFIRM) { _, _ ->
             dial(lastNumber(CallLog.Calls.MISSED_TYPE, CallLog.Calls.INCOMING_TYPE, CallLog.Calls.REJECTED_TYPE), "No one called you yet.")

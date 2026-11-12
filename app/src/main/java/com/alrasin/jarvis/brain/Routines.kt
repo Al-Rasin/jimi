@@ -12,6 +12,7 @@ object Routines {
             ToolCall("toggle", mapOf("target" to "dnd", "state" to "on")),
             ToolCall("set_brightness", mapOf("level" to "5")),
             ToolCall("list_reminders"),
+            ToolCall("daily_summary"),
         ),
         "good_morning" to listOf(
             ToolCall("toggle", mapOf("target" to "dnd", "state" to "off")),

@@ -36,6 +36,12 @@ object Triage {
         RegexOption.IGNORE_CASE,
     )
 
+    /** Chat or mail app: its notification title is usually the sender. */
+    fun isChatApp(pkg: String) = pkg.lowercase(java.util.Locale.ROOT) in CHAT_APPS
+
+    /** Bank or payment app (money features are out of scope, D-072). */
+    fun isMoneyApp(pkg: String) = BANK_APP.containsMatchIn(pkg)
+
     /** Clear rules cannot override protected notifications or possible personal messages. */
     fun classify(
         pkg: String,

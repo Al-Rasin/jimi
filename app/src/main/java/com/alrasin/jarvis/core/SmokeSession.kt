@@ -55,7 +55,7 @@ class SmokeSession(val readOnly: Boolean, val forceDryRun: Boolean = false) : Ab
     private object Policy {
         fun allows(call: ToolCall, readOnly: Boolean): Boolean {
             if (call.tool in setOf("device_status", "read_screen", "read_notes", "list_reminders",
-                    "recall_facts", "read_notifications", "notification_summary", "read_messages", "read_list", "missed_calls")) return true
+                    "recall_facts", "read_notifications", "notification_summary", "daily_summary", "read_messages", "read_list", "missed_calls")) return true
             if (readOnly) return false
             return when (call.tool) {
                 "toggle" -> call.arg("target") == "flashlight" && call.arg("state") in setOf("on", "off")

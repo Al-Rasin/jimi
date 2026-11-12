@@ -17,6 +17,7 @@ import com.alrasin.jarvis.data.NoteDao
 import com.alrasin.jarvis.data.NotificationDao
 import com.alrasin.jarvis.data.ReminderDao
 import com.alrasin.jarvis.data.Settings
+import com.alrasin.jarvis.notify.dailySummaryTool
 import com.alrasin.jarvis.notify.notificationTools
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.first
@@ -60,6 +61,7 @@ class ToolRegistry @Inject constructor(
         addAll(screenTools(context))
         addAll(dataTools(notes, reminders, scheduler, memory, noteApp = NoteApp(context)))
         addAll(notificationTools(notifications))
+        add(dailySummaryTool(context, contacts, notifications))
         val web = Web()
         addAll(webTools(web, FastWeather(context), { location.get() }, homeCity = { settings.homeCity.first() }))
         addAll(freeApiTools(web, { location.get() }, homeCity = { settings.homeCity.first() }))
