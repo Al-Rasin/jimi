@@ -182,7 +182,7 @@ internal class SmsSentStatus(private val partCount: Int) {
     }
 }
 
-private suspend fun sendSms(context: Context, sms: SmsManager, contact: Contacts.Contact, text: String): ToolResult {
+internal suspend fun sendSms(context: Context, sms: SmsManager, contact: Contacts.Contact, text: String): ToolResult {
     val parts = sms.divideMessage(text)
     if (parts.isEmpty()) return Reply.failed("the message is empty.")
     val action = "${context.packageName}.SMS_SENT.${UUID.randomUUID()}"

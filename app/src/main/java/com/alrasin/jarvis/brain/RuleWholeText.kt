@@ -64,3 +64,10 @@ internal val SKILLS_WHOLE_RE = Regex("^(?:google|(?:the )?(?:web|internet)|onlin
 internal val SKILLS_WHOLE_RE_2 = Regex("^(?:open (?:the )?(?:first|top) (?:result|one|item))$")
 internal val SKILLS_WHOLE_RE_3 = Regex("^(?:read (?:the |this |me the )?(?:list|rows|items|results|search results)(?: on (?:the )?screen)?|what (?:is|are) in (?:the |this )?list)$")
 internal val SKILLS_WHOLE_RE_4 = Regex("^(?:.+ (?:switch|toggle|option|checkbox))$")
+
+// Contacts (ROADMAP #33). Matched on lowercase text that keeps ' @ . (CommsRules style).
+internal val SAVE_CONTACT_RE = Regex("^(?:save|add) (?:this|that|the|(\\+?\\d[\\d -]{5,}\\d))(?: (?:phone )?number| caller| last caller| last number)?(?: (?:to|in) (?:my )?contacts?)? (?:as|under) (.+)$")
+internal val CONTACT_EMAIL_RE = Regex("^(?:add|save|set) (.+?)(?:'s)? email(?: address)?(?: (?:as|is|to))? (.+)$")
+internal val CONTACT_EMAIL_2_RE = Regex("^(?:add|save) (?:the |this )?email(?: address)? (.+) (?:to|for) (.+?)(?:'s contact| contact)?$")
+internal val SHARE_CONTACT_RE = Regex("^(?:share|send) (.+?)(?:'s)? (?:contact(?: card)?|number|phone number)(?: (?:on|via|through|by) (whatsapp|messenger|sms|text))?(?: (?:to|with) (.+?))?(?: (?:on|via|through|by) (whatsapp|messenger|sms|text))?$")
+internal val CONTACT_NOT_NAME_RE = Regex("\\b(?:a|an|my|me|message|messages|saying|text|that|this|tell|note|notes|reminder|file|photo|picture|image|screenshot|pdf|bookmark|favorite|favourite|draft|location)\\b")

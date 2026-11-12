@@ -2,6 +2,7 @@ package com.alrasin.jarvis.brain
 
 import com.alrasin.jarvis.core.ToolCall
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertNull
 import org.junit.Test
 import java.time.LocalDateTime
@@ -126,6 +127,19 @@ class RuleMatcherTest {
         assertEquals(c("panic"), m("code red"))
         assertEquals(c("panic"), m("Panic!"))
         assertEquals(c("cancel"), m("stop"))
+    }
+
+    @Test fun contacts() {
+        assertEquals(c("save_contact", "name" to "rahim"), m("Save this number as Rahim"))
+        assertEquals(c("save_contact", "name" to "rahim uddin", "number" to "01712345678"), m("save 01712345678 as Rahim Uddin"))
+        assertEquals(c("save_contact", "name" to "karim"), m("add the last caller to my contacts as Karim."))
+        assertEquals(c("add_contact_email", "contact" to "rahim", "email" to "rahim at gmail dot com"), m("add Rahim's email rahim at gmail dot com"))
+        assertEquals(c("add_contact_email", "contact" to "rahim", "email" to "rahim@gmail.com"), m("add email rahim@gmail.com to Rahim"))
+        assertEquals(c("share_contact", "contact" to "rahim", "app" to "whatsapp"), m("share Rahim's contact on WhatsApp"))
+        assertEquals(c("share_contact", "contact" to "rahim", "to" to "karim", "app" to "whatsapp"), m("send Rahim's number to Karim on WhatsApp"))
+        assertEquals(c("share_contact", "contact" to "rahim", "to" to "mom"), m("send rahim's number to mom"))
+        assertNotEquals("share_contact", m("send a message to Rahim saying share Karim's number")?.tool)
+        assertNotEquals("save_contact", m("save this as a note")?.tool)
     }
 
     @Test fun notificationsKnowledgeMemory() {

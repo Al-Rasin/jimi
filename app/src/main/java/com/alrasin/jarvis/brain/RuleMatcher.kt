@@ -66,7 +66,7 @@ object RuleMatcher {
         if (t.isEmpty()) return null
         val actionText = TextNorm.squash(input)
             .replace(POLITE_LEAD_RE, "")
-        return talk(t) ?: TimeRules.calendar(t, now) ?: CommsRules.comms(actionText) ?: media(actionText.trimEnd('.', '!', '?')) ?: MapRules.maps(t) ?: MapRules.appMap(t) ?: skills(t)
+        return talk(t) ?: ContactRules.contacts(actionText) ?: TimeRules.calendar(t, now) ?: CommsRules.comms(actionText) ?: media(actionText.trimEnd('.', '!', '?')) ?: MapRules.maps(t) ?: MapRules.appMap(t) ?: skills(t)
             ?: knowledge(t)?.takeIf { it.tool == "web_search" || it.tool == "wiki_lookup" }
             ?: toggle(t) ?: TimeRules.time(normalize(input, keepClockColon = true), now) ?: TimeRules.notes(t, now) ?: media(t) ?: system(t) ?: screen(t)
             ?: notifications(t) ?: noisyTool(t, now) ?: knowledge(t) ?: memory(t, actionText) ?: apps(t)

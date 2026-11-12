@@ -124,11 +124,12 @@ internal class ToolSafetyGate {
             declaredRisk != Risk.SAFE -> declaredRisk
             call.tool in setOf("delete_reminder", "forget_fact", "cancel_alarm") -> Risk.CONFIRM
             call.tool == "run_recipe" && call.arg("risky") == "true" -> Risk.CONFIRM
+            call.tool == "share_contact" && call.arg("to") != null -> Risk.CONFIRM
             call.tool in setOf("tap_named", "toggle_named", "open_result", "find_in_app") &&
                 Skills.isRisky(call.arg("name") ?: call.arg("query").orEmpty()) -> Risk.CONFIRM
             (locked || lockdown) && call.tool in setOf(
                 "read_messages", "read_chat", "read_notes", "list_reminders", "recall_facts",
-                "read_screen", "read_list", "read_notifications", "notification_summary", "daily_summary", "read_clipboard", "calendar_read",
+                "read_screen", "read_list", "read_notifications", "notification_summary", "daily_summary", "read_clipboard", "calendar_read", "share_contact",
             ) -> Risk.VOICE_ID
             else -> Risk.SAFE
         }
@@ -187,6 +188,9 @@ internal class ToolSafetyGate {
             "notification_summary" -> "Summarize your recent notifications"
             "daily_summary" -> "Tell you what you missed"
             "read_clipboard" -> "Read your clipboard"
+            "save_contact" -> "Save ${arg("number") ?: "the last unsaved number"} as ${arg("name") ?: "a new contact"}"
+            "add_contact_email" -> "Add ${arg("email")?.let { "\"$it\"" } ?: "that email"} to $contact's contact"
+            "share_contact" -> "Send $contact's number to ${arg("to") ?: "them"}$app"
             "undo_notification_clear" -> "Restore your last cleared notifications as copies"
             "explain_notification_clear" -> "Explain why I cleared those notifications"
             "search_notification_history" -> arg("query")?.let { "Search notification history for \"$it\"" }

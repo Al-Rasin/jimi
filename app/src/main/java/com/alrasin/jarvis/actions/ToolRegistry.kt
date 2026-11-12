@@ -53,6 +53,7 @@ class ToolRegistry @Inject constructor(
         addAll(timeTools(context))
         addAll(calendarTools(context))
         addAll(commsTools(context, contacts))
+        addAll(contactEditTools(context, contacts))
         addAll(callTools(context, contacts))
         add(chatReadTool(context, contacts, notifications))
         addAll(mediaTools(context))
