@@ -448,6 +448,19 @@ def augment_tool(text, tool, rng):
     return text
 
 
+def load_learned(path, tools):
+    """Rows from from_learned.py; None for a tool or arg the current prompt does not have."""
+    for line in path.read_text().splitlines():
+        if not line.strip():
+            continue
+        row = json.loads(line)
+        order = tools.get(row.get("tool"))
+        if order is None or set(row.get("args", {})) - set(order):
+            yield None
+        else:
+            yield row
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--per-tool", type=int, default=60)
@@ -456,6 +469,8 @@ def main():
     ap.add_argument("--valid", type=float, default=0.05)
     ap.add_argument("--out", type=pathlib.Path, default=OUT)
     ap.add_argument("--prefix", type=pathlib.Path, default=PREFIX)
+    ap.add_argument("--learned", type=pathlib.Path, action="append", default=[],
+                    help="extra {text,tool,args} rows from from_learned.py (app maps, recipes, fixes)")
     a = ap.parse_args()
     r.seed(a.seed)
 
@@ -493,6 +508,14 @@ def main():
             text, tool, args = gen_tool(name, now)
             made += add(text, tool, args, now)
         print(f"{name:22} {made}")
+    for path in a.learned:
+        made = skipped = 0
+        for row in load_learned(path, dict(tools)):
+            if row is None:
+                skipped += 1
+            else:
+                made += add(row["text"], row["tool"], row["args"], rand_now())
+        print(f"{'(learned ' + path.name + ')':22} {made} (skipped {skipped} unknown tool/arg)")
     made = 0
     chats = CHATS.copy()
     r.shuffle(chats)

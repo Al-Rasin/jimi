@@ -8,6 +8,8 @@ Runs on the Mac (M1 8 GB) with MLX. Output: `models/functiongemma-270m-jarvis-v2
   Phrases in `cases.jsonl` are kept out, so the eval stays fair.
 - `finetune.py` — LoRA (rank 16, all layers), loss only on the answer tokens, then fuse + convert to GGUF.
 - `cases.jsonl` — 45 held-out test phrases (`tool: null` = should chat).
+- `from_learned.py` — rows from what the phone learned (app maps, recipes, ✗-fixed commands) → `training/data/toolcall/learned.jsonl`.
+  Private-looking labels are dropped. Add them with `make_dataset.py --learned training/data/toolcall/learned.jsonl`.
 - `eval.py` — runs the cases through a Mac `llama-completion` with the app's prompt + grammar, prints a score.
 
 ## Steps
@@ -20,7 +22,9 @@ uv pip install -p .venv-llm/bin/python -e app/src/main/cpp/llama.cpp/gguf-py   #
 
 # every time the tools change
 ./gradlew testDebugUnitTest            # writes app/build/llm/{prompt_prefix.txt,grammar.gbnf,tools.txt}
-python3 training/toolcall/make_dataset.py
+python3 training/notifications/export_db.py                     # optional: pull jarvis.db (into training/data/notifications/export-*/)
+python3 training/toolcall/from_learned.py --db training/data/notifications/export-*/jarvis.db   # and/or --appmap <export>.json
+python3 training/toolcall/make_dataset.py --learned training/data/toolcall/learned.jsonl
 .venv-llm/bin/python training/toolcall/finetune.py --iters 1200
 python3 training/toolcall/eval.py --bin <llama-completion> --model models/functiongemma-270m-jarvis-v2-Q8_0.gguf \
     --context "time 2026-10-22 10:00:00"
