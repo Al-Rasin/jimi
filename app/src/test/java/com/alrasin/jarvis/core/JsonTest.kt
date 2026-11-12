@@ -74,4 +74,14 @@ class JsonTest {
             assertTrue("Expected invalid JSON: $text", runCatching { Json.parse(text) }.isFailure)
         }
     }
+
+    @Test fun typedReadsWalkObjectsAndReturnNullOnWrongType() {
+        val root = Json.parse("""{"query":{"pages":[{"title":"Dhaka"}]},"n":5,"name":"x"}""").asObj()
+        assertEquals("Dhaka", root.obj("query").list("pages").firstObj().str("title"))
+        assertEquals("x", root.str("name"))
+        assertNull(root.str("n"))
+        assertNull(root.obj("name"))
+        assertNull(root.obj("missing").list("pages").firstObj().str("title"))
+        assertNull("text".asObj())
+    }
 }

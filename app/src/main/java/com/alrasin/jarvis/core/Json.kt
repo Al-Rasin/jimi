@@ -138,3 +138,18 @@ object Json {
         }
     }
 }
+
+// Typed reads for parsed JSON (ROADMAP §L.7): `root.obj("query").obj("pages")` instead of `as? Map<*, *>` chains.
+// Each returns null when the key is missing or holds another type.
+
+/** [this] as a JSON object, or null. */
+fun Any?.asObj(): Map<*, *>? = this as? Map<*, *>
+
+fun Map<*, *>?.obj(key: String): Map<*, *>? = this?.get(key) as? Map<*, *>
+
+fun Map<*, *>?.list(key: String): List<*>? = this?.get(key) as? List<*>
+
+fun Map<*, *>?.str(key: String): String? = this?.get(key) as? String
+
+/** First element of a JSON array when it is an object. */
+fun List<*>?.firstObj(): Map<*, *>? = this?.firstOrNull() as? Map<*, *>
