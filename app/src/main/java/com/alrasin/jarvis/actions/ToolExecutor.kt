@@ -90,6 +90,7 @@ internal fun needsScreen(call: ToolCall): Boolean = when (call.tool) {
     "send_whatsapp", "open_app", "app_go", "read_screen", "ask_screen", "tap", "type_text", "scroll",
     "search_in_app", "find_in_app", "open_result", "tap_named", "go_tab", "read_list", "toggle_named", "run_recipe" -> true
     "send_sms" -> call.arg("app").equals("messenger", ignoreCase = true)
+    "ir_remote" -> call.arg("device") == "ac"
     "call" -> call.arg("app")?.lowercase() in setOf("whatsapp", "messenger")
     else -> false
 }
