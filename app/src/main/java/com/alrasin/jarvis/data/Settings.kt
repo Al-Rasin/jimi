@@ -2,6 +2,7 @@ package com.alrasin.jarvis.data
 
 import android.content.Context
 import androidx.datastore.preferences.core.booleanPreferencesKey
+import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.floatPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
@@ -40,7 +41,7 @@ class Settings @Inject constructor(@ApplicationContext private val context: Cont
     private val setupCompleteKey = booleanPreferencesKey("setup_complete")
 
     val assistantMode: Flow<AssistantMode> = context.dataStore.data.map { AssistantMode.fromStored(it[assistantModeKey]) }
-    val setupComplete: Flow<Boolean> = context.dataStore.data.map { it[setupCompleteKey] ?: false }
+    val setupComplete: Flow<Boolean> = read(setupCompleteKey, false)
 
     suspend fun setAssistantMode(mode: AssistantMode) = context.dataStore.edit { it[assistantModeKey] = mode.name }
     suspend fun setSetupComplete(complete: Boolean) = context.dataStore.edit {
@@ -53,63 +54,69 @@ class Settings @Inject constructor(@ApplicationContext private val context: Cont
     }
     private val chatModelKey = stringPreferencesKey("chat_model")
 
-    val wakeThreshold: Flow<Float> = context.dataStore.data.map { it[thresholdKey] ?: DEFAULT_THRESHOLD }
-    val listeningEnabled: Flow<Boolean> = context.dataStore.data.map { it[enabledKey] ?: false }
+    val wakeThreshold: Flow<Float> = read(thresholdKey, DEFAULT_THRESHOLD)
+    val listeningEnabled: Flow<Boolean> = read(enabledKey, false)
 
     /** Listen again for ~6 s after a reply, no wake word needed (round 3). */
-    val spokenWake: Flow<Boolean> = context.dataStore.data.map { it[spokenWakeKey] ?: true }
-    suspend fun setSpokenWake(value: Boolean) = context.dataStore.edit { it[spokenWakeKey] = value }
+    val spokenWake: Flow<Boolean> = read(spokenWakeKey, true)
+    suspend fun setSpokenWake(value: Boolean) = write(spokenWakeKey, value)
 
-    val followUp: Flow<Boolean> = context.dataStore.data.map { it[followUpKey] ?: true }
-    val sttSecondPass: Flow<Boolean> = context.dataStore.data.map { it[sttSecondPassKey] ?: false }
-    val autoClearNotifications: Flow<Boolean> = context.dataStore.data.map { it[autoClearKey] ?: false }
+    val followUp: Flow<Boolean> = read(followUpKey, true)
+    val sttSecondPass: Flow<Boolean> = read(sttSecondPassKey, false)
+    val autoClearNotifications: Flow<Boolean> = read(autoClearKey, false)
     /** User OK for learning apps at night while charging (§J.5). Off by default. */
-    val nightExplore: Flow<Boolean> = context.dataStore.data.map { it[nightExploreKey] ?: false }
+    val nightExplore: Flow<Boolean> = read(nightExploreKey, false)
     /** When each app was last explored at night: "pkg=millis;pkg=millis". */
-    val nightExplored: Flow<String> = context.dataStore.data.map { it[nightExploredKey] ?: "" }
-    val homeCity: Flow<String> = context.dataStore.data.map { it[cityKey] ?: "Dhaka" }
+    val nightExplored: Flow<String> = read(nightExploredKey, "")
+    val homeCity: Flow<String> = read(cityKey, "Dhaka")
     /** Assistant panel over the lock screen / apps after a wake. */
-    val showPanel: Flow<Boolean> = context.dataStore.data.map { it[panelKey] ?: true }
+    val showPanel: Flow<Boolean> = read(panelKey, true)
     /** Owner voice check for risky tools while locked (needs enrolment). */
-    val voiceId: Flow<Boolean> = context.dataStore.data.map { it[voiceIdKey] ?: false }
+    val voiceId: Flow<Boolean> = read(voiceIdKey, false)
     /** Voice ID match needs cosine similarity ≥ this (higher = stricter). */
-    val speakerThreshold: Flow<Float> = context.dataStore.data.map { it[speakerThresholdKey] ?: DEFAULT_SPEAKER_THRESHOLD }
+    val speakerThreshold: Flow<Float> = read(speakerThresholdKey, DEFAULT_SPEAKER_THRESHOLD)
 
     /** Optional cloud (D-005): off by default; also needs an API key in Secrets. */
-    val cloudEnabled: Flow<Boolean> = context.dataStore.data.map { it[cloudKey] ?: false }
+    val cloudEnabled: Flow<Boolean> = read(cloudKey, false)
     /** All chat goes to the cloud when online (else only "think hard …"). */
-    val cloudForChat: Flow<Boolean> = context.dataStore.data.map { it[cloudChatKey] ?: true }
+    val cloudForChat: Flow<Boolean> = read(cloudChatKey, true)
     /** Privacy (PLAN 14.3): remembered facts are sent only if this is on. Notes, notifications, screen text never are. */
-    val cloudSendFacts: Flow<Boolean> = context.dataStore.data.map { it[cloudFactsKey] ?: false }
+    val cloudSendFacts: Flow<Boolean> = read(cloudFactsKey, false)
 
     /** Jimi's voice id (see Voices, D-038). */
     val voice: Flow<String> = context.dataStore.data.map { Voices.byId(VoiceDefaults.voice(it[voiceKey])).id }
     /** Speaking speed, 1.0 = normal. */
     val voiceSpeed: Flow<Float> = context.dataStore.data.map { VoiceDefaults.speed(it[voiceSpeedKey]) }
     /** Google's online voice when the internet works (D-074). Off by default: it sends spoken text to Google. */
-    val onlineVoice: Flow<Boolean> = context.dataStore.data.map { it[onlineVoiceKey] ?: false }
+    val onlineVoice: Flow<Boolean> = read(onlineVoiceKey, false)
     val chatModel: Flow<String> = context.dataStore.data.map {
         if (it[chatModelKey] == ChatModels.LFM) ChatModels.LFM else ChatModels.DEFAULT
     }
 
-    suspend fun setChatModel(v: String) = context.dataStore.edit { it[chatModelKey] = v }
+    suspend fun setChatModel(v: String) = write(chatModelKey, v)
     suspend fun setVoice(v: String) = context.dataStore.edit { it[voiceKey] = Voices.byId(v).id }
-    suspend fun setVoiceSpeed(v: Float) = context.dataStore.edit { it[voiceSpeedKey] = v }
-    suspend fun setOnlineVoice(v: Boolean) = context.dataStore.edit { it[onlineVoiceKey] = v }
-    suspend fun setCloudEnabled(v: Boolean) = context.dataStore.edit { it[cloudKey] = v }
-    suspend fun setCloudForChat(v: Boolean) = context.dataStore.edit { it[cloudChatKey] = v }
-    suspend fun setCloudSendFacts(v: Boolean) = context.dataStore.edit { it[cloudFactsKey] = v }
-    suspend fun setFollowUp(v: Boolean) = context.dataStore.edit { it[followUpKey] = v }
-    suspend fun setSttSecondPass(v: Boolean) = context.dataStore.edit { it[sttSecondPassKey] = v }
-    suspend fun setAutoClearNotifications(v: Boolean) = context.dataStore.edit { it[autoClearKey] = v }
-    suspend fun setNightExplore(v: Boolean) = context.dataStore.edit { it[nightExploreKey] = v }
-    suspend fun setNightExplored(v: String) = context.dataStore.edit { it[nightExploredKey] = v }
-    suspend fun setHomeCity(v: String) = context.dataStore.edit { it[cityKey] = v }
-    suspend fun setShowPanel(v: Boolean) = context.dataStore.edit { it[panelKey] = v }
-    suspend fun setVoiceId(v: Boolean) = context.dataStore.edit { it[voiceIdKey] = v }
-    suspend fun setSpeakerThreshold(v: Float) = context.dataStore.edit { it[speakerThresholdKey] = v }
-    suspend fun setWakeThreshold(value: Float) = context.dataStore.edit { it[thresholdKey] = value }
-    suspend fun setListeningEnabled(value: Boolean) = context.dataStore.edit { it[enabledKey] = value }
+    suspend fun setVoiceSpeed(v: Float) = write(voiceSpeedKey, v)
+    suspend fun setOnlineVoice(v: Boolean) = write(onlineVoiceKey, v)
+    suspend fun setCloudEnabled(v: Boolean) = write(cloudKey, v)
+    suspend fun setCloudForChat(v: Boolean) = write(cloudChatKey, v)
+    suspend fun setCloudSendFacts(v: Boolean) = write(cloudFactsKey, v)
+    suspend fun setFollowUp(v: Boolean) = write(followUpKey, v)
+    suspend fun setSttSecondPass(v: Boolean) = write(sttSecondPassKey, v)
+    suspend fun setAutoClearNotifications(v: Boolean) = write(autoClearKey, v)
+    suspend fun setNightExplore(v: Boolean) = write(nightExploreKey, v)
+    suspend fun setNightExplored(v: String) = write(nightExploredKey, v)
+    suspend fun setHomeCity(v: String) = write(cityKey, v)
+    suspend fun setShowPanel(v: Boolean) = write(panelKey, v)
+    suspend fun setVoiceId(v: Boolean) = write(voiceIdKey, v)
+    suspend fun setSpeakerThreshold(v: Float) = write(speakerThresholdKey, v)
+    suspend fun setWakeThreshold(value: Float) = write(thresholdKey, value)
+    suspend fun setListeningEnabled(value: Boolean) = write(enabledKey, value)
+
+    private fun <T> read(key: Preferences.Key<T>, default: T): Flow<T> = context.dataStore.data.map { it[key] ?: default }
+
+    private suspend fun <T> write(key: Preferences.Key<T>, value: T) {
+        context.dataStore.edit { it[key] = value }
+    }
 
     companion object {
         const val DEFAULT_THRESHOLD = 0.5f
