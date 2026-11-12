@@ -3,6 +3,7 @@ package com.alrasin.jarvis.brain
 import android.content.Context
 import com.alrasin.jarvis.actions.ToolRegistry
 import com.alrasin.jarvis.core.JarvisLog
+import com.alrasin.jarvis.core.TextNorm
 import com.alrasin.jarvis.core.ToolCall
 import com.alrasin.jarvis.data.MemoryDao
 import com.alrasin.jarvis.data.NoteDao
@@ -26,8 +27,6 @@ import java.io.File
 import javax.inject.Inject
 import javax.inject.Singleton
 
-// Regexes built once, not on every call (ROADMAP §L.4).
-private val CHAT_RE = Regex("\\s+")
 
 /**
  * Local LLM levels of the Router (PLAN 9.2–9.4). GGUF files live in `<external files>/models/llm/`.
@@ -242,7 +241,7 @@ class ModelBrain @Inject constructor(
                         done.forEach { s -> ChatFormat.clean(s).takeIf { it.isNotBlank() }?.let { JarvisLog.i("latency: chat clause ${System.currentTimeMillis() - started} ms")
                             onSentence(it); spoke = true } }
                         buf = rest
-                        ChatFormat.clean(visibleAnswer.toString()).split(CHAT_RE).size < 80
+                        ChatFormat.clean(visibleAnswer.toString()).split(TextNorm.SPACES).size < 80
                     }
                 }.onFailure { JarvisLog.e("chat model failed", it) }.getOrNull()
                 val genMs = (System.currentTimeMillis() - firstAt - yielded).coerceAtLeast(1)

@@ -1,9 +1,8 @@
 package com.alrasin.jarvis.voice
 
+import com.alrasin.jarvis.core.TextNorm
 import java.util.Locale
 
-// Regexes built once, not on every call (ROADMAP §L.4).
-private val PREPARE_RE = Regex("\\s+")
 
 /** Validates tokenizer metadata before passing user vocabulary to the native recognizer. */
 object SttHotwords {
@@ -19,14 +18,14 @@ object SttHotwords {
         }
         val tokens = linkedSetOf<String>()
         for (line in tokensText.lineSequence().filter { it.isNotBlank() }) {
-            val fields = line.trim().split(PREPARE_RE)
+            val fields = line.trim().split(TextNorm.SPACES)
             if (fields.size != 2 || fields[1].toIntOrNull() == null || !tokens.add(fields[0])) {
                 return Prepared(reason = "invalid token table")
             }
         }
         val pieces = linkedSetOf<String>()
         for (line in bpeVocabText.removeSuffix("\n").splitToSequence('\n')) {
-            val fields = line.trim().split(PREPARE_RE)
+            val fields = line.trim().split(TextNorm.SPACES)
             if (fields.size != 2 || !fields[1].matches(SCORE) || fields[1].toFloatOrNull()?.isFinite() != true || !pieces.add(fields[0])) {
                 return Prepared(reason = "invalid bpe.vocab")
             }
@@ -39,7 +38,7 @@ object SttHotwords {
         val phrases = linkedSetOf<String>()
         for (hotword in hotwords) {
             if (hotword.length > MAX_PHRASE_LENGTH || hotword.any { it == '/' || it == ':' || it == '@' || it == '#' || it == '\n' || it == '\r' }) continue
-            var phrase = hotword.trim().replace(PREPARE_RE, " ")
+            var phrase = hotword.trim().replace(TextNorm.SPACES, " ")
             phrase = if (upperCase) phrase.uppercase(Locale.ROOT) else phrase.lowercase(Locale.ROOT)
             if (phrase.isEmpty() || phrase.any { it != ' ' && it.toString() !in pieces }) continue
             phrases.add(phrase)

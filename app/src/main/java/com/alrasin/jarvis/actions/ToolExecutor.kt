@@ -4,6 +4,7 @@ import com.alrasin.jarvis.agent.Skills
 import com.alrasin.jarvis.brain.Persona
 import com.alrasin.jarvis.core.JarvisLog
 import com.alrasin.jarvis.core.SmokeSession
+import com.alrasin.jarvis.core.TextNorm
 import kotlin.coroutines.coroutineContext
 import com.alrasin.jarvis.core.Risk
 import com.alrasin.jarvis.core.Tool
@@ -13,8 +14,6 @@ import com.alrasin.jarvis.core.ToolResult
 import javax.inject.Inject
 import javax.inject.Singleton
 
-// Regexes built once, not on every call (ROADMAP §L.4).
-private val SPOKEN_RE = Regex("\\s+")
 
 /**
  * SecurityGate (PLAN 4.2 / 12.2): CONFIRM tools need a "yes" first; VOICE_ID tools need a matching voice when locked
@@ -196,7 +195,7 @@ internal class ToolSafetyGate {
         return "$action, ${Persona.ADDRESS}?"
     }
 
-    private fun spoken(text: String): String = text.replace('_', ' ').replace(SPOKEN_RE, " ").trim()
+    private fun spoken(text: String): String = text.replace('_', ' ').replace(TextNorm.SPACES, " ").trim()
 }
 
 /** "07:00" → "7:00 AM"; null when not HH:mm. */

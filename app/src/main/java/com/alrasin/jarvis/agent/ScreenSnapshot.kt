@@ -1,9 +1,8 @@
 package com.alrasin.jarvis.agent
 
 import com.alrasin.jarvis.core.Json
+import com.alrasin.jarvis.core.TextNorm
 
-// Regexes built once, not on every call (ROADMAP §L.4).
-private val COMPACT_RE = Regex("\\s+")
 
 data class ScreenElement(
     val index: Int,
@@ -22,7 +21,7 @@ data class ScreenSnapshot(val packageName: String, val elements: List<ScreenElem
     fun compact(): String = buildString {
         append("App: ").append(packageName.take(160)).append('\n')
         elements.take(60).forEach { e ->
-            fun quoted(value: String) = Json.write(value.replace(COMPACT_RE, " ").take(160))
+            fun quoted(value: String) = Json.write(value.replace(TextNorm.SPACES, " ").take(160))
             append('#').append(e.index)
             append(" text=").append(quoted(if (e.password) "[private]" else e.text))
             append(" desc=").append(quoted(if (e.password) "[private]" else e.description))

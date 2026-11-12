@@ -1,5 +1,6 @@
 package com.alrasin.jarvis.brain
 
+import com.alrasin.jarvis.core.TextNorm
 import java.time.DayOfWeek
 import java.time.LocalDate
 import java.time.LocalDateTime
@@ -19,7 +20,6 @@ private val PARSE_RE_7 = Regex(" (?:at |by |for )?(noon|midday|midnight) ")
 private val NORMALIZE_RE = Regex("\\b([ap])\\.m\\.?(?=\\s|$)")
 private val NORMALIZE_RE_2 = Regex("(?<=\\d)([ap]m)\\b")
 private val NORMALIZE_RE_3 = Regex("\\bon (the )?(first|second|third|fourth|fifth|sixth|seventh|eighth|ninth|tenth)\\b")
-private val NORMALIZE_RE_4 = Regex("\\s+")
 private val NORMALIZE_RE_5 = Regex("\\b(\\d{1,2}) 0 ([0-9])\\b")
 
 /**
@@ -214,7 +214,7 @@ object TimeParser {
             .replace(NORMALIZE_RE_3) {
                 "on ${it.groupValues[1]}${listOf("first", "second", "third", "fourth", "fifth", "sixth", "seventh", "eighth", "ninth", "tenth").indexOf(it.groupValues[2]) + 1}th"
             }
-            .replace(NORMALIZE_RE_4, " ").trim(),
+            .replace(TextNorm.SPACES, " ").trim(),
     ).replace(NORMALIZE_RE_5, "$1 0$2")
 
     private fun ampm(s: String) = when (s.replace(" ", "")) { "am" -> "am"; "pm" -> "pm"; else -> null }
@@ -225,5 +225,5 @@ object TimeParser {
         else -> null
     }
 
-    private fun clean(s: String) = s.replace(NORMALIZE_RE_4, " ").trim()
+    private fun clean(s: String) = s.replace(TextNorm.SPACES, " ").trim()
 }

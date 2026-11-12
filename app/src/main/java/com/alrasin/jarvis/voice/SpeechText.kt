@@ -1,5 +1,6 @@
 package com.alrasin.jarvis.voice
 
+import com.alrasin.jarvis.core.TextNorm
 import java.time.DateTimeException
 import java.time.LocalDate
 import java.util.Locale
@@ -29,7 +30,6 @@ private val NORMALIZE_RE_21 = Regex(",\\s*(?=boss\\b)")
 private val NORMALIZE_RE_22 = Regex("[\\[\\]{}()<>]")
 private val NORMALIZE_RE_23 = Regex("[—–]")
 private val NORMALIZE_RE_24 = Regex("[^\\p{L}\\p{N}\\s.,!?:;'\\-]")
-private val NORMALIZE_RE_25 = Regex("\\s+")
 private val NORMALIZE_RE_26 = Regex("\\s+([.,!?:;])")
 private val NORMALIZE_RE_27 = Regex("[.!?]{2,}")
 private val NORMALIZE_RE_28 = Regex("([.,!?;:])(?:\\s*[,;:])+")
@@ -139,7 +139,7 @@ object SpeechText {
             .replace('’', '\'').replace('“', ' ').replace('”', ' ')
             .replace(NORMALIZE_RE_23, ", ")
             .replace(NORMALIZE_RE_24, " ")
-            .replace(NORMALIZE_RE_25, " ")
+            .replace(TextNorm.SPACES, " ")
             .replace(NORMALIZE_RE_26, "$1")
             .replace(NORMALIZE_RE_27, ".")
             .replace(NORMALIZE_RE_28, "$1")
@@ -159,7 +159,7 @@ object SpeechText {
         if (clean.isBlank()) return emptyList()
         var made = 0
         return clean.split(SENTENCE_END).flatMap { sentence ->
-            val words = sentence.split(SPACES)
+            val words = sentence.split(TextNorm.SPACES)
             val result = mutableListOf<String>()
             var start = 0
             while (start < words.size) {
@@ -195,7 +195,6 @@ object SpeechText {
     const val CLAUSE_PAUSE_MS = 140
     const val WORD_PAUSE_MS = 40
     private val SENTENCE_END = Regex("(?<=[.!?])\\s+")
-    private val SPACES = Regex("\\s+")
 
     private fun link(value: String): String = "link" + value.takeLastWhile { it in ".,!?;:" }
 

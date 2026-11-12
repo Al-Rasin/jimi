@@ -71,7 +71,8 @@ private val SKILLS_WHOLE_RE_3 = Regex("^(?:read (?:the |this |me the )?(?:list|r
 private val SKILLS_WHOLE_RE_4 = Regex("^(?:.+ (?:switch|toggle|option|checkbox))$")
 
 // Regexes built once, not on every call (ROADMAP §L.4).
-private val NORMALIZE_RE = Regex("\\s+")
+private val NOT_WORD = Regex("[^a-z0-9' ]")
+private val NOT_WORD_OR_COLON = Regex("[^a-z0-9': ]")
 private val MATCH_RE = Regex("^(?:(?:hey |ok |okay )?(?:jarvis|jimi|jimmy)[, ]+|(?:please|pls|can you|could you|would you|will you|i want you to|i want to|i would like to|just|hey|ok|okay) )+")
 private val TOGGLE_RE = Regex("^(?:explain|define|why|how|what does|what do|tell me about|dont|do not|never)\\b")
 private val TOGGLE_RE_2 = Regex("\\b(turn on|switch on|enable|activate|start|open)\\b")
@@ -214,9 +215,9 @@ object RuleMatcher {
     fun normalize(text: String, keepClockColon: Boolean = false): String = NumberWords.normalize(
         text.lowercase()
             .replace("%", " percent")
-            .replace(Regex(if (keepClockColon) "[^a-z0-9': ]" else "[^a-z0-9' ]"), " ")
+            .replace(if (keepClockColon) NOT_WORD_OR_COLON else NOT_WORD, " ")
             .replace("'s ", "s ").replace("'", "")
-            .replace(NORMALIZE_RE, " ").trim(),
+            .replace(TextNorm.SPACES, " ").trim(),
     ).let { polite(mishears(it)) }
 
     /** Speech-to-text mistakes seen in the user's real commands (files/commands, 2026-10-22). */
@@ -237,7 +238,7 @@ object RuleMatcher {
             " i want to ", " i would like to ", " i'd like to ", " for me ", " jarvis ", " jimi ", " jimmy ",
             " hey ", " ok ", " okay ", " just ", " now ",
         ).forEach { w -> s = s.replace(w, " ") }
-        return s.replace(NORMALIZE_RE, " ").trim()
+        return s.replace(TextNorm.SPACES, " ").trim()
     }
 
     internal fun interrupt(input: String): ToolCall? = talk(normalize(input))
@@ -402,11 +403,11 @@ object RuleMatcher {
         if (typed == null && named == null) return null
         val kind = typed?.groupValues?.get(1)?.removeSuffix("s")
         var spec = (typed?.groupValues?.get(2) ?: listOf(named!!.groupValues[1], named.groupValues[2]).joinToString(" "))
-            .replace(CALENDAR_ADD_RE_2, " ").replace(NORMALIZE_RE, " ").trim()
+            .replace(CALENDAR_ADD_RE_2, " ").replace(TextNorm.SPACES, " ").trim()
         var minutes: Long? = null
         CALENDAR_ADD_RE_3.find(spec)?.let { d ->
             minutes = TimeParser.duration(d.groupValues[1])?.div(60)
-            spec = spec.replaceRange(d.range, " ").replace(NORMALIZE_RE, " ").trim()
+            spec = spec.replaceRange(d.range, " ").replace(TextNorm.SPACES, " ").trim()
         }
         val at = TimeParser.parse(spec, now)
         var title = (at?.rest ?: spec).trim().replace(CALENDAR_ADD_RE_4, "").removeSuffix(" at").removeSuffix(" on").trim()
@@ -454,7 +455,7 @@ object RuleMatcher {
         .replace(EVENT_QUERY_RE, " ")
         .replace(Regex("\\b(?:today|tonight|tomorrow|(?:on |this |next )?(?:$WEEKDAY))\\b"), " ")
         .replace(EVENT_QUERY_RE_2, "")
-        .replace(NORMALIZE_RE, " ").trim()
+        .replace(TextNorm.SPACES, " ").trim()
         .takeUnless { it.isEmpty() || it.matches(Regex("(?:my |the |next )?(?:$EV|calendar)")) }
 
     /** "stop the 11 am alarm", "cancel alarm at 7" → cancel only that alarm (24h time). */

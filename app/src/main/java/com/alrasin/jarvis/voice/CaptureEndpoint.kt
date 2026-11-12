@@ -1,5 +1,6 @@
 package com.alrasin.jarvis.voice
 
+import com.alrasin.jarvis.core.TextNorm
 import kotlin.math.max
 import kotlin.math.sqrt
 
@@ -54,14 +55,13 @@ class CaptureEndpoint(
             "call", "open", "play", "send", "set", "remind", "turn", "text", "message",
             "search", "find", "tell", "what", "how", "who", "where", "why", "say",
         )
-        private val SPACES = Regex("\\s+")
 
         /**
          * Silence that ends the command (D-073). Phone assistants wait about one second; a half-said
          * sentence or a filler word ("um") waits two, like a person who sees you are still thinking.
          */
         fun silenceMillis(text: String): Long {
-            val words = text.lowercase().trim().split(SPACES)
+            val words = text.lowercase().trim().split(TextNorm.SPACES)
             val last = words.last().trimEnd('.', ',', '?', '!')
             return when {
                 last in INCOMPLETE_ENDINGS || text.trim().lowercase() in setOf("turn on", "turn off") -> 2_000

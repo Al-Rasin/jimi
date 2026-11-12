@@ -1,10 +1,10 @@
 package com.alrasin.jarvis.brain
 
+import com.alrasin.jarvis.core.TextNorm
 import com.alrasin.jarvis.core.ToolCall
 import java.util.Locale
 
 // Regexes built once, not on every call (ROADMAP §L.4).
-private val RESOLVE_RE = Regex("\\s+")
 private val NOTE_LOCATION_RE = Regex("Saved in (.+?)\\.?$")
 private val NORMALIZE_RE = Regex("(?:please )?(?:call|phone|dial) (?:him|her|them|that person|the same person)(?: on (whatsapp|phone))?(?: again)?")
 private val NORMALIZE_RE_2 = Regex("(?:please )?(?:send|text|message) (?:it|that|the same message) to (.+?)(?: (?:too|as well|also))?")
@@ -62,7 +62,7 @@ class ConversationContext(
     fun clear() { recent = null }
 
     fun resolve(input: String): Resolution? {
-        val text = input.trim().trimEnd('.', '?', '!').lowercase(Locale.ROOT).replace(RESOLVE_RE, " ")
+        val text = input.trim().trimEnd('.', '?', '!').lowercase(Locale.ROOT).replace(TextNorm.SPACES, " ")
         val current = snapshot()
         CALL_REFERENCE.matchEntire(text)?.let {
             val contact = current?.entities?.get("contact")?.takeUnless { normalize(it) in PRONOUNS }

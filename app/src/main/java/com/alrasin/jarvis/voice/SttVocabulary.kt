@@ -1,5 +1,6 @@
 package com.alrasin.jarvis.voice
 
+import com.alrasin.jarvis.core.TextNorm
 import java.text.Normalizer
 import java.util.Locale
 
@@ -21,7 +22,6 @@ class SttVocabulary(contacts: List<String> = emptyList(), apps: List<String> = e
         const val MAX_APPS = 256
         const val MAX_PHRASE_LENGTH = 80
         private const val MAX_PHRASE_WORDS = 8
-        private val whitespace = Regex("\\s+")
         private val punctuation = Regex("[^\\p{L}\\p{M}\\p{N}' -]+")
 
         val TOOL_WORDS = listOf(
@@ -46,7 +46,7 @@ class SttVocabulary(contacts: List<String> = emptyList(), apps: List<String> = e
             val normalized = Normalizer.normalize(value, Normalizer.Form.NFKC)
                 .replace('\u2019', '\'')
                 .replace(punctuation, " ")
-                .replace(whitespace, " ")
+                .replace(TextNorm.SPACES, " ")
                 .trim(' ', '-', '\'')
             // Contacts may use a phone number as their display name; never bias toward one.
             if (normalized.none { it.isLetter() } || normalized.count { it.isDigit() } >= 7) return null

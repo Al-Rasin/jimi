@@ -2,6 +2,7 @@ package com.alrasin.jarvis.voice
 
 import android.content.Context
 import com.alrasin.jarvis.core.JarvisLog
+import com.alrasin.jarvis.core.TextNorm
 import com.k2fsa.sherpa.onnx.FeatureConfig
 import com.k2fsa.sherpa.onnx.OnlineModelConfig
 import com.k2fsa.sherpa.onnx.OnlineRecognizer
@@ -13,7 +14,6 @@ import java.io.File
 // Regexes built once, not on every call (ROADMAP §L.4).
 private val CLOSE_RE = Regex("(?<!\\d):|:(?!\\d)")
 private val CLOSE_RE_2 = Regex("[^a-z0-9': ]")
-private val CLOSE_RE_3 = Regex("\\s+")
 
 /**
  * Streaming speech-to-text (PLAN 3.2, D-026): sherpa-onnx transducer (Kroko zipformer en) from APK assets `stt/`.
@@ -148,7 +148,7 @@ class SpeechToText(context: Context, dir: File? = null, hotwords: Collection<Str
         /** Lower case, no punctuation (Kroko writes "Hey, Jimmy."), keeps apostrophes: "what's". */
         fun normalize(text: String) =
             text.lowercase().replace(CLOSE_RE, " ")
-                .replace(CLOSE_RE_2, " ").replace(CLOSE_RE_3, " ").trim()
+                .replace(CLOSE_RE_2, " ").replace(TextNorm.SPACES, " ").trim()
 
         /** Prefer int8 files when a folder has both. */
         private fun path(dir: File?, part: String): String {

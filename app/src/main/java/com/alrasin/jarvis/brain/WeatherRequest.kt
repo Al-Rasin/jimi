@@ -1,11 +1,11 @@
 package com.alrasin.jarvis.brain
 
+import com.alrasin.jarvis.core.TextNorm
 import com.alrasin.jarvis.core.ToolCall
 
 // Regexes built once, not on every call (ROADMAP §L.4).
 private val MATCH_RE = Regex("\\btomorrows?\\b")
 private val MATCH_RE_2 = Regex("\\b(?:todays|today|tomorrows|tomorrow|right now|now|outside|current|currently|latest)\\b")
-private val MATCH_RE_3 = Regex("\\s+")
 private val MATCH_RE_4 = Regex(" (?:in|for|at) ([a-z][a-z ]*)$")
 
 internal object WeatherRequest {
@@ -17,7 +17,7 @@ internal object WeatherRequest {
     fun match(text: String): ToolCall? {
         val day = if (MATCH_RE.containsMatchIn(text)) "tomorrow" else "today"
         val withoutDay = text.replace(MATCH_RE_2, " ")
-            .replace(MATCH_RE_3, " ").trim()
+            .replace(TextNorm.SPACES, " ").trim()
             .removeSuffix(" right") // normalize() drops the "now" of "right now"
             .replace(here, "")
         val location = MATCH_RE_4.find(withoutDay)

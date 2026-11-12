@@ -1,14 +1,13 @@
 package com.alrasin.jarvis.notify
 
+import com.alrasin.jarvis.core.TextNorm
 import com.alrasin.jarvis.data.NotificationLog
 import java.util.Locale
 
-// Regexes built once, not on every call (ROADMAP §L.4).
-private val SEARCH_RE = Regex("\\s+")
 
 object NotificationHistorySearch {
     fun search(items: List<NotificationLog>, query: String): List<NotificationLog> {
-        val words = query.lowercase(Locale.ROOT).trim().split(SEARCH_RE).filter { it.isNotEmpty() }
+        val words = query.lowercase(Locale.ROOT).trim().split(TextNorm.SPACES).filter { it.isNotEmpty() }
         if (words.isEmpty()) return emptyList()
         return items.filter { item ->
             val haystack = listOf(item.pkg, item.appName, item.title, item.text, item.reason, item.status, item.label.orEmpty())

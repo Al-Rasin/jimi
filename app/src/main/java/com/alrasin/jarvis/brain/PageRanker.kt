@@ -1,5 +1,6 @@
 package com.alrasin.jarvis.brain
 
+import com.alrasin.jarvis.core.TextNorm
 import java.util.Locale
 import kotlin.math.ln
 
@@ -7,7 +8,6 @@ object PageRanker {
     data class Chunk(val text: String, val sourceUrl: String, val score: Double)
 
     private val words = Regex("[\\p{L}\\p{N}]+(?:['’][\\p{L}]+)?")
-    private val whitespace = Regex("\\s+")
     private val sentenceEnd = Regex("(?<=[.!?])\\s+")
     private val stopWords = setOf(
         "a", "an", "the", "and", "or", "of", "to", "in", "on", "at", "for", "from", "with",
@@ -104,7 +104,7 @@ object PageRanker {
             count = 0
         }
         for (rawLine in text.lineSequence()) {
-            val line = rawLine.replace('\u00a0', ' ').trim().replace(whitespace, " ")
+            val line = rawLine.replace('\u00a0', ' ').trim().replace(TextNorm.SPACES, " ")
             if (line.isEmpty()) {
                 if (count >= 60) flush()
                 continue

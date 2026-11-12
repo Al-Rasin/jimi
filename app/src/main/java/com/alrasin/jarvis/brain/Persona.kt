@@ -1,10 +1,10 @@
 package com.alrasin.jarvis.brain
 
+import com.alrasin.jarvis.core.TextNorm
 import com.alrasin.jarvis.core.ToolResult
 
 // Regexes built once, not on every call (ROADMAP §L.4).
 private val CLEAN_RE = Regex("[^a-z' ]")
-private val CLEAN_RE_2 = Regex("\\s+")
 private val SMALL_TALK_RE = Regex("(hi|hello|hey|yo|hii|helo|salam|assalamualaikum|assalamu alaikum)( there| jimi)?")
 private val SMALL_TALK_RE_2 = Regex("good (afternoon|evening)")
 private val SMALL_TALK_RE_3 = Regex("how are you( doing)?|hows it going|how do you do|whats up|sup")
@@ -64,7 +64,7 @@ object Persona {
     fun isNo(t: String) = NO.matches(clean(t))
 
     /** Lower case, letters only. Not RuleMatcher.normalize: that drops "hey", "ok", "please". */
-    fun clean(t: String) = t.lowercase().replace(CLEAN_RE, " ").replace(CLEAN_RE_2, " ").trim()
+    fun clean(t: String) = t.lowercase().replace(CLEAN_RE, " ").replace(TextNorm.SPACES, " ").trim()
 
     /** Small talk that needs no model. Null = not small talk. */
     fun smallTalk(input: String, hour: Int): String? {

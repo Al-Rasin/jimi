@@ -1,6 +1,7 @@
 package com.alrasin.jarvis.brain
 
 import com.alrasin.jarvis.agent.AgentRouting
+import com.alrasin.jarvis.core.TextNorm
 import com.alrasin.jarvis.core.ToolCall
 import java.util.Locale
 
@@ -16,7 +17,6 @@ object IntentRouter {
 
     const val CONFIDENCE_THRESHOLD = 0.75f
 
-    private val spaces = Regex("\\s+")
     private val punctuation = Regex("[^\\p{L}\\p{N}_' ]")
     private val address = Regex("^(?:(?:hey |ok |okay )?(?:jimi|jimmy|jarvis)[ ,]+|please )+")
     private val polite = Regex("^(?:(?:can|could|would|will) you (?:please )?|i (?:want|would like) you to |please )")
@@ -87,7 +87,7 @@ object IntentRouter {
 
     fun classify(text: String, ruleCall: ToolCall? = RuleMatcher.match(text)): Decision {
         val raw = text.trim().lowercase(Locale.ROOT).replace('’', '\'')
-        var normalized = spaces.replace(punctuation.replace(raw, " "), " ").trim()
+        var normalized = TextNorm.SPACES.replace(punctuation.replace(raw, " "), " ").trim()
         normalized = address.replace(normalized, "")
         normalized = polite.replace(normalized, "").removeSuffix(" please").trim()
         if (normalized.isEmpty()) return Decision(Route.CHAT, 0f, "empty input")

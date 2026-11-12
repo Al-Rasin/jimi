@@ -1,13 +1,13 @@
 package com.alrasin.jarvis.llm
 
 import com.alrasin.jarvis.brain.Exchange
+import com.alrasin.jarvis.core.TextNorm
 
 // Regexes built once, not on every call (ROADMAP §L.4).
 private val SENTENCES_RE = Regex("[.!?](\\s|$)")
 private val SPEECH_CHUNKS_RE = Regex("<think>.*?</think>", RegexOption.DOT_MATCHES_ALL)
 private val SPEECH_CHUNKS_RE_2 = Regex("<[^>]*$")
 private val SPEECH_CHUNKS_RE_3 = Regex("[,;:]\\s+")
-private val SPEECH_CHUNKS_RE_4 = Regex("\\s+")
 private val SPEECH_CHUNKS_RE_5 = Regex("\\S+\\s+")
 private val CLEAN_RE = Regex("<think>.*?(?:</think>|$)", RegexOption.DOT_MATCHES_ALL)
 private val CLEAN_RE_2 = Regex("<\\|im_start\\|>\\s*(?:system|user|assistant)?|</?think>|<\\|[^|>]*\\|>|</?(?:start|end)_of_turn>|<bos>|<eos>")
@@ -73,7 +73,7 @@ object ChatFormat {
         var start = 0
         SPEECH_CHUNKS_RE_3.findAll(pending).forEach { boundary ->
             val clause = pending.substring(start, boundary.range.first + 1).trim()
-            if (clause.split(SPEECH_CHUNKS_RE_4).size >= clauseWords) {
+            if (clause.split(TextNorm.SPACES).size >= clauseWords) {
                 out.add(clause)
                 start = boundary.range.last + 1
             }
@@ -109,5 +109,5 @@ object ChatFormat {
     fun clean(text: String) = text.replace(CLEAN_RE, "")
         .replace(CLEAN_RE_2, " ")
         .replace(CLEAN_RE_3, " ")
-        .replace(CLEAN_RE_4, "").replace(SPEECH_CHUNKS_RE_4, " ").trim()
+        .replace(CLEAN_RE_4, "").replace(TextNorm.SPACES, " ").trim()
 }
