@@ -1,11 +1,7 @@
 package com.alrasin.jarvis.brain
 
 import android.content.Context
-import com.alrasin.jarvis.actions.ContactResolver
-import com.alrasin.jarvis.actions.Contacts
 import com.alrasin.jarvis.actions.JarvisAccessibilityService
-import com.alrasin.jarvis.actions.Outcome
-import com.alrasin.jarvis.actions.SelfAccount
 import com.alrasin.jarvis.actions.ToolExecutor
 import com.alrasin.jarvis.agent.AgentResult
 import com.alrasin.jarvis.agent.AgentRouting
@@ -19,13 +15,9 @@ import com.alrasin.jarvis.core.SmokeSession
 import kotlin.coroutines.coroutineContext
 import com.alrasin.jarvis.core.Json
 import com.alrasin.jarvis.core.ToolCall
-import com.alrasin.jarvis.core.ToolContext
-import com.alrasin.jarvis.core.ToolResult
 import com.alrasin.jarvis.data.ConversationTurn
 import com.alrasin.jarvis.data.MemoryDao
-import com.alrasin.jarvis.data.Routine
 import com.alrasin.jarvis.data.RoutineDao
-import com.alrasin.jarvis.data.ToolCallLog
 import com.alrasin.jarvis.data.ToolLogDao
 import com.alrasin.jarvis.data.TurnDao
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -77,25 +69,14 @@ class Assistant @Inject constructor(
     )
 
     private val lock = Mutex()
-    private var pending: Pair<ToolCall, Long>? = null
-    private var pendingQuestion: String? = null
-    private var contactChoice = PendingContactChoice()
-    private val draft = MessageDraft()
-    private val timeSlot = TimeSlot()
-    private var conversation = ConversationContext()
-    private val contacts = Contacts(context)
+    private val state = TalkState()
+    private val tools = ToolRunner(context, executor, toolLog, routines, screenAgent, cloud, models, state)
     private var smokePending: Pair<ToolCall, Long>? = null
     private var smokeLastReply = ""
     private val smokeHistory = ArrayDeque<Exchange>()
     private val smokeContactChoice = PendingContactChoice()
     private val smokeConversation = ConversationContext()
-    private var lastReply = ""
-    /** Last routing step, so a crash reply can say what failed (ROADMAP §M.3). */
-    private var stage = "start"
-    private val history = ArrayDeque<Exchange>()
     private var lastTurnAt = 0L
-    /** Cloud answers only: safe to send back to the cloud as context (no tool data, D-035). */
-    private val cloudHistory = ArrayDeque<Exchange>()
 
     fun stopScreenAgent() = screenAgent.stop()
 
@@ -107,30 +88,30 @@ class Assistant @Inject constructor(
         }
         return lock.withLock {
         if (smoke == null) return@withLock handleLocked(input, speak)
-        val liveContactChoice = contactChoice
-        val liveConversation = conversation
-        contactChoice = smokeContactChoice
-        conversation = smokeConversation
-        val livePending = pending
-        val liveReply = lastReply
-        val liveHistory = history.toList()
-        pending = smokePending
-        lastReply = smokeLastReply
-        history.clear()
-        history.addAll(smokeHistory)
+        val liveContactChoice = state.contactChoice
+        val liveConversation = state.conversation
+        state.contactChoice = smokeContactChoice
+        state.conversation = smokeConversation
+        val livePending = state.pending
+        val liveReply = state.lastReply
+        val liveHistory = state.history.toList()
+        state.pending = smokePending
+        state.lastReply = smokeLastReply
+        state.history.clear()
+        state.history.addAll(smokeHistory)
         try {
             handleLocked(input, {})
         } finally {
-            smokePending = pending
-            smokeLastReply = lastReply
+            smokePending = state.pending
+            smokeLastReply = state.lastReply
             smokeHistory.clear()
-            smokeHistory.addAll(history)
-            contactChoice = liveContactChoice
-            conversation = liveConversation
-            pending = livePending
-            lastReply = liveReply
-            history.clear()
-            history.addAll(liveHistory)
+            smokeHistory.addAll(state.history)
+            state.contactChoice = liveContactChoice
+            state.conversation = liveConversation
+            state.pending = livePending
+            state.lastReply = liveReply
+            state.history.clear()
+            state.history.addAll(liveHistory)
         }
     }
 
@@ -147,14 +128,14 @@ class Assistant @Inject constructor(
         smoke?.requestedCall = null
         smoke?.ok = false
         val text = input.heard.trim()
-        stage = "start"
+        state.stage = "start"
         val now = System.currentTimeMillis()
         // A new talk after a long break starts fresh, so old turns are not mixed into a new topic.
-        if (smoke == null && now - lastTurnAt > HISTORY_IDLE_MS) history.clear()
+        if (smoke == null && now - lastTurnAt > HISTORY_IDLE_MS) state.history.clear()
         if (smoke == null) lastTurnAt = now
         val r = if (text.isEmpty()) Reply(Persona.DIDNT_GET) else runCatching { route(text, input, speak) }
             .onFailure { if (it is CancellationException) throw it; JarvisLog.e("assistant failed", it) }
-            .getOrElse { smoke?.ok = false; smoke?.route = "error"; Reply(ReplyText.routeFailed(stage)) }
+            .getOrElse { smoke?.ok = false; smoke?.route = "error"; Reply(ReplyText.routeFailed(state.stage)) }
         val id = if (smoke != null) 0L else turns.insert(
             ConversationTurn(
                 timeMs = System.currentTimeMillis(), source = input.source, heard = text, rawText = input.raw,
@@ -162,14 +143,14 @@ class Assistant @Inject constructor(
             ),
         )
         if (r.text.isNotBlank()) {
-            if (r.endConversation) clearConversation()
-            else if (r.tool in setOf("chat", "cloud")) conversation.remember(text, null, r.text)
-            lastReply = r.text
-            history.addLast(Exchange(text, r.text))
-            while (history.size > 6) history.removeFirst()
+            if (r.endConversation) state.clear()
+            else if (r.tool in setOf("chat", "cloud")) state.conversation.remember(text, null, r.text)
+            state.lastReply = r.text
+            state.history.addLast(Exchange(text, r.text))
+            while (state.history.size > 6) state.history.removeFirst()
             if (r.tool == "cloud") {
-                cloudHistory.addLast(Exchange(text, r.text))
-                while (cloudHistory.size > 4) cloudHistory.removeFirst()
+                state.cloudHistory.addLast(Exchange(text, r.text))
+                while (state.cloudHistory.size > 4) state.cloudHistory.removeFirst()
             }
         }
         return r.copy(turnId = id)
@@ -178,15 +159,15 @@ class Assistant @Inject constructor(
     private suspend fun route(text: String, input: Input, speak: (String) -> Unit): Reply {
         val smoke = coroutineContext[SmokeSession]
         fun trace(route: String, call: ToolCall? = null, ok: Boolean = true) {
-            stage = route
+            state.stage = route
             smoke?.route = route
             smoke?.call = call
             smoke?.ok = ok
         }
         val routingStarted = System.nanoTime()
         val rule = RuleMatcher.match(text)
-        if (smoke == null && rule?.tool != "panic") teachCall(text, rule)?.let { return runTool(it, input, "teach") }
-        if (rule?.tool in setOf("panic", "cancel")) return runTool(rule!!, input, "rule")
+        if (smoke == null && rule?.tool != "panic") teachCall(text, rule)?.let { return tools.run(it, input, "teach") }
+        if (rule?.tool in setOf("panic", "cancel")) return tools.run(rule!!, input, "rule")
         if (smoke == null && screenAgent.hasPendingQuestion) {
             return screenReply(screenAgent.answer(text, input.locked, input.voiceOk))
         }
@@ -200,20 +181,20 @@ class Assistant @Inject constructor(
             if (Persona.isNo(text)) return Reply("Okay, cancelled.", tool = "screen_agent")
         }
         if (smoke == null) {
-            when (val d = draft.answer(text, monotonicMillis(), newCommand = rule != null && rule.tool !in MESSAGE_TOOLS)) {
-                is MessageDraft.Answer.Ready -> return runTool(d.call, input, "draft")
+            when (val d = state.draft.answer(text, monotonicMillis(), newCommand = rule != null && rule.tool !in MESSAGE_TOOLS)) {
+                is MessageDraft.Answer.Ready -> return tools.run(d.call, input, "draft")
                 is MessageDraft.Answer.Ask -> return Reply(d.question, expectAnswer = true)
                 MessageDraft.Answer.Cancelled -> {
-                    clearConversation()
+                    state.clear()
                     return Reply("Okay, cancelled.", endConversation = true)
                 }
                 MessageDraft.Answer.None -> Unit
             }
-            when (val t = timeSlot.answer(text, monotonicMillis(), newCommand = rule != null)) {
-                is TimeSlot.Answer.Ready -> return runTool(t.call, input, "time_slot")
+            when (val t = state.timeSlot.answer(text, monotonicMillis(), newCommand = rule != null)) {
+                is TimeSlot.Answer.Ready -> return tools.run(t.call, input, "time_slot")
                 is TimeSlot.Answer.Ask -> return Reply(t.question, expectAnswer = true)
                 TimeSlot.Answer.Cancelled -> {
-                    clearConversation()
+                    state.clear()
                     return Reply("Okay, cancelled.", endConversation = true)
                 }
                 TimeSlot.Answer.GaveUp -> return Reply(TimeSlot.GAVE_UP)
@@ -223,13 +204,13 @@ class Assistant @Inject constructor(
         trace("smalltalk")
         val smallTalk = Persona.smallTalk(text, LocalDateTime.now().hour)
         if (smallTalk?.startsWith("Bye") == true) return Reply(smallTalk, endConversation = true)
-        val followUp = conversation.resolve(text)
+        val followUp = state.conversation.resolve(text)
         trace("contact_choice")
-        when (val choice = contactChoice.answer(text, newRequest = rule != null || smallTalk != null || followUp != null || cloud.asked(text))) {
-            is PendingContactChoice.Reply.Selection -> return runTool(choice.call, input, "contact_choice")
+        when (val choice = state.contactChoice.answer(text, newRequest = rule != null || smallTalk != null || followUp != null || cloud.asked(text))) {
+            is PendingContactChoice.Reply.Selection -> return tools.run(choice.call, input, "contact_choice")
             is PendingContactChoice.Reply.Prompt -> return Reply(choice.question, expectAnswer = true)
             PendingContactChoice.Reply.Cancelled -> {
-                clearConversation()
+                state.clear()
                 return Reply("Okay, cancelled.", endConversation = true)
             }
             PendingContactChoice.Reply.Expired -> {
@@ -238,34 +219,34 @@ class Assistant @Inject constructor(
             }
             is PendingContactChoice.Reply.GaveUp -> {
                 trace("contact_choice", ok = false)
-                clearConversation()
+                state.clear()
                 return Reply("I couldn't tell which one. Here they are — say the full name or the number:\n${choice.list}")
             }
             PendingContactChoice.Reply.NoPending -> Unit
         }
-        pending?.let { (call, at) ->
+        state.pending?.let { (call, at) ->
             if (followUp != null && monotonicMillis() - at in 0 until PENDING_MS) {
                 trace("confirm", call)
                 return Reply("Please confirm the pending request with yes, or cancel it with no first.", expectAnswer = true)
             }
-            pending = null
+            state.pending = null
             if (monotonicMillis() - at in 0 until PENDING_MS) {
                 // "No, I said Mother G" fixes a misheard contact instead of cancelling.
                 MessageDraft.correctedContact(text)?.takeIf { call.arg("contact") != null }?.let { who ->
-                    return runTool(call.copy(args = call.args - "contact_name" + ("contact" to who)), input, "correction")
+                    return tools.run(call.copy(args = call.args - "contact_name" + ("contact" to who)), input, "correction")
                 }
-                if (Persona.isYes(text)) return runTool(call, input, "confirm", confirmed = true)
+                if (Persona.isYes(text)) return tools.run(call, input, "confirm", confirmed = true)
                 if (Persona.isNo(text)) {
                     trace("confirm", call)
-                    clearConversation()
+                    state.clear()
                     return Reply("Okay, cancelled.", tool = call.tool, endConversation = true)
                 }
             } else if (Persona.isYes(text)) {
                 trace("confirm", call, false)
                 // A late "yes" (dialog still on screen) asks again instead of dropping the request.
-                val question = pendingQuestion
+                val question = state.pendingQuestion
                 if (question != null && monotonicMillis() - at in 0 until LATE_YES_MS) {
-                    pending = call to monotonicMillis()
+                    state.pending = call to monotonicMillis()
                     return Reply("That took a while, so once more: $question", tool = call.tool, expectAnswer = true)
                 }
                 return Reply("That confirmation expired. Say the request again.", expectAnswer = true)
@@ -281,7 +262,7 @@ class Assistant @Inject constructor(
         var contextualQuestion = false
         trace("follow_up")
         when (followUp) {
-            is ConversationContext.Resolution.Tool -> return runTool(followUp.call, input, "follow_up")
+            is ConversationContext.Resolution.Tool -> return tools.run(followUp.call, input, "follow_up")
             is ConversationContext.Resolution.Clarify -> return Reply(followUp.question, expectAnswer = true)
             is ConversationContext.Resolution.Say -> return Reply(followUp.text)
             is ConversationContext.Resolution.Query -> {
@@ -300,17 +281,17 @@ class Assistant @Inject constructor(
                     JarvisLog.i("route taught recipe ${r.name}")
                     val call = ToolCall("run_recipe", mapOf("name" to r.name, "app" to r.appName, "pkg" to r.pkg,
                         "risky" to r.risky.toString(), "params" to Json.write(params)))
-                    return runTool(call, input, "recipe")
+                    return tools.run(call, input, "recipe")
                 }
             }
             // "turn on wifi and then open youtube": every part a known tool → run them in order, no AI (§H.1).
             val chain = AssistantRouting.chainPlan(text, rule, intent)
-            if (chain?.complete == true) return runChain(chain, input)
-            AssistantRouting.webRouteCall(text, rule, intent)?.let { return runTool(it, input, "router") }
+            if (chain?.complete == true) return tools.runChain(chain, input)
+            AssistantRouting.webRouteCall(text, rule, intent)?.let { return tools.run(it, input, "router") }
             AssistantRouting.ruleRouteCall(text, rule, intent)?.let {
-                if (smoke == null) draft.start(it, monotonicMillis())?.let { q -> return Reply(q, expectAnswer = true) }
+                if (smoke == null) state.draft.start(it, monotonicMillis())?.let { q -> return Reply(q, expectAnswer = true) }
                 JarvisLog.i("route rule ${it.tool} in ${(System.nanoTime() - routingStarted) / 1_000_000} ms; llm=false")
-                return runTool(it, input, "rule")
+                return tools.run(it, input, "rule")
             }
             if (!intent.isConfident || intent.route != IntentRouter.Route.CHAT) {
                 // A saved recipe replays known steps with no AI (ROADMAP #9).
@@ -318,7 +299,7 @@ class Assistant @Inject constructor(
                     JarvisLog.i("route recipe ${r.name} (${r.source})")
                     val call = ToolCall("run_recipe", mapOf("name" to r.name, "app" to r.appName, "pkg" to r.pkg,
                         "risky" to r.risky.toString(), "params" to Json.write(params)))
-                    return runTool(call, input, "recipe")
+                    return tools.run(call, input, "recipe")
                 }
                 if (chain != null && chain.known.isNotEmpty() && !AgentRouting.needsScreen(text) && (smoke != null || !cloud.enabled())) {
                     trace("chain_partial", ok = false)
@@ -327,11 +308,11 @@ class Assistant @Inject constructor(
                 if (!AgentRouting.needsMultiStep(text)) {
                     JarvisLog.i("route llm fallback: rule=${rule?.tool ?: "none"}, reason=${intent.reason}")
                     // Cloud picks in ~1 s when allowed (D-045); NONE means plain talk, null means ask the local model.
-                    val picked = if (smoke == null) cloud.toolCall(text, cloudHistory.toList()) else null
+                    val picked = if (smoke == null) cloud.toolCall(text, state.cloudHistory.toList()) else null
                     val said = picked?.takeIf { it.tool == CloudBrain.NONE.tool }?.arg("say")
                     if (said != null && !Persona.isMemoryQuestion(text)) return Reply(said, tool = "cloud", expectAnswer = said.trimEnd().endsWith('?'))
-                    if (picked != null && picked.tool != CloudBrain.NONE.tool) return runTool(picked, input, "cloud")
-                    if (picked == null) models.toolCall(text, contextLine())?.let { return runTool(it, input, "llm") }
+                    if (picked != null && picked.tool != CloudBrain.NONE.tool) return tools.run(picked, input, "cloud")
+                    if (picked == null) models.toolCall(text, contextLine())?.let { return tools.run(it, input, "llm") }
                 }
                 if (AgentRouting.needsScreen(text)) {
                     if (smoke != null) {
@@ -346,33 +327,14 @@ class Assistant @Inject constructor(
         }
         val facts = memory.all().map { it.text }
         // Local replies can contain private notes, notifications or screen text (D-035).
-        if (smoke == null) cloud.chat(query, cloudHistory.toList(), facts, forced, speak)?.let {
+        if (smoke == null) cloud.chat(query, state.cloudHistory.toList(), facts, forced, speak)?.let {
             return Reply(it.text, tool = "cloud", spokenAlready = it.streamed, expectAnswer = it.text.trimEnd().endsWith('?'))
         }
         trace("chat", ToolCall("chat"))
-        models.chat(query, history.toList(), facts, speak)?.let { return Reply(it.text, tool = "chat", spokenAlready = it.streamed, expectAnswer = it.text.trimEnd().endsWith('?')) }
+        models.chat(query, state.history.toList(), facts, speak)?.let { return Reply(it.text, tool = "chat", spokenAlready = it.streamed, expectAnswer = it.text.trimEnd().endsWith('?')) }
         trace("fallback", ok = false)
         return Reply(Persona.CANT)
     }
-
-    private fun clearConversation() {
-        pending = null
-        draft.clear()
-        timeSlot.clear()
-        cloudHistory.clear()
-        contactChoice.clear()
-        conversation.clear()
-    }
-
-    /** Tool replies never speak a package name; use the app label or "that app". */
-    private fun plain(text: String) = ReplyText.withoutPackages(text) { pkg ->
-        runCatching {
-            val pm = context.packageManager
-            pm.getApplicationLabel(pm.getApplicationInfo(pkg, 0)).toString()
-        }.getOrNull()
-    }
-
-    private fun monotonicMillis() = System.nanoTime() / 1_000_000
 
     private fun teachCall(text: String, rule: ToolCall?): ToolCall? =
         AssistantRouting.teachCallFor(text, rule, teach.active) { RuleMatcher.appNameMatches?.invoke(it) == true }
@@ -387,171 +349,9 @@ class Assistant @Inject constructor(
         result.summary, tool = "screen_agent", expectAnswer = result.needsConfirmation || result.question,
     )
 
-    private suspend fun runTool(request: ToolCall, input: Input, source: String, confirmed: Boolean = false): Reply {
-        var call = request
-        val smoke = coroutineContext[SmokeSession]
-        smoke?.route = source
-        smoke?.call = call
-        smoke?.requestedCall = request
-        smoke?.ok = true
-        if (smoke != null && call.tool in setOf("run_routine", "panic")) {
-            val result = smoke.intercept(call)!!
-            return Reply(result.say, tool = call.tool)
-        }
-        when (call.tool) {
-            "cancel" -> {
-                clearConversation()
-                return Reply("Okay.", tool = "cancel", endConversation = true)
-            }
-            "repeat_last" -> return Reply(lastReply.ifEmpty { "I haven't said anything yet." }, tool = "repeat_last")
-            "run_routine" -> return runRoutine(call.arg("name") ?: "", input)
-            "panic" -> return panic(input)
-        }
-        if (source in setOf("llm", "cloud")) call = TimeSlot.asReminder(call, input.heard, LocalDateTime.now())
-        // "set an alarm" / "remind me to call mom": ask once for the missing time (ROADMAP §M.5).
-        if (smoke == null) timeSlot.start(call, monotonicMillis())?.let { q -> return Reply(q, tool = call.tool, expectAnswer = true) }
-        val toSelf = call.tool in setOf("send_sms", "send_whatsapp") && SelfAccount.isSelf(call.arg("contact"))
-        if (!confirmed && !toSelf && call.tool in setOf("call", "send_sms", "send_whatsapp")) {
-            val who = call.arg("contact") ?: run {
-                smoke?.ok = false
-                return Reply("Who should I contact?", expectAnswer = true)
-            }
-            when (val resolved = contacts.resolve(who)) {
-                is ContactResolver.Resolution.Ambiguous -> {
-                    pending = null
-                    conversation.clear()
-                    return Reply(contactChoice.begin(call, resolved).question, tool = call.tool, expectAnswer = true)
-                }
-                is ContactResolver.Resolution.Found -> {
-                    val name = if (source in setOf("contact_choice", "follow_up")) call.arg("contact_name") ?: resolved.contact.name
-                        else resolved.contact.name
-                    call = call.copy(args = call.args + mapOf("contact" to resolved.contact.number, "contact_name" to name))
-                }
-                ContactResolver.Resolution.NotFound -> {
-                    smoke?.ok = false
-                    return Reply("I can't find $who in your contacts. Who did you mean?", expectAnswer = true)
-                }
-            }
-        }
-        smoke?.call = call
-        stage = "tool:${call.tool}"
-        val ctx = ToolContext(context, input.heard, input.locked)
-        return when (val o = executor.execute(call, ctx, confirmed, input.voiceOk)) {
-            is Outcome.NeedConfirm -> {
-                pending = call to monotonicMillis()
-                val recipient = if (toSelf) "yourself" else call.arg("contact_name")?.let { "$it (${call.arg("contact")})" }
-                val question = when {
-                    recipient == null -> o.question
-                    call.tool == "call" -> "Call $recipient?"
-                    call.tool in setOf("send_sms", "send_whatsapp") -> "Send \"${call.arg("text")}\" to $recipient?"
-                    else -> o.question
-                }
-                pendingQuestion = question
-                Reply(question, tool = call.tool, expectAnswer = true)
-            }
-            is Outcome.Denied -> {
-                smoke?.ok = false
-                log(input.heard, call, source, ToolResult.fail(o.why))
-                Reply(plain(o.why), tool = call.tool)
-            }
-            is Outcome.Done -> {
-                smoke?.ok = o.result.ok
-                log(input.heard, call, source, o.result)
-                if (o.result.ok) conversation.remember(input.heard, call, o.result.say)
-                if (o.result.ok && call.tool in setOf("web_search", "read_page") && o.result.data.isNotBlank()) {
-                    val question = call.arg("query") ?: input.heard
-                    val answer = try {
-                        cloud.webAnswer(question, o.result.data)?.let { ModelBrain.ChatOut(it, streamed = false) }
-                            ?: models.chat(question, emptyList(), emptyList(), {}, evidence = o.result.data)
-                    } catch (e: CancellationException) {
-                        throw e
-                    } catch (e: Exception) {
-                        JarvisLog.e("web answer failed", e)
-                        null
-                    }
-                    val sources = o.result.data.lineSequence().filter { it.startsWith("Source: ") }.distinct().joinToString("\n")
-                    val text = answer?.text ?: o.result.say
-                    return Reply(text + if (sources.isBlank()) "" else "\n\n$sources", o.result.data, call.tool)
-                }
-                Reply(plain(o.result.say), o.result.data, call.tool)
-            }
-        }
-    }
+    suspend fun stepsFor(name: String): List<ToolCall>? = tools.stepsFor(name)
 
-    /** Panic word (PLAN 12.4): forget the pending question, lock the screen, refuse risky tools until unlocked. */
-    private suspend fun panic(input: Input): Reply {
-        clearConversation()
-        executor.enterLockdown()
-        screenAgent.enterLockdown()
-        executor.observeLockState(input.locked)
-        val call = ToolCall("lock_phone", emptyMap())
-        val r = executor.execute(call, ToolContext(context, input.heard, input.locked), confirmed = true, voiceOk = null)
-        log(input.heard, call, "panic", (r as? Outcome.Done)?.result ?: ToolResult.fail("not run"))
-        JarvisLog.i("panic: locked down")
-        return Reply("Locked down. Unlock with your PIN to end panic mode.", tool = "panic", endConversation = true)
-    }
-
-    private suspend fun log(heard: String, call: ToolCall, source: String, r: ToolResult) {
-        if (coroutineContext[SmokeSession] != null) return
-        runCatching {
-            toolLog.insert(
-                ToolCallLog(
-                    timeMs = System.currentTimeMillis(), heard = heard, tool = call.tool, argsJson = Json.write(call.args),
-                    source = source, ok = r.ok, result = r.say,
-                ),
-            )
-        }
-    }
-
-    /** Runs a task chain step by step and speaks once at the end; a question (confirm, which contact) stops it. */
-    private suspend fun runChain(plan: TaskChain.Plan, input: Input): Reply {
-        JarvisLog.i("route chain: ${plan.steps.joinToString(" → ") { it.call!!.tool }}")
-        val says = ArrayList<String>()
-        for ((i, step) in plan.steps.withIndex()) {
-            val reply = runTool(step.call!!, input, "chain")
-            if (reply.text.isNotBlank()) says += reply.text
-            if (reply.expectAnswer) {
-                val left = plan.steps.drop(i + 1).joinToString(" and ") { it.text }
-                if (left.isNotEmpty()) says.add(says.size - 1, "Then I stopped before: $left.")
-                return reply.copy(text = says.joinToString(" "), tool = "chain")
-            }
-            if (step.call.tool in setOf("lock_phone", "unlock_phone") && i < plan.steps.lastIndex) {
-                says += "I stopped after changing the lock. Say the rest again."
-                break
-            }
-            if (step.call.tool == "open_app" && coroutineContext[SmokeSession] == null) kotlinx.coroutines.delay(800)
-        }
-        return Reply(says.joinToString(" "), tool = "chain")
-    }
-
-    /** Runs each step and reports its actual result (PLAN 8.1–8.3). */
-    private suspend fun runRoutine(name: String, input: Input): Reply {
-        val steps = stepsFor(name) ?: return Reply("I don't have a routine called ${name.replace('_', ' ')}.", tool = "run_routine")
-        val says = ArrayList<String>()
-        val ctx = ToolContext(context, input.heard, input.locked)
-        val stopped = RoutineRunner.run(
-            steps,
-            execute = { step, confirmed -> executor.execute(step, ctx, confirmed, input.voiceOk) },
-            record = { step, result ->
-                log(input.heard, step, "routine", result)
-                if (result.say.isNotBlank()) says.add(result.say)
-            },
-        )
-        if (stopped != null) return Reply((says + stopped).joinToString(" "), tool = "run_routine")
-        val hello = when (name) {
-            "good_night" -> "Good night, ${Persona.ADDRESS}."
-            "good_morning" -> "Good morning, ${Persona.ADDRESS}."
-            else -> "Routine finished."
-        }
-        return Reply((listOf(hello) + says).joinToString(" "), tool = "run_routine", endConversation = name == "good_night")
-    }
-
-    suspend fun stepsFor(name: String): List<ToolCall>? {
-        val json = routines.get(name)?.takeIf { it.enabled }?.stepsJson ?: Routines.DEFAULT_ROUTINES[name]?.let { Routines.stepsJson(it) } ?: return null
-        return (Json.parse(json) as List<*>).mapNotNull { (it as? Map<*, *>)?.let { m -> ToolCall.fromJson(Json.write(m)) } }
-    }
-
-    suspend fun saveRoutine(name: String, steps: List<ToolCall>) = routines.put(Routine(name, Routines.stepsJson(steps)))
+    suspend fun saveRoutine(name: String, steps: List<ToolCall>) = tools.saveRoutine(name, steps)
 
     companion object {
         private const val PENDING_MS = 30_000L
