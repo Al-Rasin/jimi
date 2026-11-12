@@ -62,6 +62,7 @@ class ToolRegistry @Inject constructor(
         addAll(screenTools(context))
         addAll(askScreenTools())
         addAll(songTools(context))
+        add(translateTool())
         addAll(clipboardTools(context))
         addAll(cameraTools(context))
         val places = PlaceReminders(context)

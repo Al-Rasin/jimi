@@ -97,6 +97,12 @@ internal class ToolRunner(
         }
         smoke?.call = call
         state.stage = "tool:${call.tool}"
+        if (call.tool == "translate") cloudTranslate(call)?.let { r ->
+            smoke?.ok = true
+            log(input.heard, call, source, r)
+            state.conversation.remember(input.heard, call, r.say)
+            return Reply(r.say, r.data, call.tool)
+        }
         val ctx = ToolContext(context, input.heard, input.locked)
         return when (val o = executor.execute(call, ctx, confirmed, input.voiceOk)) {
             is Outcome.NeedConfirm -> {
@@ -164,6 +170,20 @@ internal class ToolRunner(
         log(input.heard, call, "panic", (r as? Outcome.Done)?.result ?: ToolResult.fail("not run"))
         JarvisLog.i("panic: locked down")
         return Reply("Locked down. Unlock with your PIN to end panic mode.", tool = "panic", endConversation = true)
+    }
+
+    private suspend fun cloudTranslate(call: ToolCall): ToolResult? {
+        val text = call.arg("text")?.let(TranslateText::clean)?.takeIf { it.isNotEmpty() } ?: return null
+        val to = TranslateText.lang(call.arg("to")) ?: TranslateText.target(text, null)
+        val out = try {
+            cloud.translate(text, to)
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            JarvisLog.e("cloud translate failed", e)
+            null
+        } ?: return null
+        return ToolResult.ok("In ${TranslateText.name(to)}: $out", out)
     }
 
     private suspend fun log(heard: String, call: ToolCall, source: String, r: ToolResult) {

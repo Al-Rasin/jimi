@@ -110,6 +110,7 @@ dependencies {
     implementation(libs.jsoup)
     implementation(libs.mlkit.text.recognition) // bundled Latin OCR model, works offline (§H.8)
     implementation(libs.mlkit.barcode.scanning) // bundled QR/barcode model, works offline (§I.7)
+    implementation(libs.mlkit.translate) // English↔Bengali models download once (~30 MB each), then offline (#37)
     implementation(libs.commons.compress)
     // Optional cloud chat (PLAN 14, off by default)
     implementation(libs.anthropic.java)

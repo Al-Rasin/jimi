@@ -35,7 +35,7 @@ object ToolShortlist {
         "loud" to listOf("set_volume"), "louder" to listOf("set_volume"), "quiet" to listOf("set_volume", "toggle"),
         "quieter" to listOf("set_volume"), "sound" to listOf("set_volume"), "mute" to listOf("set_volume", "toggle"),
         "volume" to listOf("set_volume"), "hear" to listOf("set_volume"),
-        "song" to listOf("play_media", "media_control", "identify_song"), "shazam" to listOf("identify_song"), "identify" to listOf("identify_song"), "music" to listOf("play_media", "media_control"),
+        "song" to listOf("play_media", "media_control", "identify_song"), "shazam" to listOf("identify_song"), "translate" to listOf("translate"), "bangla" to listOf("translate"), "bengali" to listOf("translate"), "english" to listOf("translate"), "meaning" to listOf("translate"), "identify" to listOf("identify_song"), "music" to listOf("play_media", "media_control"),
         "play" to listOf("play_media", "media_control"), "listen" to listOf("play_media"), "watch" to listOf("play_media"),
         "youtube" to listOf("play_media", "open_app"), "spotify" to listOf("play_media", "open_app"),
         "pause" to listOf("media_control"), "skip" to listOf("media_control"), "stop" to listOf("media_control", "cancel_alarm"),

@@ -243,6 +243,18 @@ class CloudBrain @Inject constructor(
             .getOrNull()?.let(ChatFormat::clean)?.takeIf { it.isNotBlank() }
     }
 
+    /** Cloud translation (ROADMAP #37) when cloud chat is on; null → on-device ML Kit. */
+    suspend fun translate(text: String, to: String): String? {
+        if (!enabled() || !settings.cloudForChat.first()) return null
+        val p = provider() ?: return null
+        val lang = TranslateText.name(to)
+        val system = "Translate the user's text into $lang. Reply with the translation only, no notes, no quotes." +
+            if (to == TranslateText.BN) " Use Bengali script." else ""
+        return runCatching { p.quick(system, emptyList(), text, CHAT_TOKENS) }
+            .onFailure { JarvisLog.e("cloud translate failed, using local", it) }
+            .getOrNull()?.trim()?.trim('"')?.takeIf { it.isNotBlank() }
+    }
+
     suspend fun webAnswer(question: String, evidence: String): String? {
         if (!enabled() || !settings.cloudForChat.first()) return null
         val p = provider() ?: return null
