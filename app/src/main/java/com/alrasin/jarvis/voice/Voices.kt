@@ -7,8 +7,6 @@ import kotlinx.coroutines.withContext
 import org.apache.commons.compress.archivers.tar.TarArchiveInputStream
 import org.apache.commons.compress.compressors.bzip2.BZip2CompressorInputStream
 import java.io.File
-import java.net.HttpURLConnection
-import java.net.URL
 
 /** Speech engines Jimi can use: sherpa-onnx models, or the phone's own engine (D-053). */
 enum class Engine { PIPER, SUPERTONIC, ANDROID }
@@ -100,7 +98,7 @@ object Voices {
         if (archive != null) {
             val part = File(dir, "$archive.tar.bz2.part")
             try {
-                fetch("$RELEASES/$archive.tar.bz2", part) { progress(it * 0.9f) }
+                Downloader.fetch("$RELEASES/$archive.tar.bz2", part) { progress(it * 0.9f) }
                 extract(part, dir, pack.files.toSet())
                 progress(1f)
             } finally {
@@ -111,44 +109,10 @@ object Voices {
             pack.files.forEachIndexed { i, name ->
                 val dest = File(dir, name)
                 if (ModelFiles.present(dest)) return@forEachIndexed
-                val part = File(dir, "$name.part")
-                try {
-                    fetch("$HF/${pack.repo}/resolve/main/$name", part) { progress((i + it) / pack.files.size) }
-                    check(part.renameTo(dest)) { "could not save $name" }
-                } finally {
-                    part.delete()
-                }
+                Downloader.fetch("$HF/${pack.repo}/resolve/main/$name", dest) { progress((i + it) / pack.files.size) }
             }
         }
         JarvisLog.i("voice pack ${pack.id} downloaded")
-    }
-
-    private fun fetch(url: String, dest: File, progress: (Float) -> Unit) {
-        val conn = URL(url).openConnection() as HttpURLConnection
-        conn.instanceFollowRedirects = true
-        conn.connectTimeout = 15_000
-        conn.readTimeout = 30_000
-        try {
-            check(conn.responseCode == HttpURLConnection.HTTP_OK) { "Download failed: HTTP ${conn.responseCode}" }
-            val expected = conn.contentLengthLong
-            val total = expected.coerceAtLeast(1)
-            conn.inputStream.use { input ->
-                dest.outputStream().use { out ->
-                    val buf = ByteArray(64 * 1024)
-                    var done = 0L
-                    while (true) {
-                        val n = input.read(buf)
-                        if (n < 0) break
-                        out.write(buf, 0, n)
-                        done += n
-                        progress((done.toFloat() / total).coerceAtMost(1f))
-                    }
-                    ModelFiles.validateDownload(done, expected)
-                }
-            }
-        } finally {
-            conn.disconnect()
-        }
     }
 
     /** Takes only the [wanted] files (by name, folders flattened) out of a .tar.bz2. */
