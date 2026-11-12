@@ -2,6 +2,10 @@ package com.alrasin.jarvis.brain
 
 import com.alrasin.jarvis.core.ToolCall
 
+// Regexes built once, not on every call (ROADMAP §L.4).
+private val CLOCK_TIME_RE = Regex("\\b\\d{1,2}(?::\\d{2})?\\s*(?:am|pm|a m|p m)\\b|\\b\\d{1,2}:\\d{2}\\b|\\bo ?clock\\b")
+private val FITS_RE = Regex("[^a-z0-9: ]")
+
 /**
  * A tool picked by the small local model must have its own words in the sentence (ROADMAP §M.2):
  * "i love you" is not read_messages, "fun fact about the moon" is not read_notes. Tools not listed here
@@ -10,7 +14,7 @@ import com.alrasin.jarvis.core.ToolCall
 object ToolFit {
     private fun w(p: String) = Regex("\\b(?:$p)\\b")
 
-    private val clockTime = Regex("\\b\\d{1,2}(?::\\d{2})?\\s*(?:am|pm|a m|p m)\\b|\\b\\d{1,2}:\\d{2}\\b|\\bo ?clock\\b")
+    private val clockTime = CLOCK_TIME_RE
     private val messageWords = "messages?|text|texts|sms|msg|send|tell|ping|write|whats ?app|messenger"
 
     private val NEEDS: Map<String, Regex> = mapOf(
@@ -35,7 +39,7 @@ object ToolFit {
 
     fun fits(text: String, call: ToolCall): Boolean {
         val need = NEEDS[call.tool] ?: return true
-        val t = text.lowercase().replace(Regex("[^a-z0-9: ]"), " ")
+        val t = text.lowercase().replace(FITS_RE, " ")
         if (need.containsMatchIn(t)) return true
         return call.tool == "set_alarm" && clockTime.containsMatchIn(t)
     }

@@ -11,6 +11,11 @@ import com.alrasin.jarvis.core.launch
 import com.alrasin.jarvis.core.pollUntil
 import java.util.Locale
 
+// Regexes built once, not on every call (ROADMAP §L.4).
+private val IS_RESULT_RE = Regex("\\b(sponsored|advertisement|promoted)\\b")
+private val IS_RESULT_RE_2 = Regex("\\b(views|view|watching)\\b")
+private val IS_RESULT_RE_3 = Regex("\\b\\d+ (second|minute|hour)s?\\b|\\b\\d{1,2}:\\d{2}\\b")
+
 internal enum class MediaApp(val key: String, val label: String, val pkg: String) {
     YOUTUBE("youtube", "YouTube", "com.google.android.youtube"),
     YOUTUBE_MUSIC("youtube_music", "YouTube Music", "com.google.android.apps.youtube.music"),
@@ -29,12 +34,12 @@ internal enum class MediaApp(val key: String, val label: String, val pkg: String
 internal object MediaResultSelector {
     fun isResult(pkg: String, id: String, text: String, description: String): Boolean {
         val label = "$text $description".lowercase(Locale.ROOT).trim()
-        if (label.isEmpty() || Regex("\\b(sponsored|advertisement|promoted)\\b").containsMatchIn(label)) return false
+        if (label.isEmpty() || IS_RESULT_RE.containsMatchIn(label)) return false
         val resource = id.substringAfter(":id/", "")
         return when (pkg) {
             MediaApp.YOUTUBE.pkg -> resource in setOf("video_title", "video_title_text", "video_title_text_view") ||
-                (Regex("\\b(views|view|watching)\\b").containsMatchIn(label) &&
-                    Regex("\\b\\d+ (second|minute|hour)s?\\b|\\b\\d{1,2}:\\d{2}\\b").containsMatchIn(label))
+                (IS_RESULT_RE_2.containsMatchIn(label) &&
+                    IS_RESULT_RE_3.containsMatchIn(label))
             MediaApp.YOUTUBE_MUSIC.pkg -> resource in setOf("title", "song_title", "video_title") &&
                 label !in setOf("songs", "videos", "albums", "playlists", "artists", "top result")
             MediaApp.SPOTIFY.pkg -> resource in setOf("track_name", "track_title", "row_title") &&

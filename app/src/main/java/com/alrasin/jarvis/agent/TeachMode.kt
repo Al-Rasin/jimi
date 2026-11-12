@@ -11,6 +11,13 @@ import kotlinx.coroutines.launch
 import javax.inject.Inject
 import javax.inject.Singleton
 
+// Regexes built once, not on every call (ROADMAP §L.4).
+private val CLEAN_RE = Regex("^(?:hey |ok |okay )?(?:jimi|jarvis)[, ]+")
+private val CLEAN_RE_2 = Regex("^(?:please |can you |could you |now )+")
+private val CLEAN_RE_3 = Regex(" please$")
+private val SAME_FIELD_RE = Regex("pass(?:word|code|wd)?|\\botp\\b|\\bpin\\b|one.?time|verif|cvv|cvc|security.?code|auth.?code|\\bcode\\b|secret")
+private val RENAMED_SAY_RE = Regex("\\{(\\w+)\\}")
+
 /**
  * Teach mode (ROADMAP §H.6): "Jimi, learn order coffee" → the user does the task by hand → "Jimi, done".
  * Taps and typing become a recipe (source "taught") that "order coffee" replays with no AI.
@@ -62,9 +69,9 @@ object TeachCommand {
     }
 
     private fun clean(text: String) = RecipeBook.normalize(text)
-        .replace(Regex("^(?:hey |ok |okay )?(?:jimi|jarvis)[, ]+"), "")
-        .replace(Regex("^(?:please |can you |could you |now )+"), "")
-        .replace(Regex(" please$"), "")
+        .replace(CLEAN_RE, "")
+        .replace(CLEAN_RE_2, "")
+        .replace(CLEAN_RE_3, "")
         .replace("'", "")
         .trim()
 }
@@ -129,7 +136,7 @@ class TeachRecorder(private val skip: (String) -> Boolean) {
 
     companion object {
         const val MAX_EVENTS = 60
-        private val SECRET = Regex("pass(?:word|code|wd)?|\\botp\\b|\\bpin\\b|one.?time|verif|cvv|cvc|security.?code|auth.?code|\\bcode\\b|secret")
+        private val SECRET = SAME_FIELD_RE
 
         fun isSecret(n: TeachNode): Boolean =
             n.password || SECRET.containsMatchIn("${n.id.substringAfter(":id/")} ${n.hint} ${n.desc}".lowercase().replace('_', ' '))
@@ -208,7 +215,7 @@ object TeachBook {
     /** New say pattern after a rename; params of the old pattern that the new name lacks go on the end. */
     fun renamedSay(oldSay: String, newName: String): String {
         var say = RecipeBook.normalize(newName)
-        Regex("\\{(\\w+)\\}").findAll(oldSay).map { it.value }.distinct().forEach { if (it !in say) say += " $it" }
+        RENAMED_SAY_RE.findAll(oldSay).map { it.value }.distinct().forEach { if (it !in say) say += " $it" }
         return say
     }
 
@@ -216,7 +223,7 @@ object TeachBook {
     fun summary(r: Recipe): String {
         val taps = r.steps.count { it.action == "tap" }
         val types = r.steps.count { it.action == "type" }
-        val say = r.say.first().replace(Regex("\\{(\\w+)\\}")) { if (it.groupValues[1] == "text") "something" else "more" }
+        val say = r.say.first().replace(RENAMED_SAY_RE) { if (it.groupValues[1] == "text") "something" else "more" }
         return "Saved \"${r.name}\" in ${r.appName}: $taps taps, $types typing. Say \"$say\" to run it."
     }
 }

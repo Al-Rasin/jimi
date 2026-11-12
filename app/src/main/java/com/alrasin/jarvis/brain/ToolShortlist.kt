@@ -2,6 +2,9 @@ package com.alrasin.jarvis.brain
 
 import com.alrasin.jarvis.core.Tool
 
+// Regexes built once, not on every call (ROADMAP §L.4).
+private val WORDS_RE = Regex("[^a-z0-9]+")
+
 /**
  * Picks the few tools a command is likely about, so the small local tool model reads ~8 tool descriptions
  * instead of all of them (all of them overflowed its 4096-token context and took ~55 s on the phone).
@@ -80,7 +83,7 @@ object ToolShortlist {
     fun appWords(labels: List<String>): Set<String> = labels.flatMap { words(it) }.filter { it.length >= 4 }.toSet()
 
     fun words(text: String): List<String> =
-        text.lowercase().split(Regex("[^a-z0-9]+")).filter { it.isNotEmpty() && it !in STOP }
+        text.lowercase().split(WORDS_RE).filter { it.isNotEmpty() && it !in STOP }
 
     /** Up to [size] tools, in registry order. Empty when nothing in the command points at any tool. */
     /** [appWords]: words from installed app names (phone profile); saying one hints "open_app". */

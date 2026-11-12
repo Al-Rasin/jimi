@@ -12,6 +12,15 @@ import com.alrasin.jarvis.core.pollUntil
 import com.alrasin.jarvis.core.resolves
 import kotlinx.coroutines.delay
 
+// Regexes built once, not on every call (ROADMAP §L.4).
+private val DARK_WANTED_RE = Regex("\\blight (?:mode|theme)\\b")
+private val KNOWN_RE = Regex("\\bhaptic|touch (?:feedback|vibration)|vibrate on touch")
+private val KNOWN_RE_2 = Regex("\\bvibrat")
+private val KNOWN_RE_3 = Regex("\\b(?:reading|paper) mode\\b|\\beye comfort\\b")
+private val KEY_RE = Regex("[^a-z0-9]+")
+private val MATCH_RE = Regex("[^a-z0-9-]+")
+private val BEST_RE = Regex("\\bsettings?\\b")
+
 /**
  * Any setting on any phone (D-056, ROADMAP §G.2). Pages come from Android's own list of public settings screens
  * (`Settings.ACTION_*_SETTINGS` that open on this phone); anything else is typed into the Settings app's search box.
@@ -187,7 +196,7 @@ class SettingsPages(private val context: Context) {
 
         /** "turn on light mode" means dark mode off. */
         internal fun darkWanted(name: String, on: Boolean): Boolean =
-            if (Regex("\\blight (?:mode|theme)\\b").containsMatchIn(name.lowercase()) && "dark" !in name.lowercase()) !on else on
+            if (DARK_WANTED_RE.containsMatchIn(name.lowercase()) && "dark" !in name.lowercase()) !on else on
 
         /** Settings whose keys are known, so no guessing from `settings list`; every key is written (MIUI keeps extra copies). */
         internal data class Known(val label: String, val keys: List<Pair<String, String>>, val appFirst: Boolean = false)
@@ -195,11 +204,11 @@ class SettingsPages(private val context: Context) {
         internal fun known(name: String): Known? {
             val n = name.lowercase()
             return when {
-                Regex("\\bhaptic|touch (?:feedback|vibration)|vibrate on touch").containsMatchIn(n) ->
+                KNOWN_RE.containsMatchIn(n) ->
                     Known("Haptic feedback", listOf("system" to "haptic_feedback_enabled"))
-                Regex("\\bvibrat").containsMatchIn(n) ->
+                KNOWN_RE_2.containsMatchIn(n) ->
                     Known("Vibration", listOf("system" to "vibrate_when_ringing", "system" to "vibrate_in_normal", "system" to "vibrate_in_silent"))
-                Regex("\\b(?:reading|paper) mode\\b|\\beye comfort\\b").containsMatchIn(n) ->
+                KNOWN_RE_3.containsMatchIn(n) ->
                     // The Settings switch was proven on the phone (#58); the key alone may not repaint the screen, so it is the fallback.
                     Known("Reading mode", listOf("system" to "screen_paper_mode_enabled"), appFirst = true)
                 else -> null
@@ -227,7 +236,7 @@ class SettingsPages(private val context: Context) {
 
         /** Best 0/1 key holding every spoken word (fewest extra words); null when none fits. */
         internal fun key(name: String, entries: List<Triple<String, String, String>>, read: Boolean = false): Triple<String, String, String>? {
-            val words = name.lowercase().split(Regex("[^a-z0-9]+")).filter { it.length > 2 && it !in FILLER }
+            val words = name.lowercase().split(KEY_RE).filter { it.length > 2 && it !in FILLER }
                 .map { SPELLING[it] ?: it }.map { if (read) READ_KEYS[it] ?: it else it }.map { it.replace("-", "").trimEnd('s') }
             if (words.isEmpty()) return null
             return entries.filter { (_, k, v) -> (v == "0" || v == "1") && !DENY.containsMatchIn(k) }
@@ -248,7 +257,7 @@ class SettingsPages(private val context: Context) {
         internal fun match(name: String, texts: List<String>): String? {
             val words = name.lowercase().split(' ').filter { it.length > 2 && it != "settings" && it != "setting" }
                 .flatMap { listOfNotNull(it, SPELLING[it]) }.map { it.trimEnd('s') }.distinct()
-            fun score(t: String) = t.lowercase().split(Regex("[^a-z0-9-]+")).count { w -> words.any { w.startsWith(it) } }
+            fun score(t: String) = t.lowercase().split(MATCH_RE).count { w -> words.any { w.startsWith(it) } }
             return texts.filter { '/' !in it && it.lowercase() !in SKIP && it.length < 60 }
                 .map { it to score(it) }.filter { it.second > 0 }
                 .maxWithOrNull(compareBy<Pair<String, Int>> { it.second }.thenByDescending { it.first.length })?.first
@@ -269,7 +278,7 @@ class SettingsPages(private val context: Context) {
 
         /** Best public page whose words fit [name] closely, or null (then Settings search is used). */
         internal fun best(name: String, pages: List<Page>): Page? {
-            val q = name.lowercase().replace(Regex("\\bsettings?\\b"), "").trim()
+            val q = name.lowercase().replace(BEST_RE, "").trim()
             if (q.isEmpty()) return pages.firstOrNull { it.action == Settings.ACTION_SETTINGS }
             pages.firstOrNull { it.base == q }?.let { return it }
             val phrase = Regex("\\b${Regex.escape(q)}\\b")

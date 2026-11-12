@@ -22,6 +22,12 @@ import java.util.Locale
 import kotlin.math.abs
 import kotlinx.coroutines.delay
 
+// Regexes built once, not on every call (ROADMAP §L.4).
+private val CLOCK_HAS_ALARM_RE = Regex("enabled=1, alarmtime=(\\d+)")
+private val STOP_TIMER_IN_CLOCK_RE = Regex("(\\d+)x(\\d+)")
+private val READ_ALARM_TIME_RE = Regex("^(\\d{1,2})(?::(\\d{2}))?(?::00)?\\s*(am|pm|a m|p m)?$")
+private val CANCEL_ONE_ALARM_RE = Regex("^(\\d{1,2}):(\\d{2})$")
+
 /** Alarms and timers through the phone's Clock app. */
 fun timeTools(context: Context): List<Tool> = listOf(
     SimpleTool(
@@ -157,7 +163,7 @@ private const val TIMER_SLACK_MS = 5_000L
 /** Second check when an earlier alarm hides the new one: an enabled row in the Clock alarm table (root only). */
 private suspend fun clockHasAlarm(at: Long): Boolean {
     val out = RootShell.run("content query --uri content://com.android.deskclock/alarm --projection enabled:alarmtime", log = false).out
-    return Regex("enabled=1, alarmtime=(\\d+)").findAll(out).any { abs(it.groupValues[1].toLong() - at) < 60_000 }
+    return CLOCK_HAS_ALARM_RE.findAll(out).any { abs(it.groupValues[1].toLong() - at) < 60_000 }
 }
 
 /** A running Clock timer is a TIMER_ALERT alarm (root only; false without root). */
@@ -169,7 +175,7 @@ private suspend fun stopTimerInClock(context: Context) {
     if (!context.launchClock(Intent(AlarmClock.ACTION_SHOW_TIMERS))) return
     delay(1_500)
     val m = context.resources.displayMetrics
-    val size = Regex("(\\d+)x(\\d+)").find(RootShell.run("wm size", log = false).out)?.destructured
+    val size = STOP_TIMER_IN_CLOCK_RE.find(RootShell.run("wm size", log = false).out)?.destructured
     val w = size?.component1()?.toIntOrNull() ?: m.widthPixels
     val h = size?.component2()?.toIntOrNull() ?: m.heightPixels
     JarvisLog.i("cancel_alarm: tapping timer stop in Clock")
@@ -245,7 +251,7 @@ internal fun readAlarmTime(text: String): Pair<LocalDate?, LocalTime>? {
     val t = text.trim().lowercase(Locale.ROOT).replace(".", "")
     runCatching { LocalDateTime.parse(t.replace(' ', 'T')) }.getOrNull()
         ?.takeIf { it.second == 0 }?.let { return it.toLocalDate() to it.toLocalTime() }
-    val m = Regex("^(\\d{1,2})(?::(\\d{2}))?(?::00)?\\s*(am|pm|a m|p m)?$").find(t) ?: return null
+    val m = READ_ALARM_TIME_RE.find(t) ?: return null
     var h = m.groupValues[1].toInt()
     val min = m.groupValues[2].ifEmpty { "0" }.toInt()
     val half = m.groupValues[3].replace(" ", "")
@@ -285,7 +291,7 @@ fun speakDuration(secs: Int): String {
 
 /** Clock's own search mode finds the alarm at that time; null when [time] is not HH:mm. MIUI Clock may ignore it, so check. */
 private suspend fun cancelOneAlarm(context: Context, time: String): ToolResult? {
-    val (h, m) = Regex("^(\\d{1,2}):(\\d{2})$").find(time)?.destructured ?: return null
+    val (h, m) = CANCEL_ONE_ALARM_RE.find(time)?.destructured ?: return null
     val target = LocalTime.of(h.toInt(), m.toInt())
     val spoken = target.format(DateTimeFormatter.ofPattern("h:mm a", Locale.ENGLISH))
     val wasNext = isAt(context.getSystemService(AlarmManager::class.java)?.nextAlarmClock?.triggerTime, target)

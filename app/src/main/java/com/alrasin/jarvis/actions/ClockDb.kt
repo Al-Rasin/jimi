@@ -2,6 +2,9 @@ package com.alrasin.jarvis.actions
 
 import com.alrasin.jarvis.core.JarvisLog
 
+// Regexes built once, not on every call (ROADMAP §L.4).
+private val PARSE_ENABLED_RE = Regex("_id=(\\d+), enabled=1, hour=(\\d+), minutes=(\\d+)")
+
 /**
  * Root fallback for the MIUI Clock alarm table when Clock ignores DISMISS_ALARM.
  * MIUI's provider ignores `--where` on update (it changes every row), so rows are changed one by one
@@ -39,7 +42,7 @@ internal object ClockDb {
     internal fun countOwned(showIntentLines: String): Int = showIntentLines.lines().count { " $PKG " in it }
 
     internal fun parseEnabled(out: String): List<Row> =
-        Regex("_id=(\\d+), enabled=1, hour=(\\d+), minutes=(\\d+)").findAll(out).map {
+        PARSE_ENABLED_RE.findAll(out).map {
             Row(it.groupValues[1].toLong(), it.groupValues[2].toInt(), it.groupValues[3].toInt())
         }.toList()
 }

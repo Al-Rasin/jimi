@@ -1,5 +1,8 @@
 package com.alrasin.jarvis.actions
 
+// Regexes built once, not on every call (ROADMAP §L.4).
+private val TORCH_DIRECTORIES_RE = Regex("[A-Za-z0-9_.:-]+")
+
 internal object DeviceActionPolicy {
     fun hasMiuiSettings(manufacturer: String): Boolean =
         manufacturer.trim().lowercase(java.util.Locale.ROOT) in setOf("xiaomi", "redmi", "poco")
@@ -7,7 +10,7 @@ internal object DeviceActionPolicy {
     fun torchDirectories(paths: List<String>): List<String> = paths.map(String::trim)
         .filter { path ->
             val name = path.removePrefix("/sys/class/leds/")
-            path.startsWith("/sys/class/leds/") && name.matches(Regex("[A-Za-z0-9_.:-]+")) &&
+            path.startsWith("/sys/class/leds/") && name.matches(TORCH_DIRECTORIES_RE) &&
                 (name.contains("torch", ignoreCase = true) || name.equals("flashlight", ignoreCase = true))
         }.distinct().sorted()
 

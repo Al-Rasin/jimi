@@ -2,6 +2,11 @@ package com.alrasin.jarvis.agent.appmap
 
 import com.alrasin.jarvis.agent.AgentSafety
 
+// Regexes built once, not on every call (ROADMAP §L.4).
+private val CLEAN_RE = Regex("[\\p{N}]+")
+private val CLEAN_RE_2 = Regex("[^\\p{L}\\p{M} ]")
+private val CLEAN_RE_3 = Regex("\\s+")
+
 /**
  * Turns a screen into structure only (ROADMAP §J.2 privacy): tabs, drawer, menu, buttons,
  * switches, field hints. Never list rows, typed text, passwords, or a clickable parent's child
@@ -69,8 +74,8 @@ object ScreenStructure {
 
     /** Lowercase, digits and punctuation out, so "Chats, 3 unread" and "Chats, 5 unread" match. */
     internal fun clean(s: String): String =
-        s.lowercase().replace(Regex("[\\p{N}]+"), " ").replace(Regex("[^\\p{L}\\p{M} ]"), " ")
-            .replace(Regex("\\s+"), " ").trim()
+        s.lowercase().replace(CLEAN_RE, " ").replace(CLEAN_RE_2, " ")
+            .replace(CLEAN_RE_3, " ").trim()
 
     internal fun role(n: RawNode): String {
         val cls = n.className.substringAfterLast('.')

@@ -2,6 +2,9 @@ package com.alrasin.jarvis.actions
 
 import com.alrasin.jarvis.core.TextNorm
 
+// Regexes built once, not on every call (ROADMAP §L.4).
+private val CLEAN_RE = Regex("\\s+")
+
 /** Cleans remembered facts so the fact list has no timestamps, filler or junk like ".." (§M.10). */
 internal object FactText {
     private val isoTime = Regex("\\b\\d{4}-\\d{2}-\\d{2}(?:[T ]\\d{1,2}:\\d{2}(?::\\d{2})?(?:\\.\\d+)?(?:Z|[+-]\\d{2}:?\\d{2})?)?\\b")
@@ -13,7 +16,7 @@ internal object FactText {
     /** Null when nothing worth keeping is left. */
     fun clean(raw: String): String? {
         val t = raw.replace(isoTime, " ").replace(bracketTime, " ").replace(epoch, " ")
-            .replace(Regex("\\s+"), " ").trim()
+            .replace(CLEAN_RE, " ").trim()
             .replace(lead, "")
             .trim(' ', '.', ',', ';', ':', '-', '"', '\'')
         if (t.count { it.isLetter() } < 2) return null

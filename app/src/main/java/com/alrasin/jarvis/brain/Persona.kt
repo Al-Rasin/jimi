@@ -2,6 +2,18 @@ package com.alrasin.jarvis.brain
 
 import com.alrasin.jarvis.core.ToolResult
 
+// Regexes built once, not on every call (ROADMAP §L.4).
+private val CLEAN_RE = Regex("[^a-z' ]")
+private val CLEAN_RE_2 = Regex("\\s+")
+private val SMALL_TALK_RE = Regex("(hi|hello|hey|yo|hii|helo|salam|assalamualaikum|assalamu alaikum)( there| jimi)?")
+private val SMALL_TALK_RE_2 = Regex("good (afternoon|evening)")
+private val SMALL_TALK_RE_3 = Regex("how are you( doing)?|hows it going|how do you do|whats up|sup")
+private val SMALL_TALK_RE_4 = Regex("(who|what) are you|whats your name|your name|introduce yourself")
+private val SMALL_TALK_RE_5 = Regex("(thank you|thanks|thank u|thx|great|good job|nice|well done|awesome|perfect)( very much| so much| a lot)?( jimi)?")
+private val SMALL_TALK_RE_6 = Regex("(are you there|you there|can you hear me|are you listening)")
+private val SMALL_TALK_RE_7 = Regex("(bye|goodbye|see you|later|see ya)")
+private val SMALL_TALK_RE_8 = Regex("tell me a joke|say something funny|joke")
+
 /** Name, tone and fixed replies (PLAN 5.3 / 10.3). Short replies; calls the user "Boss". */
 object Persona {
     const val NAME = "Jimi"
@@ -52,21 +64,21 @@ object Persona {
     fun isNo(t: String) = NO.matches(clean(t))
 
     /** Lower case, letters only. Not RuleMatcher.normalize: that drops "hey", "ok", "please". */
-    fun clean(t: String) = t.lowercase().replace(Regex("[^a-z' ]"), " ").replace(Regex("\\s+"), " ").trim()
+    fun clean(t: String) = t.lowercase().replace(CLEAN_RE, " ").replace(CLEAN_RE_2, " ").trim()
 
     /** Small talk that needs no model. Null = not small talk. */
     fun smallTalk(input: String, hour: Int): String? {
         val t = clean(input).replace("'", "").removeSuffix(" jimi").removeSuffix(" jarvis")
         return when {
-            t.matches(Regex("(hi|hello|hey|yo|hii|helo|salam|assalamualaikum|assalamu alaikum)( there| jimi)?")) ->
+            t.matches(SMALL_TALK_RE) ->
                 if (t.contains("salam")) "Walaikum assalam, $ADDRESS." else "Hello $ADDRESS. What can I do?"
-            t.matches(Regex("good (afternoon|evening)")) -> "Good ${greeting(hour)}, $ADDRESS."
-            t.matches(Regex("how are you( doing)?|hows it going|how do you do|whats up|sup")) -> "All good, $ADDRESS. Ready when you are."
-            t.matches(Regex("(who|what) are you|whats your name|your name|introduce yourself")) -> "I'm $NAME, your phone assistant."
-            t.matches(Regex("(thank you|thanks|thank u|thx|great|good job|nice|well done|awesome|perfect)( very much| so much| a lot)?( jimi)?")) -> "Any time, $ADDRESS."
-            t.matches(Regex("(are you there|you there|can you hear me|are you listening)")) -> "I'm here, $ADDRESS."
-            t.matches(Regex("(bye|goodbye|see you|later|see ya)")) -> "Bye, $ADDRESS."
-            t.matches(Regex("tell me a joke|say something funny|joke")) -> JOKES.random()
+            t.matches(SMALL_TALK_RE_2) -> "Good ${greeting(hour)}, $ADDRESS."
+            t.matches(SMALL_TALK_RE_3) -> "All good, $ADDRESS. Ready when you are."
+            t.matches(SMALL_TALK_RE_4) -> "I'm $NAME, your phone assistant."
+            t.matches(SMALL_TALK_RE_5) -> "Any time, $ADDRESS."
+            t.matches(SMALL_TALK_RE_6) -> "I'm here, $ADDRESS."
+            t.matches(SMALL_TALK_RE_7) -> "Bye, $ADDRESS."
+            t.matches(SMALL_TALK_RE_8) -> JOKES.random()
             else -> null
         }
     }

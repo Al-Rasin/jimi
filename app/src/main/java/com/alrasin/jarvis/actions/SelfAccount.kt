@@ -1,5 +1,8 @@
 package com.alrasin.jarvis.actions
 
+// Regexes built once, not on every call (ROADMAP §L.4).
+private val MESSENGER_ID_RE = Regex("_(\\d{8,20})\\.xml$")
+
 /**
  * The phone owner's own chat ("send a WhatsApp to myself"). WhatsApp: the logged-in number, read with root from
  * WhatsApp's settings. Messenger: the logged-in account id, from a Messenger settings file name.
@@ -34,6 +37,6 @@ internal object SelfAccount {
     }
 
     internal fun messengerId(files: List<String>): String? = files.firstNotNullOfOrNull {
-        Regex("_(\\d{8,20})\\.xml$").find(it.trim())?.groupValues?.get(1)
+        MESSENGER_ID_RE.find(it.trim())?.groupValues?.get(1)
     }
 }

@@ -9,6 +9,10 @@ import org.jsoup.Jsoup
 import javax.inject.Inject
 import javax.inject.Singleton
 
+// Regexes built once, not on every call (ROADMAP §L.4).
+private val STEPS_RE = Regex("^\\s*(?:\\d{1,2}[.)]|[-*•]|step \\d{1,2}:?)\\s+(.+)$", RegexOption.IGNORE_CASE)
+private val SEARCH_RE = Regex("uddg=([^&]+)")
+
 /**
  * Online research when the screen agent is stuck (ROADMAP §G.4): web search "how to X in Y on Android",
  * the cloud model turns the results into short steps, and the agent tries again with them as a hint.
@@ -45,7 +49,7 @@ object OnlineSteps {
     fun steps(answer: String): List<String> {
         if (answer.trim().uppercase().startsWith("NONE")) return emptyList()
         return answer.lines()
-            .mapNotNull { Regex("^\\s*(?:\\d{1,2}[.)]|[-*•]|step \\d{1,2}:?)\\s+(.+)$", RegexOption.IGNORE_CASE).find(it)?.groupValues?.get(1) }
+            .mapNotNull { STEPS_RE.find(it)?.groupValues?.get(1) }
             .map { it.replace("**", "").trim() }
             .filter { it.length in 3..160 }
             .take(MAX_STEPS)
@@ -85,7 +89,7 @@ class OnlineHelp @Inject constructor(private val cloud: CloudBrain) {
         val results = doc.select(".result").mapNotNull { r ->
             val a = r.selectFirst(".result__a") ?: return@mapNotNull null
             var href = a.attr("href")
-            Regex("uddg=([^&]+)").find(href)?.let { href = java.net.URLDecoder.decode(it.groupValues[1], "UTF-8") }
+            SEARCH_RE.find(href)?.let { href = java.net.URLDecoder.decode(it.groupValues[1], "UTF-8") }
             if (href.startsWith("//")) href = "https:$href"
             Triple(a.text(), r.selectFirst(".result__snippet")?.text().orEmpty(), href)
         }.filter { it.third.startsWith("http") && !it.third.contains("duckduckgo.com/y.js") }.take(5)

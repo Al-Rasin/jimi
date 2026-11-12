@@ -2,6 +2,9 @@ package com.alrasin.jarvis.notify
 
 import com.alrasin.jarvis.data.NotificationLog
 
+// Regexes built once, not on every call (ROADMAP §L.4).
+private val WORDS_RE = Regex("[^\\p{L}\\p{N}]+")
+
 /**
  * Last messages from one person (ROADMAP §H.1 read_chat). Pure, so it is unit tested.
  * Source 1: saved notifications (title = sender, or "Sender: text" lines from a group / MessagingStyle).
@@ -57,7 +60,7 @@ object ChatHistory {
         return want.all { w -> have.any { it.startsWith(w) } } || have.all { h -> want.any { it.startsWith(h) } }
     }
 
-    private fun words(s: String) = s.lowercase().split(Regex("[^\\p{L}\\p{N}]+")).filter { it.isNotEmpty() }
+    private fun words(s: String) = s.lowercase().split(WORDS_RE).filter { it.isNotEmpty() }
 
     /** What to say: "Rahim on WhatsApp: hi." or numbered when several. */
     fun say(messages: List<Message>): String {

@@ -4,6 +4,15 @@ import com.alrasin.jarvis.core.PhoneNumbers
 import com.alrasin.jarvis.core.TextNorm
 import java.text.Normalizer
 
+// Regexes built once, not on every call (ROADMAP §L.4).
+private val CHOOSE_RE = Regex("^\\s*-\\s*[0-9]")
+private val CHOOSE_RE_2 = Regex("^(?:the |number |option )?(first|second|third|fourth|fifth|sixth|seventh|eighth|ninth|tenth|last|one|two|three|four|five|six|seven|eight|nine|ten|[0-9]+(?:st|nd|rd|th)?)(?: one| contact| person)?$")
+private val CHOOSE_RE_3 = Regex("(?:number )?ending(?: in| with)? ([0-9 ]{4,})$")
+private val CLEAN_RE = Regex("\\p{InCombiningDiacriticalMarks}+")
+private val QUERY_NAME_RE = Regex("^(?:no |not that )?(?:i said |i mean |i meant |i told you )?(?:to )?")
+private val SPOKEN_RE = Regex("\\b(?:\\p{L} ){2,}\\p{L}\\b")
+private val PHONETIC_RE = Regex("(.)\\1+")
+
 object ContactResolver {
     sealed interface Resolution {
         data class Found(val contact: Contacts.Contact) : Resolution
@@ -50,12 +59,12 @@ object ContactResolver {
     private fun relationKey(name: String) = name.split(' ').map { relations[it] ?: it }
 
     fun choose(reply: String, candidates: List<Contacts.Contact>): Contacts.Contact? {
-        if (Regex("^\\s*-\\s*[0-9]").containsMatchIn(reply)) return null
+        if (CHOOSE_RE.containsMatchIn(reply)) return null
         PhoneNumbers.parse(reply)?.let { chosen ->
             return candidates.filter { PhoneNumbers.parse(it.number) == chosen }.singleOrNull()
         }
         val text = clean(reply).removeSuffix(" please").trim()
-        val ordinal = Regex("^(?:the |number |option )?(first|second|third|fourth|fifth|sixth|seventh|eighth|ninth|tenth|last|one|two|three|four|five|six|seven|eight|nine|ten|[0-9]+(?:st|nd|rd|th)?)(?: one| contact| person)?$")
+        val ordinal = CHOOSE_RE_2
             .matchEntire(text)?.groupValues?.get(1)
         if (ordinal != null) {
             val index = when (ordinal) {
@@ -76,7 +85,7 @@ object ContactResolver {
         }
         if (text.isEmpty()) return null
         // The words of the question itself: "Rahim (number ending 0001)" or just "ending 0001".
-        Regex("(?:number )?ending(?: in| with)? ([0-9 ]{4,})$").find(text)?.let { end ->
+        CHOOSE_RE_3.find(text)?.let { end ->
             val tail = PhoneNumbers.digits(end.groupValues[1])
             return candidates.filter { PhoneNumbers.endsWith(it.number, tail) }.singleOrNull()
         }
@@ -112,11 +121,11 @@ object ContactResolver {
     }
 
     private fun clean(text: String) = Normalizer.normalize(text, Normalizer.Form.NFD)
-        .replace(Regex("\\p{InCombiningDiacriticalMarks}+"), "")
+        .replace(CLEAN_RE, "")
         .let(TextNorm::words)
 
     private fun queryName(text: String) = spoken(
-        clean(text).replace(Regex("^(?:no |not that )?(?:i said |i mean |i meant |i told you )?(?:to )?"), "")
+        clean(text).replace(QUERY_NAME_RE, "")
             .removePrefix("my ").removePrefix("amar "),
     )
 
@@ -125,7 +134,7 @@ object ContactResolver {
      * ("mother ji" → "mother g"), because contacts are often saved as "Name X".
      */
     internal fun spoken(q: String): String {
-        val joined = q.replace(Regex("\\b(?:\\p{L} ){2,}\\p{L}\\b")) { it.value.replace(" ", "") }
+        val joined = q.replace(SPOKEN_RE) { it.value.replace(" ", "") }
         val words = joined.split(' ').filter(String::isNotEmpty)
         if (words.size < 2) return joined
         val letter = LETTERS[words.last()] ?: return joined
@@ -172,7 +181,7 @@ object ContactResolver {
 
     private fun phonetic(word: String) = word.replace("ph", "f").replace("sh", "s")
         .replace("ee", "i").replace("ii", "i").replace("oo", "u")
-        .replace(Regex("(.)\\1+"), "$1")
+        .replace(PHONETIC_RE, "$1")
 
     private fun matches(query: String, name: String): Boolean =
         name == query || name.startsWith("$query ") || name.endsWith(" $query") ||

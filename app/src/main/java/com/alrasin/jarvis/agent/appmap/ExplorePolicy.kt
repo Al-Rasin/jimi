@@ -5,6 +5,10 @@ import com.alrasin.jarvis.agent.AgentSafety
 import com.alrasin.jarvis.agent.appmap.ScreenStructure.Element
 import com.alrasin.jarvis.agent.appmap.ScreenStructure.RawNode
 
+// Regexes built once, not on every call (ROADMAP §L.4).
+private val SETTINGS_SCREEN_RE = Regex("(?i)setting|preference")
+private val MENU_SCREEN_RE = Regex("Popup|Menu|Drawer")
+
 /**
  * What the app explorer may tap (ROADMAP §J.5). Pure, so it is unit-tested. Only tabs, drawer,
  * menu, More/settings buttons and plain rows on settings/menu screens. Never fields, switches or
@@ -95,11 +99,11 @@ object ExplorePolicy {
     }
 
     internal fun settingsScreen(nodes: List<RawNode>, windowClass: String): Boolean =
-        Regex("(?i)setting|preference").containsMatchIn(windowClass.substringAfterLast('.')) ||
+        SETTINGS_SCREEN_RE.containsMatchIn(windowClass.substringAfterLast('.')) ||
             nodes.any { !it.inList && !it.clickable && ScreenStructure.clean(it.text) == "settings" }
 
     internal fun menuScreen(nodes: List<RawNode>, windowClass: String): Boolean =
-        Regex("Popup|Menu|Drawer").containsMatchIn(windowClass.substringAfterLast('.')) ||
+        MENU_SCREEN_RE.containsMatchIn(windowClass.substringAfterLast('.')) ||
             nodes.any { n -> MENU_CLASSES.any { n.className.contains(it) || n.parentClass.contains(it) } }
 
     /** Never explore: money, calls, camera, Jimi itself, system UI, launcher. */

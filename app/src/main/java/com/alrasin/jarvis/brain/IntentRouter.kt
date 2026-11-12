@@ -4,6 +4,9 @@ import com.alrasin.jarvis.agent.AgentRouting
 import com.alrasin.jarvis.core.ToolCall
 import java.util.Locale
 
+// Regexes built once, not on every call (ROADMAP §L.4).
+private val IS_APP_LAUNCH_QUESTION_RE = Regex("\\b(?:what|who|where|when|why|how|which)\\b")
+
 object IntentRouter {
     enum class Route { CHAT, TOOL, WEB }
 
@@ -78,7 +81,7 @@ object IntentRouter {
 
     fun isAppLaunchQuestion(text: String): Boolean {
         val normalized = polite.replace(RuleMatcher.normalize(text), "")
-        return Regex("\\b(?:what|who|where|when|why|how|which)\\b").containsMatchIn(normalized) ||
+        return IS_APP_LAUNCH_QUESTION_RE.containsMatchIn(normalized) ||
             question.containsMatchIn(normalized)
     }
 

@@ -26,6 +26,9 @@ import java.time.format.DateTimeFormatter
 import java.util.Locale
 import java.util.TimeZone
 
+// Regexes built once, not on every call (ROADMAP §L.4).
+private val PICK_RE = Regex("\\s+")
+
 /**
  * Phone calendar (ROADMAP §I.2): add / read / move / delete events through CalendarContract.
  * Works offline (the calendar app syncs later). Move and delete confirm first; repeating events are left to the
@@ -316,7 +319,7 @@ object CalendarSpeech {
         val q = query?.lowercase()?.trim().orEmpty()
         if (q.isEmpty()) return events.firstOrNull()
         events.firstOrNull { it.title.lowercase().contains(q) }?.let { return it }
-        val words = q.split(Regex("\\s+")).filter { it !in FILLER }
+        val words = q.split(PICK_RE).filter { it !in FILLER }
         if (words.isEmpty()) return events.firstOrNull()
         return events.map { e -> e to words.count { e.title.lowercase().contains(it) } }
             .filter { it.second > 0 }.maxByOrNull { it.second }?.first

@@ -3,6 +3,19 @@ package com.alrasin.jarvis.brain
 import com.alrasin.jarvis.core.ToolCall
 import java.util.Locale
 
+// Regexes built once, not on every call (ROADMAP §L.4).
+private val RESOLVE_RE = Regex("\\s+")
+private val NOTE_LOCATION_RE = Regex("Saved in (.+?)\\.?$")
+private val NORMALIZE_RE = Regex("(?:please )?(?:call|phone|dial) (?:him|her|them|that person|the same person)(?: on (whatsapp|phone))?(?: again)?")
+private val NORMALIZE_RE_2 = Regex("(?:please )?(?:send|text|message) (?:it|that|the same message) to (.+?)(?: (?:too|as well|also))?")
+private val NORMALIZE_RE_3 = Regex("(?:please )?(?:turn|put) it (up|down)(?: (?:more|again))?")
+private val NORMALIZE_RE_4 = Regex("(?:please )?(?:now )?(?:turn|switch|put) (?:it|this|that)(?: back)? (on|off)(?: (?:again|now|please))?|(?:please )?(?:turn|switch) (on|off) (?:it|this|that)(?: again)?")
+private val NORMALIZE_RE_5 = Regex("(?:did|have) you (?:turn|switch)(?:ed)? (on|off) ?(.*)|(?:did|have) you (?:turn|switch)(?:ed)? (it|this|that|.+?) (?:on|off)|is (it|this|that) (?:on|off)(?: now)?")
+private val NORMALIZE_RE_6 = Regex("(?:only|just) (?:for )?today|(?:only|just) for today|for today only")
+private val NORMALIZE_RE_7 = Regex("where (?:did|do|have) you (?:save|saved|put|keep|kept|store|stored|write|wrote|note|noted)(?: it| that| this| the note| my note| the notes| my notes)?|where (?:is|are) (?:it|that|the note|my note|the notes|my notes)(?: saved)?|where (?:was|is) (?:it|that|the note|my note) (?:saved|stored|kept)")
+private val NORMALIZE_RE_8 = Regex("what do you (?:know|remember)(?: about (?:it|that|them|this|my notes?|the notes?))?|what (?:is|was) in (?:it|that|the note|my notes?)|what did i (?:note|save)")
+private val NORMALIZE_RE_9 = Regex("(?:make|change|set) (?:it|that|the timer)(?: to)? .+ (?:seconds?|minutes?|hours?)")
+
 /** One completed turn, kept in memory only. Resolved tools still need the normal security gate. */
 class ConversationContext(
     private val clockMillis: () -> Long = { System.nanoTime() / 1_000_000 },
@@ -49,7 +62,7 @@ class ConversationContext(
     fun clear() { recent = null }
 
     fun resolve(input: String): Resolution? {
-        val text = input.trim().trimEnd('.', '?', '!').lowercase(Locale.ROOT).replace(Regex("\\s+"), " ")
+        val text = input.trim().trimEnd('.', '?', '!').lowercase(Locale.ROOT).replace(RESOLVE_RE, " ")
         val current = snapshot()
         CALL_REFERENCE.matchEntire(text)?.let {
             val contact = current?.entities?.get("contact")?.takeUnless { normalize(it) in PRONOUNS }
@@ -134,7 +147,7 @@ class ConversationContext(
     /** The note tool said where it saved ("Saved in Google Keep."); repeat that instead of letting chat make a joke (§M.10). */
     private fun noteLocation(current: Snapshot?): String {
         if (current?.lastTool?.tool != "create_note") return "I save notes in your notes app and keep a copy in Jimi's notes, ${Persona.ADDRESS}."
-        val app = Regex("Saved in (.+?)\\.?$").find(current.lastAnswer.trim())?.groupValues?.get(1)
+        val app = NOTE_LOCATION_RE.find(current.lastAnswer.trim())?.groupValues?.get(1)
         return if (app != null) "In $app, ${Persona.ADDRESS}." else "In Jimi's notes, ${Persona.ADDRESS}."
     }
 
@@ -162,9 +175,9 @@ class ConversationContext(
         val ADJUSTABLE_TOOLS = setOf("set_volume", "set_brightness")
         val INFORMATION_TOOLS = setOf("web_search", "wiki_lookup", "read_page", "news")
         val TEMPORAL_REFERENCES = setOf("what about tomorrow", "how about tomorrow", "and tomorrow", "tomorrow")
-        val CALL_REFERENCE = Regex("(?:please )?(?:call|phone|dial) (?:him|her|them|that person|the same person)(?: on (whatsapp|phone))?(?: again)?")
-        val SEND_REFERENCE = Regex("(?:please )?(?:send|text|message) (?:it|that|the same message) to (.+?)(?: (?:too|as well|also))?")
-        val ADJUST_REFERENCE = Regex("(?:please )?(?:turn|put) it (up|down)(?: (?:more|again))?")
+        val CALL_REFERENCE = NORMALIZE_RE
+        val SEND_REFERENCE = NORMALIZE_RE_2
+        val ADJUST_REFERENCE = NORMALIZE_RE_3
         val SWITCH_TOOLS = setOf("toggle", "setting")
         val TOGGLE_NAMES = mapOf(
             "flashlight" to "flashlight", "torch" to "flashlight", "wifi" to "wifi", "wi-fi" to "wifi", "bluetooth" to "bluetooth",
@@ -173,13 +186,13 @@ class ConversationContext(
             "auto rotate" to "auto_rotate", "rotation" to "auto_rotate", "wireless debugging" to "wireless_debugging",
             "usb debugging" to "usb_debugging",
         )
-        val STATE_REFERENCE = Regex("(?:please )?(?:now )?(?:turn|switch|put) (?:it|this|that)(?: back)? (on|off)(?: (?:again|now|please))?|(?:please )?(?:turn|switch) (on|off) (?:it|this|that)(?: again)?")
+        val STATE_REFERENCE = NORMALIZE_RE_4
         val AGAIN_REFERENCES = setOf("do it", "do it again", "do that", "do that again", "again", "one more time", "same again")
-        val DID_YOU_REFERENCE = Regex("(?:did|have) you (?:turn|switch)(?:ed)? (on|off) ?(.*)|(?:did|have) you (?:turn|switch)(?:ed)? (it|this|that|.+?) (?:on|off)|is (it|this|that) (?:on|off)(?: now)?")
-        val ONLY_TODAY = Regex("(?:only|just) (?:for )?today|(?:only|just) for today|for today only")
+        val DID_YOU_REFERENCE = NORMALIZE_RE_5
+        val ONLY_TODAY = NORMALIZE_RE_6
         val NOTE_TOOLS = setOf("create_note", "read_notes")
-        val NOTE_WHERE = Regex("where (?:did|do|have) you (?:save|saved|put|keep|kept|store|stored|write|wrote|note|noted)(?: it| that| this| the note| my note| the notes| my notes)?|where (?:is|are) (?:it|that|the note|my note|the notes|my notes)(?: saved)?|where (?:was|is) (?:it|that|the note|my note) (?:saved|stored|kept)")
-        val NOTES_KNOW = Regex("what do you (?:know|remember)(?: about (?:it|that|them|this|my notes?|the notes?))?|what (?:is|was) in (?:it|that|the note|my notes?)|what did i (?:note|save)")
-        val TIMER_REFERENCE = Regex("(?:make|change|set) (?:it|that|the timer)(?: to)? .+ (?:seconds?|minutes?|hours?)")
+        val NOTE_WHERE = NORMALIZE_RE_7
+        val NOTES_KNOW = NORMALIZE_RE_8
+        val TIMER_REFERENCE = NORMALIZE_RE_9
     }
 }

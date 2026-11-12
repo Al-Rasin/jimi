@@ -4,6 +4,36 @@ import java.time.DateTimeException
 import java.time.LocalDate
 import java.util.Locale
 
+// Regexes built once, not on every call (ROADMAP §L.4).
+private val NORMALIZE_RE = Regex("!?\\[([^]\\n]*)]\\([^)]*\\)")
+private val NORMALIZE_RE_2 = Regex("(?i)\\b(?:https?://|www\\.)[^\\s<>]+")
+private val NORMALIZE_RE_3 = Regex("(?i)\\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\\.[A-Z]{2,}\\b")
+private val NORMALIZE_RE_4 = Regex("(?i)\\b(?:[a-z0-9-]+\\.)+(?:com|org|net|edu|gov|io|dev|bd)(?:/[^\\s<>]*)?")
+private val NORMALIZE_RE_5 = Regex("(?m)^\\s*(?:#{1,6}\\s*|[-*+>]\\s+|[0-9]+[.)]\\s+)")
+private val NORMALIZE_RE_6 = Regex("[`*_~|]")
+private val NORMALIZE_RE_7 = Regex("[\\u0980-\\u09F1\\u09F4-\\u09FF]+")
+private val NORMALIZE_RE_8 = Regex("\\b([0-9]{4})-([0-9]{2})-([0-9]{2})\\b")
+private val NORMALIZE_RE_9 = Regex("\\b([0-9]{1,2})[/-]([0-9]{1,2})[/-]([0-9]{4})\\b")
+private val NORMALIZE_RE_10 = Regex("(?i)\\b([0-9]{1,2}):([0-9]{2})(?:\\s*([ap])\\.?m\\b)?(?![0-9])")
+private val NORMALIZE_RE_11 = Regex("(?i)\\b([0-9]{1,2})\\s*([ap])\\.?m\\b")
+private val NORMALIZE_RE_12 = Regex("(?<![\\w.])\\+?[0-9](?:[0-9 ()-]*[0-9])?(?!\\w|\\.[0-9])")
+private val NORMALIZE_RE_13 = Regex("\\D+")
+private val NORMALIZE_RE_14 = Regex("\\s{2,}")
+private val NORMALIZE_RE_15 = Regex("(?i)\\b([0-9]+)(?:st|nd|rd|th)\\b")
+private val NORMALIZE_RE_16 = Regex("(?i)\\be\\.g\\.(?=\\s|[,;:!?]|$)")
+private val NORMALIZE_RE_17 = Regex("(?i)\\bi\\.e\\.(?=\\s|[,;:!?]|$)")
+private val NORMALIZE_RE_18 = Regex("(?i)\\bkm\\b")
+private val NORMALIZE_RE_19 = Regex("\\b[A-Z]{2,}\\b")
+private val NORMALIZE_RE_20 = Regex("(?i)\\bboss\\b[!,]*")
+private val NORMALIZE_RE_21 = Regex(",\\s*(?=boss\\b)")
+private val NORMALIZE_RE_22 = Regex("[\\[\\]{}()<>]")
+private val NORMALIZE_RE_23 = Regex("[—–]")
+private val NORMALIZE_RE_24 = Regex("[^\\p{L}\\p{N}\\s.,!?:;'\\-]")
+private val NORMALIZE_RE_25 = Regex("\\s+")
+private val NORMALIZE_RE_26 = Regex("\\s+([.,!?:;])")
+private val NORMALIZE_RE_27 = Regex("[.!?]{2,}")
+private val NORMALIZE_RE_28 = Regex("([.,!?;:])(?:\\s*[,;:])+")
+
 object SpeechText {
     private val small = listOf("zero", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine",
         "ten", "eleven", "twelve", "thirteen", "fourteen", "fifteen", "sixteen", "seventeen", "eighteen", "nineteen")
@@ -18,18 +48,18 @@ object SpeechText {
 
     fun normalize(text: String): String {
         var value = text.map { if (it in '০'..'৯') '0' + (it - '০') else it }.joinToString("")
-        value = value.replace(Regex("!?\\[([^]\\n]*)]\\([^)]*\\)")) { it.groupValues[1] }
-        value = value.replace(Regex("(?i)\\b(?:https?://|www\\.)[^\\s<>]+")) { link(it.value) }
-        value = value.replace(Regex("(?i)\\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\\.[A-Z]{2,}\\b"), "link")
-        value = value.replace(Regex("(?i)\\b(?:[a-z0-9-]+\\.)+(?:com|org|net|edu|gov|io|dev|bd)(?:/[^\\s<>]*)?")) { link(it.value) }
-        value = value.replace(Regex("(?m)^\\s*(?:#{1,6}\\s*|[-*+>]\\s+|[0-9]+[.)]\\s+)"), "")
-        value = value.replace(Regex("[`*_~|]"), " ")
-        value = value.replace(Regex("[\\u0980-\\u09F1\\u09F4-\\u09FF]+"), " ")
-        value = value.replace(Regex("\\b([0-9]{4})-([0-9]{2})-([0-9]{2})\\b")) {
+        value = value.replace(NORMALIZE_RE) { it.groupValues[1] }
+        value = value.replace(NORMALIZE_RE_2) { link(it.value) }
+        value = value.replace(NORMALIZE_RE_3, "link")
+        value = value.replace(NORMALIZE_RE_4) { link(it.value) }
+        value = value.replace(NORMALIZE_RE_5, "")
+        value = value.replace(NORMALIZE_RE_6, " ")
+        value = value.replace(NORMALIZE_RE_7, " ")
+        value = value.replace(NORMALIZE_RE_8) {
             date(it, it.groupValues[1], it.groupValues[2], it.groupValues[3])
         }
         // Numeric local dates are day/month/year; ISO dates are handled above.
-        value = value.replace(Regex("\\b([0-9]{1,2})[/-]([0-9]{1,2})[/-]([0-9]{4})\\b")) {
+        value = value.replace(NORMALIZE_RE_9) {
             date(it, it.groupValues[3], it.groupValues[2], it.groupValues[1])
         }
         value = value.replace(Regex("(?i)\\b(${months.joinToString("|")})\\s+([0-9]{1,2})(?:st|nd|rd|th)?(?=\\b)")) {
@@ -38,7 +68,7 @@ object SpeechText {
         value = value.replace(Regex("(?i)\\b([0-9]{1,2})(?:st|nd|rd|th)?\\s+(${months.joinToString("|")})\\b")) {
             "${ordinal(it.groupValues[1].toInt().toString())} ${it.groupValues[2]}"
         }
-        value = value.replace(Regex("(?i)\\b([0-9]{1,2}):([0-9]{2})(?:\\s*([ap])\\.?m\\b)?(?![0-9])")) {
+        value = value.replace(NORMALIZE_RE_10) {
             val hour = it.groupValues[1].toInt()
             val minute = it.groupValues[2].toInt()
             val marker = it.groupValues[3].lowercase(Locale.ROOT)
@@ -49,7 +79,7 @@ object SpeechText {
                 else -> " ${cardinal(minute.toLong())}"
             } + if (marker.isNotEmpty()) " ${marker.uppercase(Locale.ROOT)} M" else ""
         }
-        value = value.replace(Regex("(?i)\\b([0-9]{1,2})\\s*([ap])\\.?m\\b")) {
+        value = value.replace(NORMALIZE_RE_11) {
             "${cardinal(it.groupValues[1].toLong())} ${it.groupValues[2].uppercase(Locale.ROOT)} M"
         }
         value = value.replace(Regex("(?i)(?<![\\w])(?:Tk\\.?|BDT|৳|\\$)\\s*($numberPattern)")) {
@@ -58,12 +88,12 @@ object SpeechText {
         value = value.replace(Regex("(?i)($numberPattern)\\s*(?:Tk\\.?|BDT|৳)(?![A-Za-z])")) {
             money(it.groupValues[1], false)
         }
-        value = value.replace(Regex("(?<![\\w.])\\+?[0-9](?:[0-9 ()-]*[0-9])?(?!\\w|\\.[0-9])")) {
+        value = value.replace(NORMALIZE_RE_12) {
             val digits = it.value.filter(Char::isDigit)
-            val groups = it.value.split(Regex("\\D+")).filter(String::isNotEmpty)
+            val groups = it.value.split(NORMALIZE_RE_13).filter(String::isNotEmpty)
             val phoneGroups = groups.size == 1 || (groups.size in 2..4 && groups.last().length >= 3 &&
                 groups.withIndex().all { (index, group) -> group.length >= 2 || (index == 0 && it.value.startsWith('+')) })
-            if (digits.length in 10..15 && phoneGroups && !it.value.contains(Regex("\\s{2,}"))) {
+            if (digits.length in 10..15 && phoneGroups && !it.value.contains(NORMALIZE_RE_14)) {
                 (if (it.value.startsWith('+')) "plus " else "") + digits(digits)
             } else it.value
         }
@@ -90,29 +120,29 @@ object SpeechText {
             }
             "${number(amount)} $unitWord"
         }
-        value = value.replace(Regex("(?i)\\b([0-9]+)(?:st|nd|rd|th)\\b")) { ordinal(it.groupValues[1]) }
-        value = value.replace(Regex("(?i)\\be\\.g\\.(?=\\s|[,;:!?]|$)"), "for example")
-            .replace(Regex("(?i)\\bi\\.e\\.(?=\\s|[,;:!?]|$)"), "that is")
+        value = value.replace(NORMALIZE_RE_15) { ordinal(it.groupValues[1]) }
+        value = value.replace(NORMALIZE_RE_16, "for example")
+            .replace(NORMALIZE_RE_17, "that is")
         val abbreviations = mapOf("etc" to "and so on", "dr" to "Doctor", "mr" to "Mister", "mrs" to "Missus",
             "ms" to "Miss", "prof" to "Professor", "vs" to "versus", "approx" to "approximately")
         value = value.replace(Regex("(?i)\\b(${abbreviations.keys.joinToString("|")})\\.(?=\\s|$)")) {
             abbreviations.getValue(it.groupValues[1].lowercase(Locale.ROOT))
         }
-        value = value.replace(Regex("(?i)\\bkm\\b"), "kilometers")
+        value = value.replace(NORMALIZE_RE_18, "kilometers")
         value = value.replace(Regex("(?<![\\w])[-+]?$numberPattern(?![\\w])")) { number(it.value) }
-        value = value.replace(Regex("\\b[A-Z]{2,}\\b")) {
+        value = value.replace(NORMALIZE_RE_19) {
             if (it.value in acronyms) it.value.toList().joinToString(" ") else it.value.lowercase(Locale.ROOT)
         }
-        value = value.replace(Regex("(?i)\\bboss\\b[!,]*"), "boss")
-            .replace(Regex(",\\s*(?=boss\\b)"), " ")
-        value = value.replace('&', ' ').replace(Regex("[\\[\\]{}()<>]"), " ")
+        value = value.replace(NORMALIZE_RE_20, "boss")
+            .replace(NORMALIZE_RE_21, " ")
+        value = value.replace('&', ' ').replace(NORMALIZE_RE_22, " ")
             .replace('’', '\'').replace('“', ' ').replace('”', ' ')
-            .replace(Regex("[—–]"), ", ")
-            .replace(Regex("[^\\p{L}\\p{N}\\s.,!?:;'\\-]"), " ")
-            .replace(Regex("\\s+"), " ")
-            .replace(Regex("\\s+([.,!?:;])"), "$1")
-            .replace(Regex("[.!?]{2,}"), ".")
-            .replace(Regex("([.,!?;:])(?:\\s*[,;:])+"), "$1")
+            .replace(NORMALIZE_RE_23, ", ")
+            .replace(NORMALIZE_RE_24, " ")
+            .replace(NORMALIZE_RE_25, " ")
+            .replace(NORMALIZE_RE_26, "$1")
+            .replace(NORMALIZE_RE_27, ".")
+            .replace(NORMALIZE_RE_28, "$1")
             .trim(' ', ',', ';', ':', '-')
         return if (value.any(Char::isLetterOrDigit)) value else ""
     }

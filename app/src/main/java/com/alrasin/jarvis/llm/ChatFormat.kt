@@ -2,6 +2,18 @@ package com.alrasin.jarvis.llm
 
 import com.alrasin.jarvis.brain.Exchange
 
+// Regexes built once, not on every call (ROADMAP §L.4).
+private val SENTENCES_RE = Regex("[.!?](\\s|$)")
+private val SPEECH_CHUNKS_RE = Regex("<think>.*?</think>", RegexOption.DOT_MATCHES_ALL)
+private val SPEECH_CHUNKS_RE_2 = Regex("<[^>]*$")
+private val SPEECH_CHUNKS_RE_3 = Regex("[,;:]\\s+")
+private val SPEECH_CHUNKS_RE_4 = Regex("\\s+")
+private val SPEECH_CHUNKS_RE_5 = Regex("\\S+\\s+")
+private val CLEAN_RE = Regex("<think>.*?(?:</think>|$)", RegexOption.DOT_MATCHES_ALL)
+private val CLEAN_RE_2 = Regex("<\\|im_start\\|>\\s*(?:system|user|assistant)?|</?think>|<\\|[^|>]*\\|>|</?(?:start|end)_of_turn>|<bos>|<eos>")
+private val CLEAN_RE_3 = Regex("(?i)/\\s?(?:no_?think|think)\\b")
+private val CLEAN_RE_4 = Regex("[*#`_]")
+
 /** ChatML for Qwen3 (PLAN 9.3). "/no_think" + empty think block = answer directly (fast). */
 object ChatFormat {
     private val abbreviation = Regex(
@@ -28,7 +40,7 @@ object ChatFormat {
     fun sentences(buf: String): Pair<List<String>, String> {
         val out = ArrayList<String>()
         var start = 0
-        Regex("[.!?](\\s|$)").findAll(buf).forEach { m ->
+        SENTENCES_RE.findAll(buf).forEach { m ->
             val prefix = buf.substring(start, m.range.first + 1)
             val finalLine = buf.endsWith("\n") && buf.substring(m.range.last + 1).isBlank()
             if (buf[m.range.first] == '.' && abbreviation.containsMatchIn(prefix) && !finalLine) {
@@ -52,22 +64,22 @@ object ChatFormat {
     fun speechChunks(buf: String, spoke: Boolean = false): Pair<List<String>, String> {
         val clauseWords = if (spoke) 6 else 5
         val cutWords = if (spoke) 16 else 5
-        val visible = buf.replace(Regex("<think>.*?</think>", RegexOption.DOT_MATCHES_ALL), "")
-        if (visible.contains("<think>") || Regex("<[^>]*$").containsMatchIn(visible)) {
+        val visible = buf.replace(SPEECH_CHUNKS_RE, "")
+        if (visible.contains("<think>") || SPEECH_CHUNKS_RE_2.containsMatchIn(visible)) {
             return emptyList<String>() to visible
         }
         val (sentences, pending) = sentences(visible)
         val out = sentences.toMutableList()
         var start = 0
-        Regex("[,;:]\\s+").findAll(pending).forEach { boundary ->
+        SPEECH_CHUNKS_RE_3.findAll(pending).forEach { boundary ->
             val clause = pending.substring(start, boundary.range.first + 1).trim()
-            if (clause.split(Regex("\\s+")).size >= clauseWords) {
+            if (clause.split(SPEECH_CHUNKS_RE_4).size >= clauseWords) {
                 out.add(clause)
                 start = boundary.range.last + 1
             }
         }
         val remainder = pending.substring(start)
-        val words = Regex("\\S+\\s+").findAll(remainder).take(cutWords).toList()
+        val words = SPEECH_CHUNKS_RE_5.findAll(remainder).take(cutWords).toList()
         if (words.size == cutWords) {
             val end = phraseCut(words, spoke)
             out.add(remainder.substring(0, end).trim())
@@ -94,8 +106,8 @@ object ChatFormat {
     }
 
     /** Drops think blocks, chat control tokens and "/no_think" echoes so they are never spoken or shown (§M.10). */
-    fun clean(text: String) = text.replace(Regex("<think>.*?(?:</think>|$)", RegexOption.DOT_MATCHES_ALL), "")
-        .replace(Regex("<\\|im_start\\|>\\s*(?:system|user|assistant)?|</?think>|<\\|[^|>]*\\|>|</?(?:start|end)_of_turn>|<bos>|<eos>"), " ")
-        .replace(Regex("(?i)/\\s?(?:no_?think|think)\\b"), " ")
-        .replace(Regex("[*#`_]"), "").replace(Regex("\\s+"), " ").trim()
+    fun clean(text: String) = text.replace(CLEAN_RE, "")
+        .replace(CLEAN_RE_2, " ")
+        .replace(CLEAN_RE_3, " ")
+        .replace(CLEAN_RE_4, "").replace(SPEECH_CHUNKS_RE_4, " ").trim()
 }

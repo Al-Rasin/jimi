@@ -1,5 +1,8 @@
 package com.alrasin.jarvis.agent.appmap
 
+// Regexes built once, not on every call (ROADMAP §L.4).
+private val PRETTY_RE = Regex("([a-z])([A-Z])")
+
 /**
  * "Can't do" list + permission queue (ROADMAP §J.7). Buttons the explorer was unsure about wait here
  * as questions; a "yes" lets the next learn run tap them, a "no" is never asked again. Pure text — JVM tests.
@@ -35,5 +38,5 @@ object AppAskQueue {
 
     /** "SettingsActivity" → "Settings". */
     fun pretty(screen: String): String = screen.removeSuffix("Activity").removeSuffix("Fragment")
-        .replace(Regex("([a-z])([A-Z])"), "$1 $2").trim().ifBlank { screen }
+        .replace(PRETTY_RE, "$1 $2").trim().ifBlank { screen }
 }

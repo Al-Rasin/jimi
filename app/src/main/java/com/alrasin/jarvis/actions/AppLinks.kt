@@ -7,6 +7,12 @@ import com.alrasin.jarvis.core.launch
 import com.alrasin.jarvis.core.resolves
 import java.net.URLEncoder
 
+// Regexes built once, not on every call (ROADMAP §L.4).
+private val TRAVEL_RE = Regex("walk")
+private val TRAVEL_RE_2 = Regex("motor|two wheel|scooter")
+private val TRAVEL_RE_3 = Regex("bike|bicycl|cycl")
+private val HANDLE_RE = Regex("[A-Za-z0-9._]{2,40}")
+
 /**
  * Deep links / intents table (ROADMAP §H.2): known links first, universal intents after.
  * Pure (unit tested); callers check each [Link] with resolveActivity and try the next one when it does not resolve.
@@ -106,15 +112,15 @@ object AppLinks {
     /** "drive"/"walking"/"bike"/"motorbike" said by the user → travel mode. */
     fun travel(word: String?): Travel = when {
         word == null -> Travel.DRIVE
-        Regex("walk").containsMatchIn(word) -> Travel.WALK
-        Regex("motor|two wheel|scooter").containsMatchIn(word) -> Travel.TWO_WHEELER
-        Regex("bike|bicycl|cycl").containsMatchIn(word) -> Travel.BIKE
+        TRAVEL_RE.containsMatchIn(word) -> Travel.WALK
+        TRAVEL_RE_2.containsMatchIn(word) -> Travel.TWO_WHEELER
+        TRAVEL_RE_3.containsMatchIn(word) -> Travel.BIKE
         else -> Travel.DRIVE
     }
 
     /** A user name is letters, digits, dots and underscores only; anything else is not a handle. */
     private fun handle(user: String): String? =
-        user.trim().removePrefix("@").replace(" ", "").takeIf { it.matches(Regex("[A-Za-z0-9._]{2,40}")) }
+        user.trim().removePrefix("@").replace(" ", "").takeIf { it.matches(HANDLE_RE) }
 }
 
 /** Opens the first [links] entry some activity handles (checked with resolveActivity first). Returns it, or null. */

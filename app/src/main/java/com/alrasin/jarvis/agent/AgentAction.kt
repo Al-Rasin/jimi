@@ -2,6 +2,9 @@ package com.alrasin.jarvis.agent
 
 import com.alrasin.jarvis.core.Json
 
+// Regexes built once, not on every call (ROADMAP §L.4).
+private val PARSE_RE = Regex("[A-Za-z][A-Za-z0-9_]*(\\.[A-Za-z0-9_]+)+")
+
 sealed interface AgentAction {
     data class OpenApp(val packageName: String) : AgentAction
     data class Tap(val element: Int) : AgentAction
@@ -41,7 +44,7 @@ sealed interface AgentAction {
             fun keys(vararg names: String) { require(obj.keys == setOf("action", *names)) }
             when (str("action")) {
                 "open_app" -> { keys("package"); OpenApp(str("package").also {
-                    require(it.matches(Regex("[A-Za-z][A-Za-z0-9_]*(\\.[A-Za-z0-9_]+)+")))
+                    require(it.matches(PARSE_RE))
                 }) }
                 "tap" -> { keys("element"); Tap(index()) }
                 "type" -> { keys("element", "text"); Type(index(), str("text")) }

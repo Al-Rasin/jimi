@@ -3,6 +3,9 @@ package com.alrasin.jarvis.llm
 import com.alrasin.jarvis.core.Tool
 import com.alrasin.jarvis.core.ToolCall
 
+// Regexes built once, not on every call (ROADMAP §L.4).
+private val PARSE_RE = Regex("<start_function_call>call:([a-z_]+)\\{(.*?)\\}(?:<end_function_call>|$)", RegexOption.DOT_MATCHES_ALL)
+
 /**
  * FunctionGemma prompt + output format (PLAN 9.2), and a GBNF grammar built from the tool list so the
  * model can only write a valid call to a real tool (or plain text = "no tool").
@@ -29,7 +32,7 @@ object FunctionGemma {
 
     /** call:name{key:<escape>value<escape>,...} → ToolCall. Null if no call. */
     fun parse(out: String): ToolCall? {
-        val m = Regex("<start_function_call>call:([a-z_]+)\\{(.*?)\\}(?:<end_function_call>|$)", RegexOption.DOT_MATCHES_ALL).find(out)
+        val m = PARSE_RE.find(out)
             ?: return null
         val args = Regex("([a-z_]+):(?:$ESC(.*?)$ESC|([^,}]*))", RegexOption.DOT_MATCHES_ALL).findAll(m.groupValues[2])
             .associate { it.groupValues[1] to (it.groupValues[2].ifEmpty { it.groupValues[3] }).trim() }

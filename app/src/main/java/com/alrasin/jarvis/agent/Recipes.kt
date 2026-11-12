@@ -29,6 +29,9 @@ import kotlinx.coroutines.delay
 import javax.inject.Inject
 import javax.inject.Singleton
 
+// Regexes built once, not on every call (ROADMAP §L.4).
+private val LINK_RE = Regex("\\{(\\w+)\\}")
+
 /**
  * Recipes (ROADMAP §H.5): a fixed list of steps for one spoken command in one app. They come from app cards
  * (tasks) or are saved after the AI screen agent finished a task, so the same command next time runs with no AI.
@@ -405,7 +408,7 @@ private class LiveRecipeScreen(
     private fun link(task: String): Boolean {
         val link = app.card?.deepLinks?.firstOrNull { it.task == task } ?: return false
         val values = params + ("number" to (params["number"] ?: params["contact"].orEmpty()))
-        val uri = Regex("\\{(\\w+)\\}").replace(link.uri) { Uri.encode(values[it.groupValues[1]].orEmpty()) }
+        val uri = LINK_RE.replace(link.uri) { Uri.encode(values[it.groupValues[1]].orEmpty()) }
         val intent = if (uri.isBlank()) Intent(link.action) else Intent(link.action, Uri.parse(uri))
         return context.launch(Intent(intent).setPackage(app.pkg)) || context.launch(intent)
     }

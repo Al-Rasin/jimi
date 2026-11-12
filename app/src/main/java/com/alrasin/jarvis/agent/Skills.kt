@@ -26,6 +26,9 @@ import com.alrasin.jarvis.core.launch
 import com.alrasin.jarvis.core.pollUntil
 import kotlinx.coroutines.delay
 
+// Regexes built once, not on every call (ROADMAP §L.4).
+private val WORDS_RE = Regex("[^\\p{L}\\p{N}]+")
+
 /**
  * General skills for apps without a card (ROADMAP §H.4): search, open a result, tap / toggle by name,
  * switch tabs, read the list. No AI. The pick* functions are pure so they are unit tested.
@@ -72,7 +75,7 @@ object Skills {
     /** True when tapping [label] may pay, send, delete or similar (never tapped without the user's say-so). */
     fun isRisky(label: String): Boolean = RISKY.containsMatchIn(label)
 
-    private fun words(s: String) = s.lowercase().split(Regex("[^\\p{L}\\p{N}]+")).filter { it.isNotEmpty() }
+    private fun words(s: String) = s.lowercase().split(WORDS_RE).filter { it.isNotEmpty() }
 
     /** 0..1: like [Fuzzy.score], but a long row that holds every spoken word still scores well. */
     fun rowScore(query: String, label: String): Double {

@@ -15,6 +15,12 @@ import org.jsoup.parser.Parser
 import java.net.URLEncoder
 import java.util.concurrent.TimeUnit
 
+// Regexes built once, not on every call (ROADMAP §L.4).
+private val SEARCH_RE = Regex("uddg=([^&]+)")
+private val QUESTION_RE = Regex("(?i)https?://\\S+|www\\.\\S+")
+private val GENERAL_READING_RE = Regex("[\\p{L}\\p{N}]+")
+private val TITLE_RE = Regex("(?<=[.!?])\\s+")
+
 /** Web tools (PLAN 11). Online only; each fails with a short spoken line when offline. */
 class Web {
     private val http = OkHttpClient.Builder().callTimeout(12, TimeUnit.SECONDS).build()
@@ -91,7 +97,7 @@ fun webTools(
         return doc.select(".result").mapNotNull { r ->
             val a = r.selectFirst(".result__a") ?: return@mapNotNull null
             var href = a.attr("href")
-            Regex("uddg=([^&]+)").find(href)?.let { href = java.net.URLDecoder.decode(it.groupValues[1], "UTF-8") }
+            SEARCH_RE.find(href)?.let { href = java.net.URLDecoder.decode(it.groupValues[1], "UTF-8") }
             val url = normalizeUrl(href) ?: return@mapNotNull null
             Triple(a.text(), r.selectFirst(".result__snippet")?.text().orEmpty(), url)
         }.filter { !it.third.contains("duckduckgo.com/y.js") }
@@ -147,11 +153,11 @@ fun webTools(
         SimpleTool("read_page", "Read the main text of a web page", listOf(arg("url", "page address"))) { c, ctx ->
             val rawUrl = c.require("url", "Which page?")
             val url = normalizeUrl(rawUrl) ?: return@SimpleTool ToolResult.fail("That isn't a valid web address.")
-            val question = ctx.heard.replace(Regex("(?i)https?://\\S+|www\\.\\S+"), "")
+            val question = ctx.heard.replace(QUESTION_RE, "")
                 .replace(rawUrl, "", ignoreCase = true).trim()
             val readingWords = setOf("read", "open", "summarize", "summary", "page", "web", "webpage", "website", "url", "address", "link", "aloud",
                 "please", "can", "could", "would", "you", "me", "the", "this", "that", "a", "an", "to", "for", "of", "hey", "jimi")
-            val generalReading = Regex("[\\p{L}\\p{N}]+").findAll(question).all { it.value.lowercase(java.util.Locale.ROOT) in readingWords }
+            val generalReading = GENERAL_READING_RE.findAll(question).all { it.value.lowercase(java.util.Locale.ROOT) in readingWords }
             runCatching { readPage(url, question, generalReading) }.getOrElse { webFailure("that page", it) }
         },
         SimpleTool("wiki_lookup", "Short Wikipedia summary", listOf(arg("topic", "topic"))) { c, _ ->
@@ -169,7 +175,7 @@ fun webTools(
                 )
             }.fold({ t ->
                 if (t.isBlank()) ToolResult.fail("Wikipedia has nothing on $topic.")
-                else ToolResult.ok(t.split(Regex("(?<=[.!?])\\s+")).take(2).joinToString(" "), t)
+                else ToolResult.ok(t.split(TITLE_RE).take(2).joinToString(" "), t)
             }, { webFailure("Wikipedia", it) })
         },
     )

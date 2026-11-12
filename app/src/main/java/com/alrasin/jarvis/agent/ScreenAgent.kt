@@ -8,6 +8,9 @@ import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.withTimeoutOrNull
 
+// Regexes built once, not on every call (ROADMAP §L.4).
+private val START_RE = Regex("^(?:please )?(?:open|launch|start|go to) (?:the |my )?(.+?)(?: app)?(?:,)? (?:and(?: then)?|then) .+$", RegexOption.IGNORE_CASE)
+
 interface AgentModel {
     val description: String
     suspend fun next(task: String, snapshot: ScreenSnapshot, history: List<String>): AgentAction
@@ -95,7 +98,7 @@ class ScreenAgent(
     }
 
     companion object {
-        private val START = Regex("^(?:please )?(?:open|launch|start|go to) (?:the |my )?(.+?)(?: app)?(?:,)? (?:and(?: then)?|then) .+$", RegexOption.IGNORE_CASE)
+        private val START = START_RE
     }
 
     suspend fun answer(text: String): AgentResult {

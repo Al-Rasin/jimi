@@ -2,6 +2,12 @@ package com.alrasin.jarvis.brain
 
 import com.alrasin.jarvis.core.ToolCall
 
+// Regexes built once, not on every call (ROADMAP §L.4).
+private val MATCH_RE = Regex("\\btomorrows?\\b")
+private val MATCH_RE_2 = Regex("\\b(?:todays|today|tomorrows|tomorrow|right now|now|outside|current|currently|latest)\\b")
+private val MATCH_RE_3 = Regex("\\s+")
+private val MATCH_RE_4 = Regex(" (?:in|for|at) ([a-z][a-z ]*)$")
+
 internal object WeatherRequest {
     /** "at my place / here / near me": no place, so the weather tool uses the current location (§M.8). */
     private val here = Regex(
@@ -9,12 +15,12 @@ internal object WeatherRequest {
     )
 
     fun match(text: String): ToolCall? {
-        val day = if (Regex("\\btomorrows?\\b").containsMatchIn(text)) "tomorrow" else "today"
-        val withoutDay = text.replace(Regex("\\b(?:todays|today|tomorrows|tomorrow|right now|now|outside|current|currently|latest)\\b"), " ")
-            .replace(Regex("\\s+"), " ").trim()
+        val day = if (MATCH_RE.containsMatchIn(text)) "tomorrow" else "today"
+        val withoutDay = text.replace(MATCH_RE_2, " ")
+            .replace(MATCH_RE_3, " ").trim()
             .removeSuffix(" right") // normalize() drops the "now" of "right now"
             .replace(here, "")
-        val location = Regex(" (?:in|for|at) ([a-z][a-z ]*)$").find(withoutDay)
+        val location = MATCH_RE_4.find(withoutDay)
         val question = if (location == null) withoutDay else withoutDay.substring(0, location.range.first)
         val patterns = listOf(
             "(?:(?:whats|what is|hows|how is|tell me|show me|give me|check|get)(?: me)? )?(?:the )?(?:weather|temperature)" +

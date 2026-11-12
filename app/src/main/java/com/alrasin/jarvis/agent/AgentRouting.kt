@@ -1,5 +1,8 @@
 package com.alrasin.jarvis.agent
 
+// Regexes built once, not on every call (ROADMAP §L.4).
+private val NEEDS_SCREEN_RE = Regex("^(?:please|can you|could you|would you)\\s+", RegexOption.IGNORE_CASE)
+
 object AgentRouting {
     private val explanation = Regex("^(?:how (?:do|can|would|to)|what|why|when|who|explain|tell me about)\\b", RegexOption.IGNORE_CASE)
     private val command = Regex("\\b(?:turn on|turn off|enable|disable|change|set|switch|book|order|buy|reply|send|delete|tap|click|scroll|type|open|search|find|select|choose|navigate|go to)\\b", RegexOption.IGNORE_CASE)
@@ -13,7 +16,7 @@ object AgentRouting {
     )
 
     fun needsScreen(text: String): Boolean {
-        val request = text.trim().replace(Regex("^(?:please|can you|could you|would you)\\s+", RegexOption.IGNORE_CASE), "")
+        val request = text.trim().replace(NEEDS_SCREEN_RE, "")
         return !explanation.containsMatchIn(request) && command.containsMatchIn(request) && screenContext.containsMatchIn(request)
     }
 

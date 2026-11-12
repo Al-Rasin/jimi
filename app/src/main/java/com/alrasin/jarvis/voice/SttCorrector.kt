@@ -2,6 +2,9 @@ package com.alrasin.jarvis.voice
 
 import java.util.Locale
 
+// Regexes built once, not on every call (ROADMAP §L.4).
+private val KEY_RE = Regex("[\\s'’\\-]+")
+
 /** Corrects only explicit command slots; free text is never a spelling-correction target. */
 class SttCorrector(
     contacts: Collection<String> = emptyList(),
@@ -94,7 +97,7 @@ class SttCorrector(
         .toList()
 
     private fun key(text: String): String = text.lowercase(Locale.ROOT)
-        .replace(Regex("[\\s'’\\-]+"), "")
+        .replace(KEY_RE, "")
 
     /** A compact English consonant key, used only alongside a tight edit-distance bound. */
     private fun phonetic(word: String): String {

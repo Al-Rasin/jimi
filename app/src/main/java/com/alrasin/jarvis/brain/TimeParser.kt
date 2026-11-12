@@ -6,6 +6,22 @@ import java.time.LocalDateTime
 import java.time.LocalTime
 import java.util.Locale
 
+// Regexes built once, not on every call (ROADMAP §L.4).
+private val DURATION_ONLY_RE = Regex("\\bhalf an? hour\\b")
+private val DURATION_ONLY_RE_2 = Regex("\\b(?:and|a half|for|of)\\b")
+private val PARSE_RE = Regex(" (?:every day|everyday|daily|each day)(?: at)? ")
+private val PARSE_RE_2 = Regex(" on (?:the )?(\\d{1,2})(?:st|nd|rd|th)?(?: at)? ")
+private val PARSE_RE_3 = Regex(" (?:tomorrow|tmrw)(?: (morning|afternoon|evening|night))?(?: at)? ")
+private val PARSE_RE_4 = Regex(" (?:today|tonight)(?: at)? ")
+private val PARSE_RE_5 = Regex(" (?:this |in the )(morning|afternoon|evening)(?: at)? ")
+private val PARSE_RE_6 = Regex(" at night ")
+private val PARSE_RE_7 = Regex(" (?:at |by |for )?(noon|midday|midnight) ")
+private val NORMALIZE_RE = Regex("\\b([ap])\\.m\\.?(?=\\s|$)")
+private val NORMALIZE_RE_2 = Regex("(?<=\\d)([ap]m)\\b")
+private val NORMALIZE_RE_3 = Regex("\\bon (the )?(first|second|third|fourth|fifth|sixth|seventh|eighth|ninth|tenth)\\b")
+private val NORMALIZE_RE_4 = Regex("\\s+")
+private val NORMALIZE_RE_5 = Regex("\\b(\\d{1,2}) 0 ([0-9])\\b")
+
 /**
  * Natural time in commands (PLAN 6.3): "at 7 30 pm", "tomorrow 5 pm", "in 2 hours", "every friday at 6",
  * "half past nine", "noon". Input: normalized text with numbers as digits (see [NumberWords]).
@@ -35,8 +51,8 @@ object TimeParser {
     /** Seconds when the text is only a duration ("7 minutes", "an hour and a half"). Null if other words remain. */
     fun durationOnly(text: String): Long? {
         val n = normalize(text)
-        val rest = DURATION.replace(n.replace(Regex("\\bhalf an? hour\\b"), " "), " ")
-            .replace(Regex("\\b(?:and|a half|for|of)\\b"), " ").trim()
+        val rest = DURATION.replace(n.replace(DURATION_ONLY_RE, " "), " ")
+            .replace(DURATION_ONLY_RE_2, " ").trim()
         return if (rest.isEmpty()) duration(text)?.takeIf { it > 0 } else null
     }
 
@@ -60,7 +76,7 @@ object TimeParser {
             }).toLong()
             found = true
         }
-        if (!found && Regex("\\bhalf an? hour\\b").containsMatchIn(text)) return 1800
+        if (!found && DURATION_ONLY_RE.containsMatchIn(text)) return 1800
         return if (found) total else null
     }
 
@@ -82,33 +98,33 @@ object TimeParser {
         var hint: String? = null   // am | pm
         fun cut(re: Regex): MatchResult? = re.find(rest)?.also { rest = " " + rest.replaceRange(it.range, " ").trim() + " " }
 
-        cut(Regex(" (?:every day|everyday|daily|each day)(?: at)? "))?.let { repeat = "daily" }
+        cut(PARSE_RE)?.let { repeat = "daily" }
         cut(Regex(" (?:every|each) ($DAY_RE)s?(?: at)? "))?.let { repeat = "weekly"; weekday = DAYS[it.groupValues[1]] }
         if (weekday == null) cut(Regex(" (?:on )?(?:(this|next) )?($DAY_RE)(?: at)? "))?.let {
             weekQualifier = it.groupValues[1]
             weekday = DAYS[it.groupValues[2]]
         }
-        cut(Regex(" on (?:the )?(\\d{1,2})(?:st|nd|rd|th)?(?: at)? "))?.let {
+        cut(PARSE_RE_2)?.let {
             monthDay = it.groupValues[1].toInt()
             if (monthDay !in 1..31) return null
         }
-        cut(Regex(" (?:tomorrow|tmrw)(?: (morning|afternoon|evening|night))?(?: at)? "))?.let {
+        cut(PARSE_RE_3)?.let {
             // Still awake after midnight: "tomorrow 7 am" means the coming morning.
             date = now.toLocalDate().plusDays(if (now.hour < 4) 0 else 1)
             part = it.groupValues[1].takeIf { value -> value.isNotEmpty() }
             hint = partHint(part)
         }
-        cut(Regex(" (?:today|tonight)(?: at)? "))?.let {
+        cut(PARSE_RE_4)?.let {
             date = now.toLocalDate()
             todayExplicit = true
             if (it.value.contains("tonight")) { hint = "pm"; part = "night" }
         }
-        cut(Regex(" (?:this |in the )(morning|afternoon|evening)(?: at)? "))?.let { part = it.groupValues[1]; hint = partHint(part) }
-        cut(Regex(" at night "))?.let { hint = "pm" }
+        cut(PARSE_RE_5)?.let { part = it.groupValues[1]; hint = partHint(part) }
+        cut(PARSE_RE_6)?.let { hint = "pm" }
 
         // 3. time of day
         var time: LocalTime? = null
-        val t = cut(Regex(" (?:at |by |for )?(noon|midday|midnight) "))
+        val t = cut(PARSE_RE_7)
         if (t != null) {
             time = if (t.groupValues[1] == "midnight") LocalTime.MIDNIGHT else LocalTime.NOON
             hint = "fixed"
@@ -193,13 +209,13 @@ object TimeParser {
 
     private fun normalize(text: String): String = NumberWords.normalize(
         text.lowercase(Locale.ENGLISH).replace("o'clock", "o clock")
-            .replace(Regex("\\b([ap])\\.m\\.?(?=\\s|$)"), "$1m")
-            .replace(Regex("(?<=\\d)([ap]m)\\b"), " $1")
-            .replace(Regex("\\bon (the )?(first|second|third|fourth|fifth|sixth|seventh|eighth|ninth|tenth)\\b")) {
+            .replace(NORMALIZE_RE, "$1m")
+            .replace(NORMALIZE_RE_2, " $1")
+            .replace(NORMALIZE_RE_3) {
                 "on ${it.groupValues[1]}${listOf("first", "second", "third", "fourth", "fifth", "sixth", "seventh", "eighth", "ninth", "tenth").indexOf(it.groupValues[2]) + 1}th"
             }
-            .replace(Regex("\\s+"), " ").trim(),
-    ).replace(Regex("\\b(\\d{1,2}) 0 ([0-9])\\b"), "$1 0$2")
+            .replace(NORMALIZE_RE_4, " ").trim(),
+    ).replace(NORMALIZE_RE_5, "$1 0$2")
 
     private fun ampm(s: String) = when (s.replace(" ", "")) { "am" -> "am"; "pm" -> "pm"; else -> null }
 
@@ -209,5 +225,5 @@ object TimeParser {
         else -> null
     }
 
-    private fun clean(s: String) = s.replace(Regex("\\s+"), " ").trim()
+    private fun clean(s: String) = s.replace(NORMALIZE_RE_4, " ").trim()
 }

@@ -19,6 +19,9 @@ import java.io.InputStream
 import java.net.HttpURLConnection
 import java.net.URL
 
+// Regexes built once, not on every call (ROADMAP §L.4).
+private val IMPORT_LLM_RE = Regex("[A-Za-z0-9_.-]+\\.gguf")
+
 data class ModelStatus(
     val id: String, val label: String, val ready: Boolean, val sizeLabel: String,
     val downloadable: Boolean, val detail: String,
@@ -120,7 +123,7 @@ object PortableModels {
             val name = context.contentResolver.query(uri, arrayOf(OpenableColumns.DISPLAY_NAME), null, null, null)?.use {
                 if (it.moveToFirst()) it.getString(0) else null
             } ?: error("The selected file has no name")
-            require(name.matches(Regex("[A-Za-z0-9_.-]+\\.gguf")) &&
+            require(name.matches(IMPORT_LLM_RE) &&
                 listOf("functiongemma", "qwen3", "gemma-3", "LFM2.5-1.2B-Instruct-").any { name.startsWith(it, true) }) {
                 "Select a FunctionGemma, Qwen3, Gemma-3 or LFM2.5-1.2B-Instruct .gguf model"
             }
