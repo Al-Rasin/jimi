@@ -61,6 +61,7 @@ class ToolRegistry @Inject constructor(
         add(unlockTool(context) { secrets.get(Secrets.PIN) })
         addAll(screenTools(context))
         addAll(askScreenTools())
+        addAll(songTools(context))
         addAll(clipboardTools(context))
         addAll(cameraTools(context))
         val places = PlaceReminders(context)
