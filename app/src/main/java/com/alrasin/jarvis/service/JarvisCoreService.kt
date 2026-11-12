@@ -27,7 +27,6 @@ import com.alrasin.jarvis.core.JarvisLog
 import com.alrasin.jarvis.core.backgroundWork
 import com.alrasin.jarvis.core.isLocked
 import com.alrasin.jarvis.data.Settings
-import com.alrasin.jarvis.data.WakeEvent
 import com.alrasin.jarvis.data.WakeEventDao
 import com.alrasin.jarvis.ui.AssistantActivity
 import com.alrasin.jarvis.ui.Backdrop
@@ -721,7 +720,7 @@ class JarvisCoreService : LifecycleService() {
             Notifications.updateListening(this, if (available) PHASE_WAKE else PHASE_MIC_BUSY)
         }
         val tone = Chimes()
-        var clips = ClipCollector()
+        var clips = newClips()
         var interrupted = false
         suspend fun phoneCapture(source: String, stripWake: Boolean, epoch: Int): Boolean {
             if (capturePolicy.select(engineSettings.engine.first(), phone.isOnline()) != SpeechEngine.PHONE_ON_DEVICE) {
@@ -813,7 +812,7 @@ class JarvisCoreService : LifecycleService() {
                     _lastScore.value = 0f
                     _heard.value = ""
                     ring = AudioRing(WakeWordDetector.SAMPLE_RATE * RING_SECONDS)
-                    clips = ClipCollector()
+                    clips = newClips()
                     detector.reset()
                     continue
                 }
@@ -1012,6 +1011,8 @@ class JarvisCoreService : LifecycleService() {
         }
     }
 
+    private fun newClips() = ClipCollector(this, dao) { missedRequested.also { missedRequested = false } }
+
     /** Keeps each command's audio + raw STT text, to test better STT models on the user's real voice. */
     private fun saveCommand(audio: ShortArray, rawText: String): String? =
         runCatching {
@@ -1058,71 +1059,6 @@ class JarvisCoreService : LifecycleService() {
         ask(text, raw, source, wakeId, audioPath, audio, refine)
     }
 
-    /** Decides when to save a clip: real wakes, near misses, and "Missed it" taps. */
-    private inner class ClipCollector {
-        private var lastWakeMs = 0L
-        private var lastNearMs = 0L
-        private var pendingKind: String? = null
-        private var pendingPeak = 0f
-        private var pendingChunks = 0
-        var lastWakeId: Long? = null
-            private set
-        var lastWakePeak = 0f
-            private set
-
-        /** Returns true when the wake word was just heard. */
-        suspend fun onChunk(score: Float, thr: Float, ring: AudioRing, tone: Chimes): Boolean {
-            val now = System.currentTimeMillis()
-            if (missedRequested) {
-                missedRequested = false
-                save(WakeEvent.VERDICT_MISSED, 0f, thr, ring.last(WakeWordDetector.SAMPLE_RATE * MISSED_SECONDS))
-                return false
-            }
-            if (score >= thr && now - lastWakeMs > WAKE_COOLDOWN_MS) {
-                lastWakeMs = now
-                WakeFeedbackSignal.signal(this@JarvisCoreService)
-                pendingKind = WakeEvent.VERDICT_NONE
-                pendingPeak = score
-                pendingChunks = AFTER_CHUNKS
-                lastWakeId = null
-                return true
-            }
-            if (pendingKind == null && score >= NEAR_MIN && score < thr &&
-                now - lastNearMs > NEAR_COOLDOWN_MS && now - lastWakeMs > WAKE_COOLDOWN_MS
-            ) {
-                pendingKind = WakeEvent.VERDICT_NEAR
-                pendingPeak = score
-                pendingChunks = AFTER_CHUNKS
-                return false
-            }
-            val kind = pendingKind ?: return false
-            pendingPeak = maxOf(pendingPeak, score)
-            if (kind == WakeEvent.VERDICT_NEAR && pendingPeak >= thr) {
-                pendingKind = null   // turned into a real wake; next chunk handles it
-                return false
-            }
-            if (--pendingChunks > 0) return false
-            pendingKind = null
-            if (kind == WakeEvent.VERDICT_NEAR) lastNearMs = now
-            val id = save(kind, pendingPeak, thr, ring.last(CLIP_SAMPLES))
-            if (kind == WakeEvent.VERDICT_NONE) {
-                lastWakeId = id
-                lastWakePeak = pendingPeak
-                Notifications.showWakeCheck(this@JarvisCoreService, id, pendingPeak)
-            }
-            return false
-        }
-
-        private suspend fun save(verdict: String, score: Float, thr: Float, audio: ShortArray): Long {
-            val time = System.currentTimeMillis()
-            val file = WakeFeedback.clipFile(this@JarvisCoreService, time, score, verdict)
-            Wav.write(file, audio)
-            val id = dao.insert(WakeEvent(timeMs = time, score = score, threshold = thr, clipPath = file.path, verdict = verdict))
-            JarvisLog.i("wake #$id $verdict score=${"%.2f".format(score)}")
-            return id
-        }
-    }
-
     @OptIn(ExperimentalCoroutinesApi::class)
     override fun onDestroy() {
         listenJob?.cancel()
@@ -1165,12 +1101,6 @@ class JarvisCoreService : LifecycleService() {
         private const val FOLLOW_UP_WAIT = 6f     // seconds to start talking after an answer
         private const val TAIL_MS = 350L
         private const val RING_SECONDS = 4
-        private const val CLIP_SAMPLES = 40_000       // 2.5 s per wake clip
-        private const val MISSED_SECONDS = 3
-        private const val AFTER_CHUNKS = 6           // keep ~0.5 s after the peak in the clip
-        private const val WAKE_COOLDOWN_MS = 2_000L
-        private const val NEAR_MIN = 0.2f
-        private const val NEAR_COOLDOWN_MS = 30_000L
         /** Most words per spoken piece: Google voice makes ~25 words in ~1 s; Piper ~10 words in ~2 s (3 s of speech). */
         private const val PHONE_VOICE_WORDS = 25
         private const val VOICE_WORDS = 10
