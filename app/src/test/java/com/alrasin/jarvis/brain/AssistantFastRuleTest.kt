@@ -20,7 +20,7 @@ class AssistantFastRuleTest {
                 assertEquals(0, lookups)
                 val rule = RuleMatcher.match(text, now)
                 assertEquals(text, "open_app", rule?.tool)
-                assertEquals(text, rule, Assistant.ruleRouteCall(text, rule, IntentRouter.classify(text, rule)))
+                assertEquals(text, rule, AssistantRouting.ruleRouteCall(text, rule, IntentRouter.classify(text, rule)))
                 assertEquals(text, 1, lookups)
             }
         } finally {
@@ -33,14 +33,14 @@ class AssistantFastRuleTest {
             val rule = RuleMatcher.match(text, now)
             assertEquals(text, "set_alarm", rule?.tool)
             assertEquals(text, "15:00", rule?.arg("time"))
-            assertEquals(text, rule, Assistant.ruleRouteCall(text, rule, IntentRouter.classify(text, rule)))
+            assertEquals(text, rule, AssistantRouting.ruleRouteCall(text, rule, IntentRouter.classify(text, rule)))
         }
     }
 
     @Test fun fastPathKeepsChatAndMultiStepGuards() {
         val call = ToolCall("open_app", mapOf("app" to "youtube"))
         for (text in listOf("don't open YouTube", "open YouTube then tap subscriptions")) {
-            assertNull(text, Assistant.ruleRouteCall(text, call, IntentRouter.classify(text, call)))
+            assertNull(text, AssistantRouting.ruleRouteCall(text, call, IntentRouter.classify(text, call)))
         }
     }
 

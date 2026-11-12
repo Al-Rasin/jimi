@@ -13,7 +13,6 @@ import com.alrasin.jarvis.agent.RecipeStore
 import com.alrasin.jarvis.agent.ScreenAgentSession
 import com.alrasin.jarvis.agent.RecipeBook
 import com.alrasin.jarvis.agent.TeachBook
-import com.alrasin.jarvis.agent.TeachCommand
 import com.alrasin.jarvis.agent.TeachSession
 import com.alrasin.jarvis.core.JarvisLog
 import com.alrasin.jarvis.core.SmokeSession
@@ -305,10 +304,10 @@ class Assistant @Inject constructor(
                 }
             }
             // "turn on wifi and then open youtube": every part a known tool → run them in order, no AI (§H.1).
-            val chain = chainPlan(text, rule, intent)
+            val chain = AssistantRouting.chainPlan(text, rule, intent)
             if (chain?.complete == true) return runChain(chain, input)
-            webRouteCall(text, rule, intent)?.let { return runTool(it, input, "router") }
-            ruleRouteCall(text, rule, intent)?.let {
+            AssistantRouting.webRouteCall(text, rule, intent)?.let { return runTool(it, input, "router") }
+            AssistantRouting.ruleRouteCall(text, rule, intent)?.let {
                 if (smoke == null) draft.start(it, monotonicMillis())?.let { q -> return Reply(q, expectAnswer = true) }
                 JarvisLog.i("route rule ${it.tool} in ${(System.nanoTime() - routingStarted) / 1_000_000} ms; llm=false")
                 return runTool(it, input, "rule")
@@ -376,7 +375,7 @@ class Assistant @Inject constructor(
     private fun monotonicMillis() = System.nanoTime() / 1_000_000
 
     private fun teachCall(text: String, rule: ToolCall?): ToolCall? =
-        teachCallFor(text, rule, teach.active) { RuleMatcher.appNameMatches?.invoke(it) == true }
+        AssistantRouting.teachCallFor(text, rule, teach.active) { RuleMatcher.appNameMatches?.invoke(it) == true }
 
     private fun contextLine(): String {
         val now = LocalDateTime.now()
@@ -548,68 +547,16 @@ class Assistant @Inject constructor(
     }
 
     suspend fun stepsFor(name: String): List<ToolCall>? {
-        val json = routines.get(name)?.takeIf { it.enabled }?.stepsJson ?: DEFAULT_ROUTINES[name]?.let { stepsJson(it) } ?: return null
+        val json = routines.get(name)?.takeIf { it.enabled }?.stepsJson ?: Routines.DEFAULT_ROUTINES[name]?.let { Routines.stepsJson(it) } ?: return null
         return (Json.parse(json) as List<*>).mapNotNull { (it as? Map<*, *>)?.let { m -> ToolCall.fromJson(Json.write(m)) } }
     }
 
-    suspend fun saveRoutine(name: String, steps: List<ToolCall>) = routines.put(Routine(name, stepsJson(steps)))
+    suspend fun saveRoutine(name: String, steps: List<ToolCall>) = routines.put(Routine(name, Routines.stepsJson(steps)))
 
     companion object {
         private const val PENDING_MS = 30_000L
         private const val LATE_YES_MS = 180_000L
         private const val HISTORY_IDLE_MS = 5 * 60_000L
         private val MESSAGE_TOOLS = setOf("send_sms", "send_whatsapp")
-        private val WEB_TOOLS = setOf("web_search", "weather", "news", "wiki_lookup", "read_page", "open_url", "currency", "prayer_times")
-
-        /** Tools that can grab a whole "X and Y" sentence by one loose word, so a full chain beats them. */
-        private val LOOSE_TOOLS = setOf("toggle", "open_app", "set_volume", "set_brightness", "go_home", "go_back")
-
-        /** A chain plan when the sentence has parts; a matching non-loose rule for the whole sentence wins (it may own the "and"). */
-        internal fun chainPlan(text: String, rule: ToolCall?, intent: IntentRouter.Decision): TaskChain.Plan? {
-            if (intent.isConfident && intent.route == IntentRouter.Route.CHAT) return null
-            if (rule != null && rule.tool !in LOOSE_TOOLS && AgentRouting.acceptsSingleTool(text, rule.tool)) return null
-            return TaskChain.plan(text) { RuleMatcher.match(it) }
-        }
-
-        internal fun ruleRouteCall(text: String, rule: ToolCall?, intent: IntentRouter.Decision): ToolCall? {
-            if (intent.isConfident && intent.route == IntentRouter.Route.CHAT) return null
-            return rule?.takeIf { AgentRouting.acceptsSingleTool(text, it.tool) }
-        }
-
-        /** Teach mode commands: done / cancel while recording, or "learn order coffee" to start. */
-        internal fun teachCallFor(text: String, rule: ToolCall?, active: Boolean, isApp: (String) -> Boolean): ToolCall? {
-            if (active) when (TeachCommand.duringTeach(text)) {
-                TeachCommand.Cmd.Done -> return ToolCall("teach_done", emptyMap())
-                TeachCommand.Cmd.Cancel -> return ToolCall("teach_cancel", emptyMap())
-                else -> Unit
-            }
-            if (rule != null && rule.tool != "learn_app") return null
-            return TeachCommand.startOrNull(text, isApp)?.let { ToolCall("teach_start", mapOf("task" to it.name)) }
-        }
-
-        internal fun webRouteCall(text: String, rule: ToolCall?, intent: IntentRouter.Decision): ToolCall? {
-            if (!intent.isConfident || intent.route != IntentRouter.Route.WEB) return null
-            if (rule != null && rule.tool !in WEB_TOOLS) return null
-            return rule ?: ToolCall("web_search", mapOf("query" to text))
-        }
-
-        fun stepsJson(steps: List<ToolCall>) = Json.write(steps.map { mapOf("tool" to it.tool, "args" to it.args) })
-
-        val DEFAULT_ROUTINES = mapOf(
-            "good_night" to listOf(
-                ToolCall("toggle", mapOf("target" to "dnd", "state" to "on")),
-                ToolCall("set_brightness", mapOf("level" to "5")),
-                ToolCall("list_reminders"),
-            ),
-            "good_morning" to listOf(
-                ToolCall("toggle", mapOf("target" to "dnd", "state" to "off")),
-                ToolCall("set_brightness", mapOf("level" to "auto")),
-                ToolCall("device_status", mapOf("what" to "date")),
-                ToolCall("calendar_read"),
-                ToolCall("weather"),
-                ToolCall("list_reminders"),
-                ToolCall("notification_summary"),
-            ),
-        )
     }
 }

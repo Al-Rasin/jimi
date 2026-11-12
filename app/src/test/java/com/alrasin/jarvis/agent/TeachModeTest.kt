@@ -1,6 +1,6 @@
 package com.alrasin.jarvis.agent
 
-import com.alrasin.jarvis.brain.Assistant
+import com.alrasin.jarvis.brain.AssistantRouting
 import com.alrasin.jarvis.core.ToolCall
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -40,15 +40,15 @@ class TeachModeTest {
     }
 
     @Test fun assistantRouting() {
-        val done = Assistant.teachCallFor("done", null, active = true) { false }
+        val done = AssistantRouting.teachCallFor("done", null, active = true) { false }
         assertEquals("teach_done", done?.tool)
-        assertNull(Assistant.teachCallFor("done", null, active = false) { false })
-        assertEquals("teach_cancel", Assistant.teachCallFor("cancel", ToolCall("cancel", emptyMap()), true) { false }?.tool)
-        val start = Assistant.teachCallFor("learn order coffee", null, false) { false }
+        assertNull(AssistantRouting.teachCallFor("done", null, active = false) { false })
+        assertEquals("teach_cancel", AssistantRouting.teachCallFor("cancel", ToolCall("cancel", emptyMap()), true) { false }?.tool)
+        val start = AssistantRouting.teachCallFor("learn order coffee", null, false) { false }
         assertEquals("teach_start", start?.tool)
         assertEquals("order coffee", start?.arg("task"))
         // Another rule (e.g. "learn it" for the permission queue) keeps its own meaning.
-        assertNull(Assistant.teachCallFor("learn it", ToolCall("ask_answer", emptyMap()), false) { false })
+        assertNull(AssistantRouting.teachCallFor("learn it", ToolCall("ask_answer", emptyMap()), false) { false })
     }
 
     @Test fun recorderKeepsOneAppAndSkipsSecrets() {

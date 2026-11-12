@@ -9,7 +9,7 @@ class WeatherFastRouteTest {
             "is it raining", "will it rain tomorrow", "should I carry an umbrella", "how hot is it today").forEach { text ->
             val rule = RuleMatcher.match(text)
             assertEquals(text, "weather", rule?.tool)
-            assertEquals(text, "weather", Assistant.webRouteCall(text, rule, IntentRouter.classify(text, rule))?.tool)
+            assertEquals(text, "weather", AssistantRouting.webRouteCall(text, rule, IntentRouter.classify(text, rule))?.tool)
         }
     }
 

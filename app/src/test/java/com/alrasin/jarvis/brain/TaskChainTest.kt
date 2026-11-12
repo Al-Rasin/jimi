@@ -24,7 +24,7 @@ class TaskChainTest {
 
     private fun route(text: String): TaskChain.Plan? {
         val rule = RuleMatcher.match(text)
-        return Assistant.chainPlan(text, rule, IntentRouter.classify(text, rule))
+        return AssistantRouting.chainPlan(text, rule, IntentRouter.classify(text, rule))
     }
 
     @Test fun splitsOnAndThenAfterThat() {

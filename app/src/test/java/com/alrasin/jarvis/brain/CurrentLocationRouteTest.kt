@@ -13,7 +13,7 @@ class CurrentLocationRouteTest {
         listOf("where am I", "where am i right now", "what's my location", "what is my current location", "my location").forEach { text ->
             val rule = RuleMatcher.match(text)
             assertEquals(text, "my_location", rule?.tool)
-            assertEquals(text, "my_location", Assistant.ruleRouteCall(text, rule, IntentRouter.classify(text, rule))?.tool)
+            assertEquals(text, "my_location", AssistantRouting.ruleRouteCall(text, rule, IntentRouter.classify(text, rule))?.tool)
         }
     }
 
