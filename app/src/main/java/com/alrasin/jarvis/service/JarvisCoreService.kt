@@ -35,7 +35,6 @@ import com.alrasin.jarvis.voice.SpeechCapturePolicy
 import com.alrasin.jarvis.voice.SpeechEngine
 import com.alrasin.jarvis.voice.WakePhrase
 import com.alrasin.jarvis.data.SpeechEngineSettings
-import com.alrasin.jarvis.voice.ScreenAgentInterrupt
 import com.alrasin.jarvis.voice.Chimes
 import com.alrasin.jarvis.voice.PhraseCache
 import com.alrasin.jarvis.voice.SpeechText
@@ -493,11 +492,8 @@ class JarvisCoreService : LifecycleService() {
             .getOrNull()
         var command: SpeechToText.Session? = null
         var commandEpoch = speechEpoch
-        var interruption: SpeechToText.Session? = null
-        var interruptionChunks = 0
-        var stopCommand: SpeechToText.Session? = null
-        var stopChunks = 0
-        val stopListener = ScreenAgentInterrupt()
+        val interruption = stt?.let(::SpeechStopListener)
+        val stopListener = AgentStopListener(stt)
         var commandSource = "voice"
         val commandAudio = ArrayList<ShortArray>()
         var wasBusy = false
@@ -523,9 +519,7 @@ class JarvisCoreService : LifecycleService() {
             val snapshot = currentVocabulary.get()
             val commandCorrector = SttCorrector(snapshot.contacts, snapshot.apps)
             interruption?.close()
-            interruption = null
-            stopCommand?.close()
-            stopCommand = null
+            stopListener.close()
             rec.releaseForPhone()
             _microphoneAvailable.value = false
             _phase.value = PHASE_PREPARING
@@ -587,11 +581,6 @@ class JarvisCoreService : LifecycleService() {
                     if (interrupted) continue
                     interrupted = true
                     interruption?.close()
-                    interruption = null
-                    interruptionChunks = 0
-                    stopCommand?.close()
-                    stopCommand = null
-                    stopChunks = 0
                     stopListener.reset()
                     command?.close()
                     command = null
@@ -624,19 +613,13 @@ class JarvisCoreService : LifecycleService() {
                 ring.write(chunk)
                 val agentRunning = screenAgent.running
                 val listenForStop = stopListener.canListen(agentRunning, playbackActive, SystemClock.elapsedRealtime())
-                if (!listenForStop || agentInterrupt.get() != null) {
-                    stopCommand?.close()
-                    stopCommand = null
-                    stopChunks = 0
-                }
+                if (!listenForStop || agentInterrupt.get() != null) stopListener.close()
                 if (agentRunning) {
                     wasBusy = true
                     command?.close()
                     command = null
-                    if (listenForStop && agentInterrupt.get() == null && stt != null) {
-                        val stop = stopCommand ?: stt.session(waitStart = 3f).also { stopCommand = it }
-                        stop.accept(chunk)
-                        val phrase = stopListener.accept(stop.text, stop.done, SystemClock.elapsedRealtime())
+                    if (listenForStop && agentInterrupt.get() == null) {
+                        val phrase = stopListener.accept(chunk, SystemClock.elapsedRealtime())
                         if (phrase != null && synchronized(speechState) {
                                 if (screenAgent.running && agentInterrupt.compareAndSet(null, phrase)) {
                                     shutUp(cancelReply = false)
@@ -645,12 +628,6 @@ class JarvisCoreService : LifecycleService() {
                                 } else false
                             }) {
                             JarvisLog.i("screen agent voice interruption: $phrase")
-                        }
-                        if (phrase != null || stop.done || ++stopChunks * chunk.size >= WakeWordDetector.SAMPLE_RATE * 3) {
-                            stop.close()
-                            stopCommand = null
-                            stopChunks = 0
-                            stopListener.reset()
                         }
                     }
                     continue
@@ -696,23 +673,15 @@ class JarvisCoreService : LifecycleService() {
                     val wake = score >= BargeIn.wakeThreshold(threshold) &&
                         listOf("hey jimi", "hey jimmy", "hey jarvis").none { BargeIn.isPlaybackEcho(it, playbackText) }
                     var stop = false
-                    if (!wake && stt != null && BargeIn.canRecognizeStop(rec.echoCanceled, TextToSpeech.playbackEnergy)) {
-                        val candidate = interruption ?: stt.session().also { interruption = it; interruptionChunks = 0 }
-                        candidate.accept(chunk)
-                        stop = BargeIn.isInterruption(candidate.text) && !BargeIn.isPlaybackEcho(candidate.text, playbackText)
-                        if (candidate.done || ++interruptionChunks >= 25) {
-                            candidate.close()
-                            interruption = null
-                        }
+                    if (!wake && interruption != null && BargeIn.canRecognizeStop(rec.echoCanceled, TextToSpeech.playbackEnergy)) {
+                        stop = interruption.accept(chunk, playbackText)
                     } else {
                         interruption?.close()
-                        interruption = null
                     }
                     if ((wake || stop) && stt != null) {
                         interruptSpeech()
                         commandEpoch = speechEpoch
                         interruption?.close()
-                        interruption = null
                         // Exclude loudspeaker pre-roll; capture fresh command audio after the interruption.
                         commandSource = "barge_in"
                         commandAudio.clear()
@@ -726,7 +695,6 @@ class JarvisCoreService : LifecycleService() {
                 }
                 wasSpeaking = false
                 interruption?.close()
-                interruption = null
                 val enrolling = enrollAudio
                 if (enrolling != null) {
                     enrolling.add(chunk.copyOf())
@@ -789,7 +757,7 @@ class JarvisCoreService : LifecycleService() {
         } finally {
             vocabularyJob.cancel()
             interruption?.close()
-            stopCommand?.close()
+            stopListener.close()
             command?.close()
             stt?.close()
             secondPass.close()
