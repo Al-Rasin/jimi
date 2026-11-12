@@ -13,6 +13,7 @@ import android.telephony.SubscriptionManager
 import com.alrasin.jarvis.core.JarvisLog
 import com.alrasin.jarvis.core.Json
 import com.alrasin.jarvis.core.ToolResult
+import com.alrasin.jarvis.core.asObj
 import com.alrasin.jarvis.core.obj
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.sync.Mutex
@@ -194,7 +195,7 @@ class PhoneProfile(private val context: Context, private val apps: AppList) {
         )
 
         internal fun fromJson(text: String): Profile? {
-            val m = Json.parse(text) as? Map<*, *> ?: return null
+            val m = Json.parse(text).asObj() ?: return null
             fun strings(v: Any?) = (v as? List<*>).orEmpty().filterIsInstance<String>()
             return Profile(
                 scannedMs = (m["scannedMs"] as? Number)?.toLong() ?: return null,

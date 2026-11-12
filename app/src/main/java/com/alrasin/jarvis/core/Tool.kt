@@ -17,7 +17,7 @@ data class ToolCall(val tool: String, val args: Map<String, String> = emptyMap()
     companion object {
         /** Parses {"tool": …, "args": {…}}; non-string arg values become strings. Null if not a tool call. */
         fun fromJson(text: String): ToolCall? {
-            val obj = runCatching { Json.parse(text.trim()) }.getOrNull() as? Map<*, *> ?: return null
+            val obj = runCatching { Json.parse(text.trim()) }.getOrNull().asObj() ?: return null
             val tool = obj["tool"] as? String ?: return null
             val args = obj.obj("args").orEmpty()
                 .mapNotNull { (k, v) -> (k as? String)?.let { it to (if (v is String) v else Json.write(v)) } }

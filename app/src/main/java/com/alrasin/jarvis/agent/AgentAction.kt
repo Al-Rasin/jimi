@@ -1,6 +1,7 @@
 package com.alrasin.jarvis.agent
 
 import com.alrasin.jarvis.core.Json
+import com.alrasin.jarvis.core.asObj
 
 // Regexes built once, not on every call (ROADMAP §L.4).
 private val PARSE_RE = Regex("[A-Za-z][A-Za-z0-9_]*(\\.[A-Za-z0-9_]+)+")
@@ -33,7 +34,7 @@ sealed interface AgentAction {
             // Cloud models often wrap the object in ```json fences or a short sentence; keep only the object.
             val json = reply.substring(reply.indexOf('{').coerceAtLeast(0), reply.lastIndexOf('}') + 1)
             require(json.length <= 8192)
-            val obj = Json.parse(json) as? Map<*, *> ?: return null
+            val obj = Json.parse(json).asObj() ?: return null
             fun str(key: String): String = (obj[key] as? String)?.takeIf { it.length <= 2000 }
                 ?: error("Missing $key")
             fun index(): Int {

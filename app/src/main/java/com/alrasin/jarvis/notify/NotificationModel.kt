@@ -1,6 +1,8 @@
 package com.alrasin.jarvis.notify
 
 import com.alrasin.jarvis.core.Json
+import com.alrasin.jarvis.core.asObj
+import com.alrasin.jarvis.core.obj
 import java.io.File
 import kotlin.math.exp
 
@@ -65,13 +67,13 @@ class NotificationModel private constructor(
 
         fun fromJson(json: String?): NotificationModel = runCatching {
             require(json != null && json.length <= MAX_MODEL_BYTES)
-            val root = Json.parse(json) as? Map<*, *> ?: error("Expected model object")
+            val root = Json.parse(json).asObj() ?: error("Expected model object")
             require((root["version"] as? Number)?.toDouble() == 1.0)
             require((root["feature_version"] as? Number)?.toDouble() == 1.0)
             val bias = finiteNumber(root["bias"])
             val threshold = finiteNumber(root["threshold"])
             require(threshold > 0.0 && threshold < 1.0)
-            val rawWeights = root["weights"] as? Map<*, *> ?: error("Expected weights object")
+            val rawWeights = root.obj("weights") ?: error("Expected weights object")
             val weights = rawWeights.entries.associate { (key, value) ->
                 require(key is String && key.isNotEmpty())
                 key to finiteNumber(value)
