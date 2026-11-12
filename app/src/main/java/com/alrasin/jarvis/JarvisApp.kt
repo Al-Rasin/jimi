@@ -3,6 +3,7 @@ package com.alrasin.jarvis
 import android.app.Application
 import android.content.pm.ApplicationInfo
 import android.content.ComponentCallbacks2
+import com.alrasin.jarvis.actions.PlaceReminders
 import com.alrasin.jarvis.core.JarvisLog
 import android.os.StrictMode
 import com.alrasin.jarvis.agent.appmap.NightExploreWorker
@@ -25,6 +26,7 @@ class JarvisApp : Application() {
         }
         Notifications.createChannels(this)
         NightExploreWorker.schedule(this)
+        Thread { runCatching { PlaceReminders(this).restoreAll() } }.start()   // proximity alerts die on app update
     }
 
     override fun onTrimMemory(level: Int) {

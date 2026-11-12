@@ -71,3 +71,11 @@ internal val CONTACT_EMAIL_RE = Regex("^(?:add|save|set) (.+?)(?:'s)? email(?: a
 internal val CONTACT_EMAIL_2_RE = Regex("^(?:add|save) (?:the |this )?email(?: address)? (.+) (?:to|for) (.+?)(?:'s contact| contact)?$")
 internal val SHARE_CONTACT_RE = Regex("^(?:share|send) (.+?)(?:'s)? (?:contact(?: card)?|number|phone number)(?: (?:on|via|through|by) (whatsapp|messenger|sms|text))?(?: (?:to|with) (.+?))?(?: (?:on|via|through|by) (whatsapp|messenger|sms|text))?$")
 internal val CONTACT_NOT_NAME_RE = Regex("\\b(?:a|an|my|me|message|messages|saying|text|that|this|tell|note|notes|reminder|file|photo|picture|image|screenshot|pdf|bookmark|favorite|favourite|draft|location)\\b")
+
+// Location reminders (ROADMAP #29). Verb group: arrive words, or leave/exit.
+private const val PLACE_VERB = "(reach|get to|get back to|get back|get|arrive at|arrive|come to|come back to|come|am at|leave|exit)"
+private const val PLACE_NAME = "(?:the |my )?([a-z0-9]+(?: [a-z0-9]+)?)"
+internal val PLACE_REM_RE = Regex("^(?:remind me|set a reminder)(?: to| about| that)? (.+?) (?:when|once|as soon as) i $PLACE_VERB (?:to |at )?$PLACE_NAME$")
+internal val PLACE_REM_RE_2 = Regex("^remind me (?:when|once|as soon as) i $PLACE_VERB (?:to |at )?$PLACE_NAME (?:to|about|that) (.+)$")
+internal val PLACE_REM_RE_3 = Regex("^(?:when|once|as soon as) i $PLACE_VERB (?:to |at )?$PLACE_NAME remind me (?:to |about |that )?(.+)$")
+internal val SAVE_PLACE_RE = Regex("^(?:this is (?:my |the )?(home|office|work|house|gym|school|college|university|mosque|masjid|workplace|hospital|market)|(?:save|remember|mark|set) (?:this|my current|the current|current) (?:place|location|spot)(?: as| is)? (?:my |the )?([a-z0-9]+(?: [a-z0-9]+)?))$")

@@ -23,6 +23,7 @@ fun dataTools(
     scheduler: ReminderScheduler,
     memory: MemoryDao,
     noteApp: NoteApp? = null,
+    places: PlaceReminders? = null,
     selectedFactId: () -> Long? = { null },
 ): List<Tool> {
     fun whenText(ms: Long): String {
@@ -62,20 +63,26 @@ fun dataTools(
             ToolResult.ok("Okay, I'll remind you to $text ${whenText(ms)}$rep.")
         },
         SimpleTool("list_reminders", "List pending reminders") { _, _ ->
-            val list = reminders.pending()
+            val timed = reminders.pending().map { it.text to whenText(it.dueMs) }
+            val atPlace = places?.all().orEmpty().map { it.text to "when you ${if (it.leave) "leave" else "reach"} ${PlaceText.spoken(it.place)}" }
+            val list = timed + atPlace
             if (list.isEmpty()) return@SimpleTool ToolResult.ok("No reminders.")
             ToolResult.ok(
-                "${list.size} reminder${if (list.size > 1) "s" else ""}: " + list.take(5).joinToString(". ") { "${it.text}, ${whenText(it.dueMs)}" } + ".",
-                list.joinToString("\n") { "• ${it.text} — ${whenText(it.dueMs)}" },
+                "${list.size} reminder${if (list.size > 1) "s" else ""}: " + list.take(5).joinToString(". ") { "${it.first}, ${it.second}" } + ".",
+                list.joinToString("\n") { "• ${it.first} — ${it.second}" },
             )
         },
         SimpleTool("delete_reminder", "Delete a reminder", listOf(arg("text", "which reminder, or all"))) { c, _ ->
             val q = c.require("text", "Which reminder?")
             val list = reminders.pending()
+            val atPlace = places?.all().orEmpty()
             val del = if (q == "all") list else listOfNotNull(Fuzzy.best(q, list, { it.text }, min = 0.5))
-            if (del.isEmpty()) return@SimpleTool ToolResult.fail("I can't find that reminder.")
+            val delPlace = if (q == "all") atPlace else if (del.isEmpty()) listOfNotNull(Fuzzy.best(q, atPlace, { it.text }, min = 0.5)) else emptyList()
+            if (del.isEmpty() && delPlace.isEmpty()) return@SimpleTool ToolResult.fail("I can't find that reminder.")
             del.forEach { scheduler.cancel(it.id); reminders.delete(it.id) }
-            ToolResult.ok(if (del.size == 1) "Deleted the reminder ${del[0].text}." else "Deleted ${del.size} reminders.")
+            delPlace.forEach { places?.remove(it.id) }
+            val texts = del.map { it.text } + delPlace.map { it.text }
+            ToolResult.ok(if (texts.size == 1) "Deleted the reminder ${texts[0]}." else "Deleted ${texts.size} reminders.")
         },
         SimpleTool("remember_fact", "Remember a fact about the user", listOf(arg("text", "the fact"))) { c, _ ->
             val t = c.arg("text")?.let(FactText::clean) ?: return@SimpleTool ToolResult.fail("Remember what?")

@@ -143,6 +143,11 @@
             android:name=".service.WakeFeedbackReceiver"
             android:exported="false" />
 
+        <!-- Location reminders (#29): proximity alerts from LocationManager. -->
+        <receiver
+            android:name=".actions.PlaceReminderReceiver"
+            android:exported="false" />
+
         <!-- Find my phone (#30): secret SMS from a trusted number. -->
         <receiver
             android:name=".service.FindPhoneReceiver"

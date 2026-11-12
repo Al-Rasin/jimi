@@ -73,6 +73,7 @@ internal object TimeRules {
         NOTES_RE_3.find(t)?.let {
             return call("delete_reminder", "text" to (it.groupValues[2].ifEmpty { if (it.groupValues[1].isNotEmpty()) "all" else "" }))
         }
+        place(t)?.let { return it }
         val rem = NOTES_RE_4.find(t)
         if (rem != null) {
             val spec = rem.groupValues[1].replace(NOTES_RE_5, "in $1")
@@ -81,6 +82,17 @@ internal object TimeRules {
                 .removePrefix("to ").removePrefix("that ").removePrefix("about ").removeSuffix(" at").trim()
             return call("create_reminder", "text" to text.ifEmpty { null }, "time" to m?.at?.format(ISO), "repeat" to m?.repeat?.takeIf { it != "none" })
         }
+        return null
+    }
+
+    /** "this is home", "remind me to call mom when I reach home" (ROADMAP #29). */
+    fun place(t: String): ToolCall? {
+        SAVE_PLACE_RE.find(t)?.let { return call("save_place", "name" to it.groupValues[1].ifEmpty { it.groupValues[2] }) }
+        fun rem(text: String, verb: String, place: String) =
+            call("place_reminder", "text" to text, "place" to place, "when" to if (verb == "leave" || verb == "exit") "leave" else "arrive")
+        PLACE_REM_RE.find(t)?.let { return rem(it.groupValues[1], it.groupValues[2], it.groupValues[3]) }
+        PLACE_REM_RE_2.find(t)?.let { return rem(it.groupValues[3], it.groupValues[1], it.groupValues[2]) }
+        PLACE_REM_RE_3.find(t)?.let { return rem(it.groupValues[3], it.groupValues[1], it.groupValues[2]) }
         return null
     }
 

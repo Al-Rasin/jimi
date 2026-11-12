@@ -7,6 +7,7 @@ import android.content.Context
 import android.content.Intent
 import android.os.Build
 import android.os.SystemClock
+import com.alrasin.jarvis.actions.PlaceReminders
 import com.alrasin.jarvis.actions.ReminderScheduler
 import com.alrasin.jarvis.core.JarvisLog
 import com.alrasin.jarvis.data.Settings
@@ -33,6 +34,7 @@ class BootReceiver : BroadcastReceiver() {
                 when (intent.action) {
                     Intent.ACTION_BOOT_COMPLETED -> {
                         reminders.rescheduleAll()
+                        PlaceReminders(context).restoreAll()
                         if (settings.setupComplete.first() && settings.listeningEnabled.first()) {
                             resume(context)
                         }
