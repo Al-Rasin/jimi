@@ -7,6 +7,7 @@ import androidx.lifecycle.viewModelScope
 import com.alrasin.jarvis.core.JarvisLog
 import com.alrasin.jarvis.data.Settings
 import com.alrasin.jarvis.data.WakeEventDao
+import com.alrasin.jarvis.service.CoreState
 import com.alrasin.jarvis.service.JarvisCoreService
 import com.alrasin.jarvis.service.WakeFeedback
 import com.alrasin.jarvis.voice.SpeechToText
@@ -39,14 +40,14 @@ class HomeViewModel @Inject constructor(
     private val dao: WakeEventDao,
 ) : AndroidViewModel(app) {
     private val requestedRunning = MutableStateFlow<Boolean?>(null)
-    val running = combine(JarvisCoreService.running, requestedRunning) { actual, requested -> requested ?: actual }
-        .stateIn(viewModelScope, SharingStarted.Eagerly, JarvisCoreService.running.value)
+    val running = combine(CoreState.running, requestedRunning) { actual, requested -> requested ?: actual }
+        .stateIn(viewModelScope, SharingStarted.Eagerly, CoreState.running.value)
     private var listeningChange: Job? = null
     private val listeningLock = Mutex()
-    val lastScore = JarvisCoreService.lastScore
-    val modelName = JarvisCoreService.modelName
-    val phase = JarvisCoreService.phase
-    val heard = JarvisCoreService.heard
+    val lastScore = CoreState.lastScore
+    val modelName = CoreState.modelName
+    val phase = CoreState.phase
+    val heard = CoreState.heard
     val events = dao.recent().stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
     val counts = dao.counts().stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
     val threshold = settings.wakeThreshold.stateIn(viewModelScope, SharingStarted.Eagerly, Settings.DEFAULT_THRESHOLD)
@@ -67,7 +68,7 @@ class HomeViewModel @Inject constructor(
                     val dispatched = if (enabled) JarvisCoreService.start(app) else JarvisCoreService.stop(app)
                     if (dispatched == null) return@launch
                 }
-                withTimeoutOrNull(45_000) { JarvisCoreService.running.first { it == enabled } }
+                withTimeoutOrNull(45_000) { CoreState.running.first { it == enabled } }
             } catch (failure: RuntimeException) {
                 if (failure is kotlinx.coroutines.CancellationException) throw failure
                 JarvisLog.e("listening change failed", failure)

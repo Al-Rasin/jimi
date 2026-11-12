@@ -56,6 +56,7 @@ import com.alrasin.jarvis.R
 import com.alrasin.jarvis.brain.Persona
 import com.alrasin.jarvis.data.ConversationTurn
 import com.alrasin.jarvis.data.NotificationLog
+import com.alrasin.jarvis.service.CoreState
 import com.alrasin.jarvis.service.JarvisCoreService
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -94,7 +95,7 @@ fun AppShell(vm: AppViewModel, home: HomeViewModel) {
                 MobiusStrip(if (running) moodOf(phase) else OrbMood.IDLE, size = 40.dp)
                 Column(Modifier.weight(1f).padding(start = 10.dp)) {
                     GradientTitle("Jimi", 20)
-                    Meta(if (running) (if (phase == JarvisCoreService.PHASE_WAKE) "Listening for \"Hey Jimi\"" else phase) else "Asleep")
+                    Meta(if (running) (if (phase == CoreState.PHASE_WAKE) "Listening for \"Hey Jimi\"" else phase) else "Asleep")
                 }
                 // one tap turns listening on or off
                 Row(

@@ -31,6 +31,7 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.drawscope.rotate
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import com.alrasin.jarvis.service.CoreState
 import com.alrasin.jarvis.service.JarvisCoreService
 import kotlinx.coroutines.delay
 
@@ -48,9 +49,9 @@ object PanelColors {
 enum class OrbMood { IDLE, HEARING, THINKING, SPEAKING }
 
 fun moodOf(phase: String) = when (phase) {
-    JarvisCoreService.PHASE_HEARING, JarvisCoreService.PHASE_FOLLOW_UP -> OrbMood.HEARING
-    JarvisCoreService.PHASE_THINKING -> OrbMood.THINKING
-    JarvisCoreService.PHASE_SPEAKING -> OrbMood.SPEAKING
+    CoreState.PHASE_HEARING, CoreState.PHASE_FOLLOW_UP -> OrbMood.HEARING
+    CoreState.PHASE_THINKING -> OrbMood.THINKING
+    CoreState.PHASE_SPEAKING -> OrbMood.SPEAKING
     else -> OrbMood.IDLE
 }
 

@@ -39,6 +39,7 @@ import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.compose.LocalLifecycleOwner
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.alrasin.jarvis.data.AssistantMode
+import com.alrasin.jarvis.service.CoreState
 import com.alrasin.jarvis.service.JarvisCoreService
 
 @Composable
@@ -202,7 +203,7 @@ private fun WakeTestCard(vm: AppViewModel, home: HomeViewModel) {
     val models by vm.portableModels.collectAsStateWithLifecycle()
     val running by home.running.collectAsStateWithLifecycle()
     val phase by home.phase.collectAsStateWithLifecycle()
-    val micAvailable by JarvisCoreService.microphoneAvailable.collectAsStateWithLifecycle()
+    val micAvailable by CoreState.microphoneAvailable.collectAsStateWithLifecycle()
     val events by home.events.collectAsStateWithLifecycle()
     var startedAt by rememberSaveable { mutableStateOf<Long?>(null) }
     val ready = SetupPolicy.wakeReady(features.firstOrNull { it.id == "mic" }?.ready == true, models.associate { it.id to it.ready })

@@ -38,7 +38,7 @@ class BootReceiver : BroadcastReceiver() {
                         }
                         schedule(context)
                     }
-                    ACTION_WATCHDOG -> if (!JarvisCoreService.running.value &&
+                    ACTION_WATCHDOG -> if (!CoreState.running.value &&
                         settings.setupComplete.first() && settings.listeningEnabled.first()) {
                         JarvisLog.i("watchdog: microphone service was not running")
                         resume(context)

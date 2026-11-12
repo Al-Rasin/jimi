@@ -34,6 +34,7 @@ import com.alrasin.jarvis.actions.RootShell
 import com.alrasin.jarvis.voice.PortableModels
 import com.alrasin.jarvis.data.TurnDao
 import com.alrasin.jarvis.actions.ReminderScheduler
+import com.alrasin.jarvis.service.CoreState
 import com.alrasin.jarvis.service.JarvisCoreService
 import com.alrasin.jarvis.voice.SpeakerVerifier
 import com.alrasin.jarvis.voice.TextToSpeech
@@ -129,8 +130,8 @@ class AppViewModel @Inject constructor(
     val nightExplore = settings.nightExplore.state(false)
     val voiceId = settings.voiceId.state(false)
     val speakerThreshold = settings.speakerThreshold.state(Settings.DEFAULT_SPEAKER_THRESHOLD)
-    val enrollStatus = JarvisCoreService.enrollStatus
-    val lastVoiceScore = JarvisCoreService.lastVoiceScore
+    val enrollStatus = CoreState.enrollStatus
+    val lastVoiceScore = CoreState.lastVoiceScore
     val voiceSamples = MutableStateFlow(0)
     val cloudEnabled = settings.cloudEnabled.state(false)
     val cloudForChat = settings.cloudForChat.state(true)
@@ -151,14 +152,14 @@ class AppViewModel @Inject constructor(
 
     fun finishSetup() = viewModelScope.launch { settings.setSetupComplete(true) }
     suspend fun resumeListening() = withContext(Dispatchers.IO) {
-        if (!settings.setupComplete.first() || !settings.listeningEnabled.first() || JarvisCoreService.running.value) return@withContext
+        if (!settings.setupComplete.first() || !settings.listeningEnabled.first() || CoreState.running.value) return@withContext
         val ready = SetupPolicy.wakeReady(
             DeviceCheck.hasPermission(app, android.Manifest.permission.RECORD_AUDIO),
             PortableModels.status(app).associate { it.id to it.ready },
         )
         if (!ready) return@withContext
         JarvisCoreService.start(app)
-        withTimeoutOrNull(30_000) { JarvisCoreService.running.first { it } }
+        withTimeoutOrNull(30_000) { CoreState.running.first { it } }
     }
     fun setAssistantMode(mode: AssistantMode) = viewModelScope.launch { settings.setAssistantMode(mode) }
     fun refreshDeviceCheck() = viewModelScope.launch(Dispatchers.IO) {

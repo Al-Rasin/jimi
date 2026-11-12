@@ -51,6 +51,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.alrasin.jarvis.brain.Persona
+import com.alrasin.jarvis.service.CoreState
 import com.alrasin.jarvis.service.JarvisCoreService
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.delay
@@ -127,7 +128,7 @@ private fun Panel(vm: PanelViewModel, onClose: () -> Unit) {
     var touched by remember { mutableLongStateOf(System.currentTimeMillis()) }
     var shown by remember { mutableStateOf(false) }
     var closing by remember { mutableStateOf(false) }
-    val idle = phase == JarvisCoreService.PHASE_WAKE
+    val idle = phase == CoreState.PHASE_WAKE
     val mood = moodOf(phase)
     val motion = ValueAnimator.areAnimatorsEnabled()
     val replyShown = rememberTypewriter(reply)
@@ -189,7 +190,7 @@ private fun Panel(vm: PanelViewModel, onClose: () -> Unit) {
         ) {
             Box(Modifier.fillMaxWidth()) {
                 Row(Modifier.align(Alignment.TopEnd)) {
-                    if (phase == JarvisCoreService.PHASE_SPEAKING) {
+                    if (phase == CoreState.PHASE_SPEAKING) {
                         TextButton(onClick = { touch(); vm.shutUp() }) { Text("STOP", color = PanelColors.Accent, letterSpacing = 2.sp) }
                     }
                     TextButton(onClick = ::close) { Text("✕", color = PanelColors.Dim, fontSize = 18.sp) }

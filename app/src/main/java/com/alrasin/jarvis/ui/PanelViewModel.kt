@@ -7,6 +7,7 @@ import com.alrasin.jarvis.core.WrongAnswers
 import com.alrasin.jarvis.data.TurnDao
 import com.alrasin.jarvis.data.WakeEvent
 import com.alrasin.jarvis.data.WakeEventDao
+import com.alrasin.jarvis.service.CoreState
 import com.alrasin.jarvis.service.JarvisCoreService
 import com.alrasin.jarvis.service.Notifications
 import com.alrasin.jarvis.service.Turn
@@ -24,12 +25,12 @@ class PanelViewModel @Inject constructor(
     private val turns: TurnDao,
     private val wakes: WakeEventDao,
 ) : AndroidViewModel(app) {
-    val phase = JarvisCoreService.phase
-    val heard = JarvisCoreService.heard
-    val reply = JarvisCoreService.reply
-    val micLevel = JarvisCoreService.micLevel
-    val turnId = JarvisCoreService.turnId
-    val wakeId = JarvisCoreService.wakeId
+    val phase = CoreState.phase
+    val heard = CoreState.heard
+    val reply = CoreState.reply
+    val micLevel = CoreState.micLevel
+    val turnId = CoreState.turnId
+    val wakeId = CoreState.wakeId
 
     private val _exchanges = MutableStateFlow<List<Turn>>(emptyList())
     /** Finished turns since this panel opened (chat bubbles). */
@@ -42,18 +43,18 @@ class PanelViewModel @Inject constructor(
     val reported: StateFlow<Long> = _reported
 
     init {
-        val opened = JarvisCoreService.lastTurn.value?.id
+        val opened = CoreState.lastTurn.value?.id
         viewModelScope.launch {
-            JarvisCoreService.lastTurn.collect { t ->
+            CoreState.lastTurn.collect { t ->
                 if (t == null || t.id == opened || _exchanges.value.any { it.id == t.id }) return@collect
                 _exchanges.value = _exchanges.value + t
                 _live.value = false
             }
         }
-        viewModelScope.launch { heard.collect { _live.value = it.isNotBlank() && it != JarvisCoreService.lastTurn.value?.heard } }
+        viewModelScope.launch { heard.collect { _live.value = it.isNotBlank() && it != CoreState.lastTurn.value?.heard } }
         viewModelScope.launch {
             phase.collect {
-                if (it == JarvisCoreService.PHASE_THINKING || it == JarvisCoreService.PHASE_SPEAKING)
+                if (it == CoreState.PHASE_THINKING || it == CoreState.PHASE_SPEAKING)
                     _live.value = true
             }
         }
@@ -61,7 +62,7 @@ class PanelViewModel @Inject constructor(
 
     /** ✗ on the answer: saves a report for diagnosis (WrongAnswers). */
     fun wrongAnswer(note: String) {
-        val t = _exchanges.value.lastOrNull() ?: JarvisCoreService.lastTurn.value ?: return
+        val t = _exchanges.value.lastOrNull() ?: CoreState.lastTurn.value ?: return
         _reported.value = t.id
         viewModelScope.launch(Dispatchers.IO) { WrongAnswers.save(app, t.id, t.heard, t.reply, t.tool, note) }
     }
