@@ -6,6 +6,8 @@ import android.net.NetworkCapabilities
 import com.alrasin.jarvis.core.Json
 import com.alrasin.jarvis.core.JarvisLog
 import com.alrasin.jarvis.core.ToolResult
+import com.alrasin.jarvis.core.firstObj
+import com.alrasin.jarvis.core.list
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import okhttp3.OkHttpClient
@@ -52,7 +54,7 @@ class FastWeather(private val context: Context? = null) {
         try {
             val geo = known ?: places[key] ?: run {
                 val results = fetch("https://geocoding-api.open-meteo.com/v1/search?count=1&name=${Web.enc(place)}")
-                val found = (results["results"] as? List<*>)?.firstOrNull() as? Map<*, *>
+                val found = results.list("results").firstObj()
                     ?: return@withContext ToolResult.fail("I couldn't find $place. Set your weather city in Settings.")
                 places[key] = found
                 found

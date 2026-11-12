@@ -5,6 +5,9 @@ import com.alrasin.jarvis.core.JarvisLog
 import com.alrasin.jarvis.core.Json
 import com.alrasin.jarvis.core.Tool
 import com.alrasin.jarvis.core.ToolResult
+import com.alrasin.jarvis.core.asObj
+import com.alrasin.jarvis.core.obj
+import com.alrasin.jarvis.core.str
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
@@ -183,6 +186,6 @@ fun webTools(
 
 /** Intro text from the action=query&prop=extracts answer (fallback when the REST summary fails). */
 internal fun wikiExtract(json: Any?): String {
-    val pages = ((json as? Map<*, *>)?.get("query") as? Map<*, *>)?.get("pages") as? Map<*, *> ?: return ""
-    return pages.values.firstNotNullOfOrNull { (it as? Map<*, *>)?.get("extract") as? String }.orEmpty()
+    val pages = json.asObj().obj("query").obj("pages") ?: return ""
+    return pages.values.firstNotNullOfOrNull { it.asObj().str("extract") }.orEmpty()
 }

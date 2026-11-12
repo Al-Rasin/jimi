@@ -3,6 +3,11 @@ package com.alrasin.jarvis.brain.cloud
 import com.alrasin.jarvis.brain.CloudProvider
 import com.alrasin.jarvis.brain.Exchange
 import com.alrasin.jarvis.core.Json
+import com.alrasin.jarvis.core.asObj
+import com.alrasin.jarvis.core.firstObj
+import com.alrasin.jarvis.core.list
+import com.alrasin.jarvis.core.obj
+import com.alrasin.jarvis.core.str
 
 /**
  * One OpenAI-style chat service (D-063 §L.6). [extra] goes into every request body (e.g. thinking off).
@@ -70,8 +75,8 @@ class OpenAiProvider(private val preset: Preset, private val apiKey: String) : C
 
         fun parse(body: String): String {
             val root = Json.parse(body) as? Map<*, *> ?: error("bad JSON")
-            val first = (root["choices"] as? List<*>)?.firstOrNull() as? Map<*, *> ?: error("no answer")
-            return ((first["message"] as? Map<*, *>)?.get("content") as? String).orEmpty().trim()
+            val first = root.list("choices").firstObj() ?: error("no answer")
+            return first.obj("message").str("content").orEmpty().trim()
         }
 
         /** Text of one SSE line ("data: {choices:[{delta:{content}}]}"), or null for blank / [DONE] / no-text lines. */
@@ -80,8 +85,7 @@ class OpenAiProvider(private val preset: Preset, private val apiKey: String) : C
             val data = line.removePrefix("data:").trim()
             if (data == "[DONE]") return null
             return runCatching {
-                val first = ((Json.parse(data) as Map<*, *>)["choices"] as List<*>).first() as Map<*, *>
-                (first["delta"] as? Map<*, *>)?.get("content") as? String
+                Json.parse(data).asObj().list("choices").firstObj().obj("delta").str("content")
             }.getOrNull()?.ifEmpty { null }
         }
 

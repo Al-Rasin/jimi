@@ -13,6 +13,7 @@ import android.telephony.SubscriptionManager
 import com.alrasin.jarvis.core.JarvisLog
 import com.alrasin.jarvis.core.Json
 import com.alrasin.jarvis.core.ToolResult
+import com.alrasin.jarvis.core.obj
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -200,7 +201,7 @@ class PhoneProfile(private val context: Context, private val apps: AppList) {
                 device = m["device"] as? String ?: "",
                 android = m["android"] as? String ?: "",
                 apps = strings(m["apps"]),
-                roles = (m["roles"] as? Map<*, *>).orEmpty().entries.associate { (k, v) -> k.toString() to strings(v) },
+                roles = m.obj("roles").orEmpty().entries.associate { (k, v) -> k.toString() to strings(v) },
                 contacts = (m["contacts"] as? Number)?.toInt() ?: 0,
                 whatsappContacts = (m["whatsappContacts"] as? Number)?.toInt() ?: 0,
                 sims = (m["sims"] as? Number)?.toInt() ?: 0,

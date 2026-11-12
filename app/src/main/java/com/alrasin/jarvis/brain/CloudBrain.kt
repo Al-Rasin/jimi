@@ -15,6 +15,11 @@ import com.alrasin.jarvis.core.Json
 import com.alrasin.jarvis.core.Secrets
 import com.alrasin.jarvis.core.Tool
 import com.alrasin.jarvis.core.ToolCall
+import com.alrasin.jarvis.core.asObj
+import com.alrasin.jarvis.core.firstObj
+import com.alrasin.jarvis.core.list
+import com.alrasin.jarvis.core.obj
+import com.alrasin.jarvis.core.str
 import com.alrasin.jarvis.data.Settings
 import com.alrasin.jarvis.llm.ChatFormat
 import com.anthropic.client.AnthropicClient
@@ -130,9 +135,9 @@ class GeminiProvider(private val apiKey: String, private val model: String = MOD
 
         private fun parseRaw(body: String): String {
             val root = Json.parse(body) as? Map<*, *> ?: error("Gemini: bad JSON")
-            val first = (root["candidates"] as? List<*>)?.firstOrNull() as? Map<*, *> ?: error("Gemini: no answer")
-            val parts = ((first["content"] as? Map<*, *>)?.get("parts") as? List<*>).orEmpty()
-            return parts.mapNotNull { p -> (p as? Map<*, *>)?.takeIf { it["thought"] != true }?.get("text") as? String }
+            val first = root.list("candidates").firstObj() ?: error("Gemini: no answer")
+            val parts = first.obj("content").list("parts").orEmpty()
+            return parts.mapNotNull { p -> p.asObj()?.takeIf { it["thought"] != true }.str("text") }
                 .joinToString("")
         }
 
@@ -329,7 +334,7 @@ class CloudBrain @Inject constructor(
             val obj = Json.firstObject(out.replace("```json", "").replace("```", "")) ?: return null
             val call = ToolCall.fromJson(Json.write(obj)) ?: return null
             if (call.tool == NONE.tool) {
-                val say = ((obj as? Map<*, *>)?.get("say") as? String)?.let(ChatFormat::clean)?.takeIf { it.isNotBlank() }
+                val say = obj.asObj().str("say")?.let(ChatFormat::clean)?.takeIf { it.isNotBlank() }
                 return if (say == null) NONE else ToolCall(NONE.tool, mapOf("say" to say))
             }
             val tool = tools.firstOrNull { it.name == call.tool } ?: return null

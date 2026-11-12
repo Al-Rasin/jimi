@@ -4,6 +4,10 @@ import com.alrasin.jarvis.core.JarvisLog
 import com.alrasin.jarvis.core.Json
 import com.alrasin.jarvis.core.Tool
 import com.alrasin.jarvis.core.ToolResult
+import com.alrasin.jarvis.core.asObj
+import com.alrasin.jarvis.core.firstObj
+import com.alrasin.jarvis.core.list
+import com.alrasin.jarvis.core.obj
 import java.time.LocalDate
 import java.time.LocalDateTime
 import java.time.LocalTime
@@ -60,7 +64,7 @@ fun freeApiTools(
         cityPlaces[key]?.let { return it to city }
         val hit = runCatching {
             val res = Json.parse(web.get("https://geocoding-api.open-meteo.com/v1/search?count=1&name=${Web.enc(city)}", fast = true)) as Map<*, *>
-            val first = (res["results"] as? List<*>)?.firstOrNull() as? Map<*, *> ?: return null
+            val first = res.list("results").firstObj() ?: return null
             (first["latitude"] as Number).toDouble() to (first["longitude"] as Number).toDouble()
         }.getOrNull() ?: return null
         cityPlaces[key] = hit
@@ -191,7 +195,7 @@ internal object Currency {
     }
 
     fun parseRates(json: Any?, base: String): Map<String, Double> {
-        val m = (json as? Map<*, *>)?.get(base) as? Map<*, *> ?: error("no $base rates")
+        val m = json.asObj().obj(base) ?: error("no $base rates")
         return m.entries.mapNotNull { (k, v) -> (k as? String)?.let { key -> (v as? Number)?.toDouble()?.let { key to it } } }.toMap()
             .also { require(it.isNotEmpty()) }
     }
