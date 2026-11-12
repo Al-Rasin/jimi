@@ -109,6 +109,7 @@ dependencies {
     implementation(libs.okhttp)
     implementation(libs.jsoup)
     implementation(libs.mlkit.text.recognition) // bundled Latin OCR model, works offline (§H.8)
+    implementation(libs.mlkit.barcode.scanning) // bundled QR/barcode model, works offline (§I.7)
     implementation(libs.commons.compress)
     // Optional cloud chat (PLAN 14, off by default)
     implementation(libs.anthropic.java)

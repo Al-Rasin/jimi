@@ -242,6 +242,9 @@ object RuleMatcher {
             t.matches(COPY_ANSWER_WHOLE_RE) -> return call("copy_text")
             t.matches(COPY_SCREEN_WHOLE_RE) -> return call("copy_text", "source" to "screen")
             t.matches(READ_CLIPBOARD_WHOLE_RE) -> return call("read_clipboard")
+            t.matches(VIDEO_WHOLE_RE) -> return call("take_photo", "mode" to "video")
+            t.matches(STOP_VIDEO_WHOLE_RE) -> return call("take_photo", "mode" to "stop")
+            t.matches(QR_LINK_WHOLE_RE) -> return call("open_qr_link")
             t.matches(SCREEN_WHOLE_RE_2) -> return call("go_back")
             t.matches(SCREEN_WHOLE_RE_3) -> return call("go_home")
             t.matches(SCREEN_WHOLE_RE_4) -> return call("open_recents")
@@ -249,6 +252,14 @@ object RuleMatcher {
                 val dir = SCREEN_RE.find(t)?.value ?: "down"
                 return call("scroll", "direction" to dir)
             }
+        }
+        PHOTO_WHOLE_RE.matchEntire(t)?.let { m ->
+            val mode = when (m.groupValues[1]) { "selfie" -> "selfie"; "video" -> "video"; else -> "photo" }
+            val pairs = listOfNotNull("mode" to mode, m.groupValues[2].ifEmpty { null }?.let { "delay" to it })
+            return call("take_photo", *pairs.toTypedArray())
+        }
+        QR_WHOLE_RE.matchEntire(t)?.let { m ->
+            return call("scan_qr", "source" to if (m.groupValues[1].isNotEmpty()) "screen" else "camera")
         }
         SCREEN_RE_2.find(t)?.let { return call("tap", "text" to it.groupValues[1]) }
         SCREEN_RE_3.find(t)?.let { return call("type_text", "text" to it.groupValues[1]) }

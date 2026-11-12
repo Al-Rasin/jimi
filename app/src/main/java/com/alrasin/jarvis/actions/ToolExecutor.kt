@@ -125,6 +125,7 @@ internal class ToolSafetyGate {
             call.tool in setOf("delete_reminder", "forget_fact", "cancel_alarm") -> Risk.CONFIRM
             call.tool == "run_recipe" && call.arg("risky") == "true" -> Risk.CONFIRM
             call.tool == "share_contact" && call.arg("to") != null -> Risk.CONFIRM
+            (locked || lockdown) && call.tool == "scan_qr" && call.arg("source") == "screen" -> Risk.VOICE_ID
             call.tool in setOf("tap_named", "toggle_named", "open_result", "find_in_app") &&
                 Skills.isRisky(call.arg("name") ?: call.arg("query").orEmpty()) -> Risk.CONFIRM
             (locked || lockdown) && call.tool in setOf(
@@ -188,6 +189,8 @@ internal class ToolSafetyGate {
             "notification_summary" -> "Summarize your recent notifications"
             "daily_summary" -> "Tell you what you missed"
             "read_clipboard" -> "Read your clipboard"
+            "open_qr_link" -> "Open the link from the QR code"
+            "scan_qr" -> "Scan the QR code on your screen"
             "save_contact" -> "Save ${arg("number") ?: "the last unsaved number"} as ${arg("name") ?: "a new contact"}"
             "add_contact_email" -> "Add ${arg("email")?.let { "\"$it\"" } ?: "that email"} to $contact's contact"
             "share_contact" -> "Send $contact's number to ${arg("to") ?: "them"}$app"

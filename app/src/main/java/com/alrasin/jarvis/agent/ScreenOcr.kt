@@ -66,7 +66,7 @@ object ScreenOcr {
     }
 
     /** Accessibility screenshot; it is rate-limited (≈1/s), so retry once, then root `screencap`. */
-    private suspend fun shot(service: JarvisAccessibilityService): Bitmap? {
+    internal suspend fun shot(service: JarvisAccessibilityService): Bitmap? {
         service.screenshot()?.let { return it }
         delay(1_100)
         service.screenshot()?.let { return it }
