@@ -233,6 +233,16 @@ class CloudBrain @Inject constructor(
     }
 
     /** Answers a web question from public excerpts (D-045). Null when off or on error. */
+    /** Question about the screen (#40). Screen text leaves the phone only when cloud chat is on (D-040). */
+    suspend fun screenAnswer(question: String, screenText: String): String? {
+        if (!enabled() || !settings.cloudForChat.first()) return null
+        val p = provider() ?: return null
+        val system = Persona.SYSTEM_PROMPT + "\n" + SCREEN_RULES + screenText.take(6000)
+        return runCatching { p.quick(system, emptyList(), question, CHAT_TOKENS) }
+            .onFailure { JarvisLog.e("cloud screen answer failed, using local", it) }
+            .getOrNull()?.let(ChatFormat::clean)?.takeIf { it.isNotBlank() }
+    }
+
     suspend fun webAnswer(question: String, evidence: String): String? {
         if (!enabled() || !settings.cloudForChat.first()) return null
         val p = provider() ?: return null

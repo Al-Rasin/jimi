@@ -60,6 +60,7 @@ class ToolRegistry @Inject constructor(
         addAll(systemTools(context, Torch(context)))
         add(unlockTool(context) { secrets.get(Secrets.PIN) })
         addAll(screenTools(context))
+        addAll(askScreenTools())
         addAll(clipboardTools(context))
         addAll(cameraTools(context))
         val places = PlaceReminders(context)

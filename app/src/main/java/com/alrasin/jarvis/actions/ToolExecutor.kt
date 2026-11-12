@@ -82,7 +82,7 @@ internal enum class Unlock { NONE, UNLOCK, VOICE_ID_OFF, VOICE_MISMATCH, PAYMENT
 
 /** Tools that drive another app's screen and so cannot work behind the lock screen. */
 internal fun needsScreen(call: ToolCall): Boolean = when (call.tool) {
-    "send_whatsapp", "open_app", "app_go", "read_screen", "tap", "type_text", "scroll",
+    "send_whatsapp", "open_app", "app_go", "read_screen", "ask_screen", "tap", "type_text", "scroll",
     "search_in_app", "find_in_app", "open_result", "tap_named", "go_tab", "read_list", "toggle_named", "run_recipe" -> true
     "send_sms" -> call.arg("app").equals("messenger", ignoreCase = true)
     "call" -> call.arg("app")?.lowercase() in setOf("whatsapp", "messenger")
@@ -130,7 +130,7 @@ internal class ToolSafetyGate {
                 Skills.isRisky(call.arg("name") ?: call.arg("query").orEmpty()) -> Risk.CONFIRM
             (locked || lockdown) && call.tool in setOf(
                 "read_messages", "read_chat", "read_notes", "list_reminders", "recall_facts",
-                "read_screen", "read_list", "read_notifications", "notification_summary", "daily_summary", "read_clipboard", "calendar_read", "share_contact",
+                "read_screen", "ask_screen", "read_list", "read_notifications", "notification_summary", "daily_summary", "read_clipboard", "calendar_read", "share_contact",
             ) -> Risk.VOICE_ID
             else -> Risk.SAFE
         }
@@ -183,6 +183,7 @@ internal class ToolSafetyGate {
             "recall_facts" -> "Read what I remember about you"
             "read_screen" -> "Read your screen"
             "read_list" -> "Read the list on your screen"
+            "ask_screen" -> "Tell you about your screen"
             "run_recipe" -> "Run \"${arg("name") ?: "that"}\" in ${arg("app") ?: "the app"}"
             "tap_named", "toggle_named", "open_result", "find_in_app" -> "Tap \"${arg("name") ?: arg("query") ?: "that"}\""
             "read_notifications" -> "Read your notifications"

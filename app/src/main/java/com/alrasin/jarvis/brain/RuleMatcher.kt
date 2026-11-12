@@ -66,7 +66,7 @@ object RuleMatcher {
         if (t.isEmpty()) return null
         val actionText = TextNorm.squash(input)
             .replace(POLITE_LEAD_RE, "")
-        return talk(t) ?: ContactRules.contacts(actionText) ?: TimeRules.calendar(t, now) ?: CommsRules.comms(actionText) ?: media(actionText.trimEnd('.', '!', '?')) ?: MapRules.maps(t) ?: MapRules.appMap(t) ?: skills(t)
+        return talk(t) ?: askScreen(t) ?: ContactRules.contacts(actionText) ?: TimeRules.calendar(t, now) ?: CommsRules.comms(actionText) ?: media(actionText.trimEnd('.', '!', '?')) ?: MapRules.maps(t) ?: MapRules.appMap(t) ?: skills(t)
             ?: knowledge(t)?.takeIf { it.tool == "web_search" || it.tool == "wiki_lookup" }
             ?: toggle(t) ?: TimeRules.time(normalize(input, keepClockColon = true), now) ?: TimeRules.notes(t, now) ?: media(t) ?: system(t) ?: screen(t)
             ?: notifications(t) ?: noisyTool(t, now) ?: knowledge(t) ?: memory(t, actionText) ?: apps(t)
@@ -234,6 +234,15 @@ object RuleMatcher {
         SYSTEM_RE_2.find(t)?.let { return call("run_routine", "name" to it.groupValues[1].replace(' ', '_')) }
         SYSTEM_RE_3.find(t)?.let { return call("run_routine", "name" to it.groupValues[1].replace(' ', '_')) }
         return null
+    }
+
+    /** "What is this", "summarize this page", "reply to this" (#40). Before comms/knowledge, which would take them. */
+    private fun askScreen(t: String): ToolCall? = when {
+        t.matches(SCREEN_WHOLE_RE) -> null
+        t.matches(ASK_SCREEN_WHAT_WHOLE_RE) -> call("ask_screen", "mode" to "what")
+        t.matches(ASK_SCREEN_SUMMARY_WHOLE_RE) -> call("ask_screen", "mode" to "summary")
+        t.matches(ASK_SCREEN_REPLY_WHOLE_RE) -> call("ask_screen", "mode" to "reply")
+        else -> ASK_SCREEN_ASK_RE.matchEntire(t)?.let { call("ask_screen", "mode" to "ask", "question" to it.groupValues[1] + "?") }
     }
 
     private fun screen(t: String): ToolCall? {

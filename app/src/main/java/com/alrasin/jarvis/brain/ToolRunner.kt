@@ -2,6 +2,7 @@ package com.alrasin.jarvis.brain
 
 import android.content.Context
 import com.alrasin.jarvis.actions.ContactResolver
+import com.alrasin.jarvis.actions.ScreenAsk
 import com.alrasin.jarvis.actions.Contacts
 import com.alrasin.jarvis.actions.Outcome
 import com.alrasin.jarvis.actions.SelfAccount
@@ -119,6 +120,19 @@ internal class ToolRunner(
                 smoke?.ok = o.result.ok
                 log(input.heard, call, source, o.result)
                 if (o.result.ok) state.conversation.remember(input.heard, call, o.result.say)
+                if (o.result.ok && call.tool == "ask_screen" && o.result.data.isNotBlank()) {
+                    val question = ScreenAsk.prompt(call.arg("mode") ?: "what", call.arg("question"))
+                    val answer = try {
+                        cloud.screenAnswer(question, o.result.data)
+                            ?: models.chat(question, emptyList(), emptyList(), {}, evidence = o.result.data, screen = true)?.text
+                    } catch (e: CancellationException) {
+                        throw e
+                    } catch (e: Exception) {
+                        JarvisLog.e("screen answer failed", e)
+                        null
+                    }
+                    return Reply(plain(answer?.takeIf { it.isNotBlank() } ?: o.result.say), o.result.data, call.tool)
+                }
                 if (o.result.ok && call.tool in setOf("web_search", "read_page") && o.result.data.isNotBlank()) {
                     val question = call.arg("query") ?: input.heard
                     val answer = try {
