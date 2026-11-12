@@ -12,7 +12,7 @@ import com.alrasin.jarvis.notify.JarvisNotificationListener
 object RootSetup {
     private val RUNTIME = listOf(
         "RECORD_AUDIO", "POST_NOTIFICATIONS", "READ_CONTACTS", "CALL_PHONE", "SEND_SMS", "READ_SMS", "RECEIVE_SMS",
-        "READ_PHONE_STATE", "READ_CALL_LOG", "WRITE_CONTACTS", "ANSWER_PHONE_CALLS", "CAMERA", "ACCESS_FINE_LOCATION", "ACCESS_COARSE_LOCATION", "ACCESS_BACKGROUND_LOCATION", "BLUETOOTH_CONNECT",
+        "READ_PHONE_STATE", "READ_CALL_LOG", "WRITE_CONTACTS", "ANSWER_PHONE_CALLS", "CAMERA", "ACCESS_FINE_LOCATION", "ACCESS_COARSE_LOCATION", "ACCESS_BACKGROUND_LOCATION", "ACCESS_MEDIA_LOCATION", "BLUETOOTH_CONNECT",
         "READ_EXTERNAL_STORAGE", "READ_CALENDAR", "WRITE_CALENDAR",
     )
 
@@ -38,6 +38,7 @@ object RootSetup {
             step("MIUI: show on lock screen", "appops set $pkg 10020 allow")
         }
         step("change settings", "appops set $pkg WRITE_SETTINGS allow")
+        step("all files access", "appops set $pkg MANAGE_EXTERNAL_STORAGE allow")
         if (Build.VERSION.SDK_INT >= 31) step("exact alarms", "appops set $pkg SCHEDULE_EXACT_ALARM allow")
         step("battery: never sleep", "dumpsys deviceidle whitelist +$pkg")
         step("do not disturb access", "cmd notification allow_dnd $pkg")

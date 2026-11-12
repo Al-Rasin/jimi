@@ -67,6 +67,7 @@ class ToolRegistry @Inject constructor(
         val places = PlaceReminders(context)
         addAll(dataTools(notes, reminders, scheduler, memory, noteApp = NoteApp(context), places = places))
         addAll(placeTools(places, location))
+        addAll(fileSearchTools(context, places))
         addAll(notificationTools(notifications))
         add(dailySummaryTool(context, contacts, notifications))
         val web = Web()

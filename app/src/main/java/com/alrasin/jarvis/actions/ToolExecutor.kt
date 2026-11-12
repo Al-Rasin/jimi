@@ -131,6 +131,7 @@ internal class ToolSafetyGate {
             (locked || lockdown) && call.tool in setOf(
                 "read_messages", "read_chat", "read_notes", "list_reminders", "recall_facts",
                 "read_screen", "ask_screen", "read_list", "read_notifications", "notification_summary", "daily_summary", "read_clipboard", "calendar_read", "share_contact",
+                "find_photos", "find_file",
             ) -> Risk.VOICE_ID
             else -> Risk.SAFE
         }
@@ -190,6 +191,8 @@ internal class ToolSafetyGate {
             "notification_summary" -> "Summarize your recent notifications"
             "daily_summary" -> "Tell you what you missed"
             "read_clipboard" -> "Read your clipboard"
+            "find_photos" -> "Show your photos"
+            "find_file" -> "Find your file \"${arg("query") ?: "that"}\""
             "open_qr_link" -> "Open the link from the QR code"
             "scan_qr" -> "Scan the QR code on your screen"
             "save_contact" -> "Save ${arg("number") ?: "the last unsaved number"} as ${arg("name") ?: "a new contact"}"
