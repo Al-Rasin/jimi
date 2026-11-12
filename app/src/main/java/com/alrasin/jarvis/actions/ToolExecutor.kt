@@ -2,6 +2,8 @@ package com.alrasin.jarvis.actions
 
 import com.alrasin.jarvis.agent.Skills
 import com.alrasin.jarvis.brain.Persona
+import com.alrasin.jarvis.core.ContextMode
+import com.alrasin.jarvis.core.ContextNow
 import com.alrasin.jarvis.core.JarvisLog
 import com.alrasin.jarvis.core.SmokeSession
 import com.alrasin.jarvis.core.TextNorm
@@ -36,6 +38,9 @@ class ToolExecutor @Inject constructor(private val registry: ToolRegistry) {
     suspend fun execute(call: ToolCall, ctx: ToolContext, confirmed: Boolean, voiceOk: Boolean?): Outcome {
         val tool = registry.get(call.tool) ?: return Outcome.Done(ToolResult.fail("I don't know how to ${call.tool.replace('_', ' ')} yet."))
         val wasLocked = ctx.locked
+        if (drivingBlock(call, ContextNow.mode)) {
+            return Outcome.Done(ToolResult.fail("Not while driving, ${Persona.ADDRESS}. I'll do it when you stop."))
+        }
         return gate.execute(call, tool.risk, ctx.locked, confirmed, voiceOk) {
             coroutineContext[SmokeSession]?.intercept(call)
                 ?: unlockFirst(call, ctx, voiceOk)
@@ -88,6 +93,10 @@ internal fun needsScreen(call: ToolCall): Boolean = when (call.tool) {
     "call" -> call.arg("app")?.lowercase() in setOf("whatsapp", "messenger")
     else -> false
 }
+
+/** Car mode: no tasks that make the driver look at the screen. Messages and calls stay allowed (they are voice-only). */
+internal fun drivingBlock(call: ToolCall, mode: ContextMode): Boolean =
+    mode.noScreen && needsScreen(call) && call.tool !in setOf("send_whatsapp", "send_sms", "call", "read_screen", "ask_screen")
 
 internal fun unlockNeed(call: ToolCall, locked: Boolean, voiceOk: Boolean?, isPaymentApp: Boolean = false): Unlock = when {
     !locked || !needsScreen(call) -> Unlock.NONE

@@ -1,5 +1,6 @@
 package com.alrasin.jarvis.ui
 
+import com.alrasin.jarvis.brain.ContextModes
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -52,6 +53,10 @@ internal fun SettingsTab(vm: AppViewModel, onSetup: () -> Unit, onDeviceCheck: (
     val panel by vm.showPanel.collectAsStateWithLifecycle()
     val autoClear by vm.autoClear.collectAsStateWithLifecycle()
     val nightExplore by vm.nightExplore.collectAsStateWithLifecycle()
+    val carMode by vm.carMode.collectAsStateWithLifecycle()
+    val headphonesMode by vm.headphonesMode.collectAsStateWithLifecycle()
+    val bedtimeMode by vm.bedtimeMode.collectAsStateWithLifecycle()
+    val bedtimeHours by vm.bedtimeHours.collectAsStateWithLifecycle()
     val voiceId by vm.voiceId.collectAsStateWithLifecycle()
     val city by vm.homeCity.collectAsStateWithLifecycle()
     val message by vm.message.collectAsStateWithLifecycle()
@@ -193,6 +198,12 @@ internal fun SettingsTab(vm: AppViewModel, onSetup: () -> Unit, onDeviceCheck: (
                 ToggleRow("Panel on wake", panel) { vm.setShowPanel(it) }
                 ToggleRow("Auto-clear noise alerts", autoClear) { vm.setAutoClear(it) }
                 ToggleRow("Learn apps at night", nightExplore) { vm.setNightExplore(it) }
+            }
+            RowsCard("Modes") {
+                ToggleRow("Car mode", carMode, "Short answers, reads messages, no screen tasks") { vm.setCarMode(it) }
+                ToggleRow("Headphones mode", headphonesMode, "Short answers, reads messages") { vm.setHeadphonesMode(it) }
+                ToggleRow("Bedtime mode", bedtimeMode, "Quiet voice and Do Not Disturb") { vm.setBedtimeMode(it) }
+                if (bedtimeMode) BedtimeHours(bedtimeHours, vm::setBedtimeHours)
             }
             RowsCard {
                 NavRow("Voice", Voices.byId(voice).label.substringBefore(" ·")) { page = "voice" }
@@ -375,4 +386,21 @@ private fun AppKnowledgeCards(vm: AppViewModel) {
             ItemRow(a.label, meta)
         }
     }
+}
+
+/** Bedtime start and end hour chips; saved as "23-6". */
+@Composable
+private fun BedtimeHours(hours: String, set: (String) -> Unit) {
+    val (start, end) = ContextModes.hours(hours) ?: (23 to 6)
+    Hint("From")
+    ChipRow { listOf(21, 22, 23, 0).forEach { h -> Chip(hourLabel(h), selected = h == start) { set("$h-$end") } } }
+    Hint("To")
+    ChipRow { listOf(5, 6, 7, 8).forEach { h -> Chip(hourLabel(h), selected = h == end) { set("$start-$h") } } }
+}
+
+private fun hourLabel(h: Int): String = when {
+    h == 0 -> "12 am"
+    h < 12 -> "$h am"
+    h == 12 -> "12 pm"
+    else -> "${h - 12} pm"
 }

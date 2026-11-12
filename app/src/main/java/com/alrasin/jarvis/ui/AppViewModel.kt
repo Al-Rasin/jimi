@@ -1,5 +1,6 @@
 package com.alrasin.jarvis.ui
 
+import com.alrasin.jarvis.brain.ContextModes
 import com.alrasin.jarvis.actions.PhoneProfile
 import com.alrasin.jarvis.agent.appmap.AppAskQueue
 import com.alrasin.jarvis.agent.appmap.AppCards
@@ -128,6 +129,10 @@ class AppViewModel @Inject constructor(
     val showPanel = settings.showPanel.state(true)
     val autoClear = settings.autoClearNotifications.state(false)
     val nightExplore = settings.nightExplore.state(false)
+    val carMode = settings.carMode.state(true)
+    val headphonesMode = settings.headphonesMode.state(true)
+    val bedtimeMode = settings.bedtimeMode.state(false)
+    val bedtimeHours = settings.bedtimeHours.state(ContextModes.DEFAULT_HOURS)
     val voiceId = settings.voiceId.state(false)
     val speakerThreshold = settings.speakerThreshold.state(Settings.DEFAULT_SPEAKER_THRESHOLD)
     val enrollStatus = CoreState.enrollStatus
@@ -274,6 +279,10 @@ class AppViewModel @Inject constructor(
 
     fun setSpokenWake(v: Boolean) = viewModelScope.launch { settings.setSpokenWake(v) }
     fun setFollowUp(v: Boolean) = viewModelScope.launch { settings.setFollowUp(v) }
+    fun setCarMode(v: Boolean) = viewModelScope.launch { settings.setCarMode(v) }
+    fun setHeadphonesMode(v: Boolean) = viewModelScope.launch { settings.setHeadphonesMode(v) }
+    fun setBedtimeMode(v: Boolean) = viewModelScope.launch { settings.setBedtimeMode(v) }
+    fun setBedtimeHours(v: String) = viewModelScope.launch { settings.setBedtimeHours(v) }
     fun setShowPanel(v: Boolean) = viewModelScope.launch { settings.setShowPanel(v) }
     fun setAutoClear(v: Boolean) = viewModelScope.launch { settings.setAutoClearNotifications(v) }
     fun setNightExplore(v: Boolean) = viewModelScope.launch { settings.setNightExplore(v) }

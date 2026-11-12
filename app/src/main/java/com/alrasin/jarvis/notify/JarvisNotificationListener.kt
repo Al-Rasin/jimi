@@ -1,5 +1,7 @@
 package com.alrasin.jarvis.notify
 
+import com.alrasin.jarvis.brain.ContextModes
+import com.alrasin.jarvis.core.ContextNow
 import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
@@ -62,6 +64,7 @@ class JarvisNotificationListener : NotificationListenerService() {
                         )
                         if (learned.important) r.copy(important = true, reason = learned.reason) else r
                     }
+                    readAloud(sbn, row)
                     val clearable = sbn.isClearable && n.flags and Notification.FLAG_GROUP_SUMMARY == 0
                     if (clearable && !row.important && settings.autoClearNotifications.first()) {
                         val result = history.clear(listOf(row)) { cancelUnchanged(sbn, row) }
@@ -90,6 +93,20 @@ class JarvisNotificationListener : NotificationListenerService() {
             if (settings.listeningEnabled.first()) JarvisCoreService.say(this@JarvisNotificationListener, CallText.ringing(who, app))
         }
     }
+
+    /** Car / headphones mode (ROADMAP B §I.11): say new chat messages out loud, once each. */
+    private suspend fun readAloud(sbn: StatusBarNotification, row: NotificationLog) {
+        val n = sbn.notification
+        if (!ContextNow.mode.readMessages || sbn.isOngoing || n.flags and Notification.FLAG_GROUP_SUMMARY != 0) return
+        val chat = n.category == Notification.CATEGORY_MESSAGE || n.extras.containsKey(Notification.EXTRA_MESSAGES)
+        if (!chat) return
+        val line = ContextModes.messageLine(row.appName, row.title, row.text) ?: return
+        if (line == lastReadLine || !settings.listeningEnabled.first()) return
+        lastReadLine = line
+        JarvisCoreService.say(this, line)
+    }
+
+    @Volatile private var lastReadLine: String? = null
 
     override fun onNotificationRemoved(sbn: StatusBarNotification) {
         if (sbn.key == lastCallKey) lastCallKey = null

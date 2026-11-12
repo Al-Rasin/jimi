@@ -157,6 +157,9 @@ class TextToSpeech(
             fun head(): Long = track.playbackHeadPosition.toLong() and 0xffffffffL
         }
 
+        /** Speech loudness (1 = normal). Bedtime mode lowers it so Jimi whispers at night. */
+        @Volatile var gain: Float = 1f
+
         val isPlaying: Boolean
             get() {
                 synchronized(playbackLock) {
@@ -210,7 +213,8 @@ class TextToSpeech(
         ): Boolean {
             val epoch = synchronized(playbackLock) { playbackEpoch }
             if (stop()) return false
-            val samples = PcmShape.shape(pcm, rate, pauseMs)
+            val g = gain
+            val samples = PcmShape.shape(pcm, rate, pauseMs).let { s -> if (g >= 1f) s else FloatArray(s.size) { s[it] * g } }
             if (samples.isEmpty()) return true
             synchronized(writeLock) {
                 val s = streamFor(rate, epoch, stop) ?: return cancel(epoch, stop)

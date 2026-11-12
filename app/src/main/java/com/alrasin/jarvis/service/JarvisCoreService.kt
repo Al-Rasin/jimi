@@ -1,5 +1,7 @@
 package com.alrasin.jarvis.service
 
+import com.alrasin.jarvis.brain.ContextModes
+import com.alrasin.jarvis.core.ContextNow
 import com.alrasin.jarvis.agent.appmap.AppMapFreshness
 import android.Manifest
 import android.annotation.SuppressLint
@@ -140,6 +142,7 @@ class JarvisCoreService : LifecycleService() {
         PhoneAlerts(this, lifecycleScope, { settings.listeningEnabled.first() }, { registry.contacts.nameFor(it) }) { announce(it) }
     }
     private var wakeLock: PowerManager.WakeLock? = null
+    private val contextWatch by lazy { ContextWatch(this, lifecycleScope, settings) }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         super.onStartCommand(intent, flags, startId)
@@ -250,6 +253,7 @@ class JarvisCoreService : LifecycleService() {
         lifecycleScope.launch { settings.voiceId.collect { voiceId = it } }
         lifecycleScope.launch { settings.speakerThreshold.collect { speakerThreshold = it } }
         alerts.register()
+        contextWatch.start()
         mapFreshness.start()
         lifecycleScope.launch(Dispatchers.IO) { ProcessGuard.run(this@JarvisCoreService) }
     }
@@ -356,6 +360,9 @@ class JarvisCoreService : LifecycleService() {
                 }
                 val locked = isLocked()
                 val input = Assistant.Input(text, raw, source, locked, voiceOk(locked, audio), wakeId = wakeId, audioPath = audioPath)
+                // car / headphones mode: speak only the first sentences; the full answer stays in the notification
+                val short = ContextNow.mode.shortAnswers
+                var spokenSentences = 0
                 var r = try {
                     // adb test hook: source "offline_test" times the on-phone path with the cloud skipped
                     withContext(if (source == "offline_test") CloudBrain.Offline else EmptyCoroutineContext) { assistant.handle(input) { sentence ->
@@ -364,7 +371,7 @@ class JarvisCoreService : LifecycleService() {
                             thinkingCue.finish(epoch)
                             if (firstReplyReadyAt == 0L) firstReplyReadyAt = SystemClock.elapsedRealtime()
                             _phase.value = PHASE_SPEAKING
-                            say(sentence, epoch)
+                            if (!short || spokenSentences++ < ContextModes.SHORT_SENTENCES) say(sentence, epoch)
                         }
                     } }
                 } finally {
@@ -391,7 +398,7 @@ class JarvisCoreService : LifecycleService() {
                 }
                 JarvisLog.i("reply (${r.tool ?: "talk"}): ${r.text.length} characters, ${SystemClock.elapsedRealtime() - asked} ms after command")
                 if (r.text.isNotBlank()) {   // blank = follow-up noise dropped quietly
-                    if (!r.spokenAlready && r.tool != "panic") say(r.text, epoch)
+                    if (!r.spokenAlready && r.tool != "panic") say(if (short) ContextModes.shorten(r.text) else r.text, epoch)
                     Notifications.showReply(this@JarvisCoreService, text, r.text)
                 }
                 if (r.tool == "panic") synchronized(speechState) {
@@ -817,6 +824,7 @@ class JarvisCoreService : LifecycleService() {
     override fun onDestroy() {
         listenJob?.cancel()
         alerts.unregister()
+        contextWatch.stop()
         mapFreshness.stop()
         speech.close()
         shutUp()

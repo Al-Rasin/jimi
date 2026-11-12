@@ -1,5 +1,6 @@
 package com.alrasin.jarvis.data
 
+import com.alrasin.jarvis.brain.ContextModes
 import android.content.Context
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.Preferences
@@ -39,6 +40,10 @@ class Settings @Inject constructor(@ApplicationContext private val context: Cont
     private val onlineVoiceKey = booleanPreferencesKey("online_voice")
     private val assistantModeKey = stringPreferencesKey("assistant_mode")
     private val setupCompleteKey = booleanPreferencesKey("setup_complete")
+    private val carModeKey = booleanPreferencesKey("car_mode")
+    private val headphonesModeKey = booleanPreferencesKey("headphones_mode")
+    private val bedtimeModeKey = booleanPreferencesKey("bedtime_mode")
+    private val bedtimeHoursKey = stringPreferencesKey("bedtime_hours")
 
     val assistantMode: Flow<AssistantMode> = context.dataStore.data.map { AssistantMode.fromStored(it[assistantModeKey]) }
     val setupComplete: Flow<Boolean> = read(setupCompleteKey, false)
@@ -101,6 +106,16 @@ class Settings @Inject constructor(@ApplicationContext private val context: Cont
     suspend fun setCloudForChat(v: Boolean) = write(cloudChatKey, v)
     suspend fun setCloudSendFacts(v: Boolean) = write(cloudFactsKey, v)
     suspend fun setFollowUp(v: Boolean) = write(followUpKey, v)
+
+    /** Context modes (ROADMAP B §I.11): car and headphones on by default, bedtime off until the user picks it. */
+    val carMode: Flow<Boolean> = read(carModeKey, true)
+    val headphonesMode: Flow<Boolean> = read(headphonesModeKey, true)
+    val bedtimeMode: Flow<Boolean> = read(bedtimeModeKey, false)
+    val bedtimeHours: Flow<String> = read(bedtimeHoursKey, ContextModes.DEFAULT_HOURS)
+    suspend fun setCarMode(v: Boolean) = write(carModeKey, v)
+    suspend fun setHeadphonesMode(v: Boolean) = write(headphonesModeKey, v)
+    suspend fun setBedtimeMode(v: Boolean) = write(bedtimeModeKey, v)
+    suspend fun setBedtimeHours(v: String) = write(bedtimeHoursKey, v)
     suspend fun setSttSecondPass(v: Boolean) = write(sttSecondPassKey, v)
     suspend fun setAutoClearNotifications(v: Boolean) = write(autoClearKey, v)
     suspend fun setNightExplore(v: Boolean) = write(nightExploreKey, v)
