@@ -1,5 +1,6 @@
 package com.alrasin.jarvis.actions
 
+import com.alrasin.jarvis.core.PhoneNumbers
 import com.alrasin.jarvis.core.TextNorm
 import java.text.Normalizer
 
@@ -13,14 +14,14 @@ object ContactResolver {
     }
 
     fun resolve(query: String, contacts: List<Contacts.Contact>): Resolution {
-        number(query)?.let { return Resolution.Found(Contacts.Contact(it, it)) }
+        PhoneNumbers.parse(query)?.let { return Resolution.Found(Contacts.Contact(it, it)) }
         val q = queryName(query)
         if (q.isEmpty()) return Resolution.NotFound
-        val available = contacts.filter { number(it.number) != null && clean(it.name).isNotEmpty() }
-            .groupBy { clean(it.name) to number(it.number) }.values.map { rows ->
+        val available = contacts.filter { PhoneNumbers.parse(it.number) != null && clean(it.name).isNotEmpty() }
+            .groupBy { clean(it.name) to PhoneNumbers.parse(it.number) }.values.map { rows ->
                 rows.first().copy(aliases = rows.flatMap { it.aliases }.distinct())
             }
-            .sortedWith(compareBy({ clean(it.name) }, { number(it.number) }))
+            .sortedWith(compareBy({ clean(it.name) }, { PhoneNumbers.parse(it.number) }))
         val names = available.filter { contact ->
             contactNames(contact).any { matches(q, it) || relationMatch(q, it) || phoneticMatch(q, it) }
         }
@@ -50,8 +51,8 @@ object ContactResolver {
 
     fun choose(reply: String, candidates: List<Contacts.Contact>): Contacts.Contact? {
         if (Regex("^\\s*-\\s*[0-9]").containsMatchIn(reply)) return null
-        number(reply)?.let { chosen ->
-            return candidates.filter { number(it.number) == chosen }.singleOrNull()
+        PhoneNumbers.parse(reply)?.let { chosen ->
+            return candidates.filter { PhoneNumbers.parse(it.number) == chosen }.singleOrNull()
         }
         val text = clean(reply).removeSuffix(" please").trim()
         val ordinal = Regex("^(?:the |number |option )?(first|second|third|fourth|fifth|sixth|seventh|eighth|ninth|tenth|last|one|two|three|four|five|six|seven|eight|nine|ten|[0-9]+(?:st|nd|rd|th)?)(?: one| contact| person)?$")
@@ -76,8 +77,8 @@ object ContactResolver {
         if (text.isEmpty()) return null
         // The words of the question itself: "Rahim (number ending 0001)" or just "ending 0001".
         Regex("(?:number )?ending(?: in| with)? ([0-9 ]{4,})$").find(text)?.let { end ->
-            val tail = end.groupValues[1].filter(Char::isDigit)
-            return candidates.filter { it.number.filter(Char::isDigit).endsWith(tail) }.singleOrNull()
+            val tail = PhoneNumbers.digits(end.groupValues[1])
+            return candidates.filter { PhoneNumbers.endsWith(it.number, tail) }.singleOrNull()
         }
         val exact = candidates.filter { clean(it.name) == text }
         if (exact.isNotEmpty()) return exact.singleOrNull()
@@ -98,7 +99,7 @@ object ContactResolver {
     fun question(query: String, candidates: List<Contacts.Contact>): String {
         val repeatedNames = candidates.groupingBy { clean(it.name) }.eachCount()
         val labels = candidates.map {
-            if (repeatedNames[clean(it.name)]!! > 1) "${it.name} (number ending ${it.number.filter(Char::isDigit).takeLast(4)})"
+            if (repeatedNames[clean(it.name)]!! > 1) "${it.name} (number ending ${PhoneNumbers.digits(it.number).takeLast(4)})"
             else it.name
         }
         val choices = when (labels.size) {
@@ -108,14 +109,6 @@ object ContactResolver {
             else -> labels.dropLast(1).joinToString(", ") + ", or " + labels.last()
         }
         return "Which ${query.trim()}: $choices?"
-    }
-
-    fun number(text: String): String? {
-        val trimmed = text.trim()
-        if (!Regex("^\\+?[0-9(][0-9\\s().-]*$").matches(trimmed)) return null
-        val digits = trimmed.filter(Char::isDigit)
-        if (digits.length < 5) return null
-        return if (trimmed.startsWith('+')) "+$digits" else digits
     }
 
     private fun clean(text: String) = Normalizer.normalize(text, Normalizer.Form.NFD)

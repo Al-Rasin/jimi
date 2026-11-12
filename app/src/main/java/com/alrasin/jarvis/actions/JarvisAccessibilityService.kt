@@ -17,6 +17,7 @@ import com.alrasin.jarvis.agent.appmap.AppLearner
 import com.alrasin.jarvis.agent.appmap.AppWatcher
 import com.alrasin.jarvis.agent.TeachSession
 import com.alrasin.jarvis.core.JarvisLog
+import com.alrasin.jarvis.core.PhoneNumbers
 import com.alrasin.jarvis.notify.ChatHistory
 import dagger.hilt.android.AndroidEntryPoint
 import javax.inject.Inject
@@ -174,10 +175,10 @@ class JarvisAccessibilityService : AccessibilityService() {
     }
 
     fun hasConversationTitle(packageName: String, text: String): Boolean = visibleNodes(packageName).any { node ->
-        val expectedNumber = ContactResolver.number(text)
+        val expectedNumber = PhoneNumbers.parse(text)
         val exact = !node.isEditable && listOf(node.text, node.contentDescription).any { value ->
             val label = value?.toString()?.trim().orEmpty()
-            label.equals(text, true) || (expectedNumber != null && ContactResolver.number(label) == expectedNumber)
+            label.equals(text, true) || (expectedNumber != null && PhoneNumbers.parse(label) == expectedNumber)
         }
         if (!exact) return@any false
         val titleIds = setOf("conversation_contact_name", "thread_name", "thread_title", "thread_title_name")

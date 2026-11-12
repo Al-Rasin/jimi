@@ -8,6 +8,7 @@ import android.provider.ContactsContract
 import android.telephony.PhoneNumberUtils
 import android.telephony.TelephonyManager
 import com.alrasin.jarvis.brain.Reply
+import com.alrasin.jarvis.core.PhoneNumbers
 import com.alrasin.jarvis.core.ToolResult
 import com.alrasin.jarvis.core.isInstalled
 import com.alrasin.jarvis.core.launch
@@ -43,17 +44,17 @@ internal class AppCommunications(private val context: Context, private val conta
     }
 
     private fun international(number: String): String? {
-        CommsAddress.international(number)?.let { return it }
+        PhoneNumbers.international(number)?.let { return it }
         val country = runCatching {
             context.getSystemService(TelephonyManager::class.java)?.simCountryIso?.takeIf { it.isNotBlank() }
                 ?: context.getSystemService(TelephonyManager::class.java)?.networkCountryIso?.takeIf { it.isNotBlank() }
         }.getOrNull() ?: Locale.getDefault().country
-        return PhoneNumberUtils.formatNumberToE164(number, country.uppercase(Locale.ROOT))?.let(CommsAddress::international)
+        return PhoneNumberUtils.formatNumberToE164(number, country.uppercase(Locale.ROOT))?.let(PhoneNumbers::international)
     }
 
     private fun matchingContactIds(person: Contacts.Contact): Set<Long> = person.contactId?.let { setOf(it) }
         ?: contacts.all().filter {
-            ContactResolver.number(it.number) == ContactResolver.number(person.number) ||
+            PhoneNumbers.parse(it.number) == PhoneNumbers.parse(person.number) ||
                 international(person.number)?.let { number -> number == international(it.number) } == true
         }.mapNotNull { it.contactId }.toSet()
 
@@ -72,7 +73,7 @@ internal class AppCommunications(private val context: Context, private val conta
                 if (mime != null) {
                     if (type != mime) continue
                     val rowNumber = cursor.getString(3).orEmpty().substringBefore('@')
-                    val exact = ContactResolver.number(rowNumber) == ContactResolver.number(person.number)
+                    val exact = PhoneNumbers.parse(rowNumber) == PhoneNumbers.parse(person.number)
                     val e164 = international(person.number)
                     if (!exact && (e164 == null || (e164 != rowNumber && e164 != international(rowNumber)))) continue
                 } else if (!CommsAddress.isMessengerConversation(type)) continue
@@ -129,7 +130,7 @@ internal class AppCommunications(private val context: Context, private val conta
         val (pkg, label) = chat(app) ?: return ToolResult.fail("${chatLabel(app)} is not installed.")
         val service = requireScreen { return ToolResult.fail("Enable Jimi accessibility in Android settings so I can send the $label message.") }
         val uri = if (app == "whatsapp") {
-            val number = SelfAccount.whatsappNumber()?.let(CommsAddress::international)
+            val number = SelfAccount.whatsappNumber()?.let(PhoneNumbers::international)
                 ?: return ToolResult.fail("I couldn't find your own WhatsApp number.")
             waUri(number, text)
         } else {
@@ -177,16 +178,6 @@ internal class AppCommunications(private val context: Context, private val conta
 }
 
 internal object CommsAddress {
-    fun international(value: String): String? {
-        val compact = value.trim().replace(Regex("[\\s().-]"), "")
-        val digits = when {
-            compact.startsWith("+") -> compact.drop(1)
-            compact.startsWith("00") -> compact.drop(2)
-            else -> return null
-        }
-        return digits.takeIf { it.matches(Regex("[1-9][0-9]{6,14}")) }
-    }
-
     fun isMessengerConversation(mime: String): Boolean = mime.startsWith("vnd.android.cursor.item/") &&
         (mime.contains("com.facebook.messenger") || mime.contains("com.facebook.orca")) &&
         (mime.endsWith(".chat") || mime.endsWith(".message"))

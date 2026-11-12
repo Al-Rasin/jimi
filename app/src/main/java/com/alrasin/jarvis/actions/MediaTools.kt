@@ -4,6 +4,7 @@ import android.content.Context
 import android.media.AudioManager
 import android.os.SystemClock
 import android.view.KeyEvent
+import com.alrasin.jarvis.brain.Persona
 import com.alrasin.jarvis.core.Tool
 import com.alrasin.jarvis.core.ToolResult
 import com.alrasin.jarvis.core.pollUntil
@@ -53,23 +54,23 @@ fun mediaTools(context: Context): List<Tool> {
                     audio.setStreamVolume(s, (pct * max + 50) / 100, 0)
                 }
             }
-            ToolResult.ok("Volume ${audio.getStreamVolume(s) * 100 / max.coerceAtLeast(1)} percent, Boss.")
+            ToolResult.ok("Volume ${audio.getStreamVolume(s) * 100 / max.coerceAtLeast(1)} percent, ${Persona.ADDRESS}.")
         },
     )
 }
 
 internal object MediaTruth {
     fun opened(wasActive: Boolean?, active: Boolean?): ToolResult = ToolResult.ok(
-        if (wasActive == false && active == true) "I opened it. Audio is playing, Boss."
-        else "I opened it, Boss."
+        if (wasActive == false && active == true) "I opened it. Audio is playing, ${Persona.ADDRESS}."
+        else "I opened it, ${Persona.ADDRESS}."
     )
 
     fun control(action: String, active: Boolean?): ToolResult = ToolResult.ok(when {
-        action == "play" && active == true -> "Audio is playing, Boss."
-        action == "pause" && active == false -> "No music is playing, Boss."
-        action == "play" -> "Play requested, Boss. I couldn't confirm playback."
-        action == "pause" -> "Pause requested, Boss. I couldn't confirm it."
-        action == "next" -> "Next track requested, Boss."
-        else -> "Previous track requested, Boss."
+        action == "play" && active == true -> "Audio is playing, ${Persona.ADDRESS}."
+        action == "pause" && active == false -> "No music is playing, ${Persona.ADDRESS}."
+        action == "play" -> "Play requested, ${Persona.ADDRESS}. I couldn't confirm playback."
+        action == "pause" -> "Pause requested, ${Persona.ADDRESS}. I couldn't confirm it."
+        action == "next" -> "Next track requested, ${Persona.ADDRESS}."
+        else -> "Previous track requested, ${Persona.ADDRESS}."
     })
 }

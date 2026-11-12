@@ -4,6 +4,7 @@ import android.app.SearchManager
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
+import com.alrasin.jarvis.brain.Persona
 import com.alrasin.jarvis.core.ToolResult
 import com.alrasin.jarvis.core.isInstalled
 import com.alrasin.jarvis.core.launch
@@ -58,7 +59,7 @@ internal suspend fun playSearch(context: Context, query: String, requestedApp: S
     if (!opened) return ToolResult.fail("I couldn't open ${app.label} search.")
     val service = requireScreen { return ToolResult.fail("I opened ${app.label} search. Enable Jimi accessibility so I can select the first result.") }
     if (pollUntil(24, 250, delayFirst = true) { service.clickFirstMediaResult(app.pkg) }) {
-        return ToolResult.ok("I selected the first result for $query in ${app.label}. Playback requested, Boss.")
+        return ToolResult.ok("I selected the first result for $query in ${app.label}. Playback requested, ${Persona.ADDRESS}.")
     }
     return ToolResult.fail("I opened ${app.label} search but couldn't select a video or song. Unlock the phone and check the results and internet connection.")
 }

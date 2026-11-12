@@ -13,6 +13,7 @@ import android.os.Build
 import android.provider.ContactsContract
 import android.telephony.SmsManager
 import com.alrasin.jarvis.brain.Reply
+import com.alrasin.jarvis.core.PhoneNumbers
 import com.alrasin.jarvis.core.Risk
 import com.alrasin.jarvis.core.Tool
 import com.alrasin.jarvis.core.ToolResult
@@ -46,21 +47,21 @@ class Contacts(private val context: Context) {
             arrayOf(ContactsContract.CommonDataKinds.Phone.DISPLAY_NAME, ContactsContract.CommonDataKinds.Phone.NUMBER, ContactsContract.CommonDataKinds.Phone.CONTACT_ID),
             null, null, null,
         )?.use { c -> while (c.moveToNext()) out.add(Contact(c.getString(0) ?: "", c.getString(1) ?: "", aliases[c.getLong(2)].orEmpty(), c.getLong(2))) }
-        return out.distinctBy { it.name to ContactResolver.number(it.number) }
+        return out.distinctBy { it.name to PhoneNumbers.parse(it.number) }
     }
 
     /** Spoken digits ("01712 345678") are used as the number. */
     fun find(name: String): Contact? = (resolve(name) as? ContactResolver.Resolution.Found)?.contact
 
     fun resolve(name: String): ContactResolver.Resolution = ContactResolver.resolve(
-        name, if (ContactResolver.number(name) != null) emptyList() else all(),
+        name, if (PhoneNumbers.parse(name) != null) emptyList() else all(),
     )
 
     /** Contact name for a sender. Senders like "Teletalk" or short codes have too few digits to match: keep them as they are. */
     fun nameFor(number: String): String {
-        val n = number.filter { it.isDigit() }.takeLast(9)
+        val n = PhoneNumbers.tail(number)
         if (n.length < MIN_MATCH_DIGITS) return number
-        return all().firstOrNull { it.number.filter { d -> d.isDigit() }.endsWith(n) }?.name ?: number
+        return all().firstOrNull { PhoneNumbers.endsWith(it.number, n) }?.name ?: number
     }
 
     companion object {
@@ -80,12 +81,12 @@ fun commsTools(context: Context, contacts: Contacts): List<Tool> = listOf(
             is ContactResolver.Resolution.Found -> match.contact
             is ContactResolver.Resolution.Ambiguous -> return@SimpleTool ToolResult.fail(match.question)
             ContactResolver.Resolution.NotFound -> return@SimpleTool ToolResult.fail("I can't find $who in your contacts.")
-        }.let { it.copy(name = c.arg("contact_name")?.takeIf { ContactResolver.number(who) != null } ?: it.name) }
+        }.let { it.copy(name = c.arg("contact_name")?.takeIf { PhoneNumbers.parse(who) != null } ?: it.name) }
         if (app != "phone") return@SimpleTool AppCommunications(context, contacts).call(p, app, video == "true")
         if (context.checkSelfPermission(Manifest.permission.CALL_PHONE) != PackageManager.PERMISSION_GRANTED)
             return@SimpleTool ToolResult.fail("I need the phone permission. Open Jarvis setup.")
         if (context.launch(Intent(Intent.ACTION_CALL, Uri.parse("tel:" + Uri.encode(p.number)))))
-            Reply.done("I requested a call to ${c.arg("contact_name")?.takeIf { ContactResolver.number(who) != null } ?: p.name}.")
+            Reply.done("I requested a call to ${c.arg("contact_name")?.takeIf { PhoneNumbers.parse(who) != null } ?: p.name}.")
         else Reply.failed("I couldn't open the phone app.")
     },
     SimpleTool("send_sms", "Send an SMS, or send a Messenger message with app=messenger", listOf(arg("contact", "name, nickname, relation or number"), arg("text", "message"), arg("app", "messaging app", required = false, choices = listOf("sms", "messenger"))), Risk.CONFIRM) { c, _ ->
@@ -99,7 +100,7 @@ fun commsTools(context: Context, contacts: Contacts): List<Tool> = listOf(
             is ContactResolver.Resolution.Found -> match.contact
             is ContactResolver.Resolution.Ambiguous -> return@SimpleTool ToolResult.fail(match.question)
             ContactResolver.Resolution.NotFound -> return@SimpleTool ToolResult.fail("I can't find $who in your contacts.")
-        }.let { it.copy(name = c.arg("contact_name")?.takeIf { ContactResolver.number(who) != null } ?: it.name) }
+        }.let { it.copy(name = c.arg("contact_name")?.takeIf { PhoneNumbers.parse(who) != null } ?: it.name) }
         if (app == "messenger") return@SimpleTool AppCommunications(context, contacts).message(p, app, text)
         if (context.checkSelfPermission(Manifest.permission.SEND_SMS) != PackageManager.PERMISSION_GRANTED)
             return@SimpleTool ToolResult.fail("I need the SMS permission. Open Jarvis setup.")
@@ -114,7 +115,7 @@ fun commsTools(context: Context, contacts: Contacts): List<Tool> = listOf(
             is ContactResolver.Resolution.Found -> match.contact
             is ContactResolver.Resolution.Ambiguous -> return@SimpleTool ToolResult.fail(match.question)
             ContactResolver.Resolution.NotFound -> return@SimpleTool ToolResult.fail("I can't find $who in your contacts.")
-        }.let { it.copy(name = c.arg("contact_name")?.takeIf { ContactResolver.number(who) != null } ?: it.name) }
+        }.let { it.copy(name = c.arg("contact_name")?.takeIf { PhoneNumbers.parse(who) != null } ?: it.name) }
         AppCommunications(context, contacts).message(p, "whatsapp", text)
     },
     SimpleTool("read_messages", "Read the latest text messages") { _, _ ->

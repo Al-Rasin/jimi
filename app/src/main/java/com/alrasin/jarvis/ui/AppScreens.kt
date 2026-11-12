@@ -34,6 +34,7 @@ import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.geometry.Offset
+import com.alrasin.jarvis.brain.Persona
 import com.alrasin.jarvis.voice.Engine
 import com.alrasin.jarvis.voice.Voice
 import com.alrasin.jarvis.voice.VoicePack
@@ -191,7 +192,7 @@ private fun ChatTab(vm: AppViewModel) {
                     verticalArrangement = Arrangement.Center,
                 ) {
                     MobiusStrip(OrbMood.IDLE, size = 150.dp)
-                    Text("Hi Boss", Modifier.padding(top = 20.dp), style = MaterialTheme.typography.bodyLarge, color = JimiColors.SecondaryText)
+                    Text("Hi ${Persona.ADDRESS}", Modifier.padding(top = 20.dp), style = MaterialTheme.typography.bodyLarge, color = JimiColors.SecondaryText)
                     GradientTitle("How can I help?", 32, Modifier.padding(top = 4.dp))
                     FlowRow(
                         Modifier.padding(top = 28.dp),

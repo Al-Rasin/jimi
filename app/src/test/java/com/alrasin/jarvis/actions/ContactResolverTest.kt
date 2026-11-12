@@ -1,5 +1,6 @@
 package com.alrasin.jarvis.actions
 
+import com.alrasin.jarvis.core.PhoneNumbers
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
@@ -108,16 +109,16 @@ class ContactResolverTest {
     }
 
     @Test fun localNumbersPreserveLeadingZero() {
-        assertEquals("01712345678", ContactResolver.number("01712 345678"))
+        assertEquals("01712345678", PhoneNumbers.parse("01712 345678"))
     }
 
     @Test fun parenthesizedLocalNumberIsAccepted() {
-        assertEquals("5550100001", ContactResolver.number("(555) 010-0001"))
+        assertEquals("5550100001", PhoneNumbers.parse("(555) 010-0001"))
     }
 
     @Test fun invalidOrMixedNumericTargetsAreRejected() {
         listOf("1234", "+1234", "Rahim 123456", "123456abc", "12+34567", "++123456", "123456;789").forEach {
-            assertNull(it, ContactResolver.number(it))
+            assertNull(it, PhoneNumbers.parse(it))
         }
     }
 

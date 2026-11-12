@@ -5,6 +5,7 @@ import android.app.PendingIntent
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
+import com.alrasin.jarvis.brain.Persona
 import com.alrasin.jarvis.core.JarvisLog
 import com.alrasin.jarvis.data.Reminder
 import com.alrasin.jarvis.data.ReminderDao
@@ -86,7 +87,7 @@ class ReminderReceiver : BroadcastReceiver() {
                 val r = dao.get(id) ?: return@launch
                 if (r.done) return@launch
                 Notifications.showReminder(context, r)
-                JarvisCoreService.say(context, "Boss, reminder: ${r.text}")
+                JarvisCoreService.say(context, "${Persona.ADDRESS}, reminder: ${r.text}")
                 val next = ReminderScheduler.next(r)
                 if (next != null) {
                     val n = r.copy(dueMs = next)

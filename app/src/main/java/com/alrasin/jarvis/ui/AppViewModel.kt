@@ -13,6 +13,7 @@ import com.alrasin.jarvis.actions.RootSetup
 import com.alrasin.jarvis.actions.ToolExecutor
 import com.alrasin.jarvis.actions.ToolRegistry
 import com.alrasin.jarvis.brain.ModelBrain
+import com.alrasin.jarvis.brain.Persona
 import com.alrasin.jarvis.llm.ChatModels
 import com.alrasin.jarvis.core.JarvisLog
 import com.alrasin.jarvis.core.Json
@@ -305,7 +306,7 @@ class AppViewModel @Inject constructor(
         if (trying.value != null) return
         trying.value = v.id
         viewModelScope.launch(Dispatchers.IO) {
-            runCatching { TextToSpeech(app, v, speed = voiceSpeed.value).use { it.online = onlineVoice.value; it.speak("Hi Boss, I'm Jimi. How can I help?") } }
+            runCatching { TextToSpeech(app, v, speed = voiceSpeed.value).use { it.online = onlineVoice.value; it.speak("Hi ${Persona.ADDRESS}, I'm Jimi. How can I help?") } }
                 .onFailure { JarvisLog.e("try voice failed", it); _message.value = "Voice preview failed. Delete its download, then download it again." }
             trying.value = null
         }

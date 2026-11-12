@@ -1,5 +1,6 @@
 package com.alrasin.jarvis.voice
 
+import com.alrasin.jarvis.brain.Persona
 import java.io.ByteArrayOutputStream
 import java.io.DataInputStream
 import java.io.DataOutputStream
@@ -182,16 +183,16 @@ class PhraseCache(
             "Let me check.",
             "On it.",
             "Hmm, one sec.",
-            "Boss, Flashlight is on.",
-            "Boss, Flashlight is off.",
+            "${Persona.ADDRESS}, Flashlight is on.",
+            "${Persona.ADDRESS}, Flashlight is off.",
             "Done.",
             "Sorry, I didn't catch that.",
-            "Sorry Boss, I can't do that yet.",
-            "Hello Boss. What can I do?",
-            "Any time, Boss.",
-            "I'm here, Boss.",
-            "All good, Boss. Ready when you are.",
-            "Bye, Boss.",
+            "Sorry ${Persona.ADDRESS}, I can't do that yet.",
+            "Hello ${Persona.ADDRESS}. What can I do?",
+            "Any time, ${Persona.ADDRESS}.",
+            "I'm here, ${Persona.ADDRESS}.",
+            "All good, ${Persona.ADDRESS}. Ready when you are.",
+            "Bye, ${Persona.ADDRESS}.",
             "Flashlight on.",
             "Flashlight off.",
             "Flashlight is already on.",
@@ -213,7 +214,7 @@ class PhraseCache(
             "Scrolled.",
         ) + listOf("Wi-Fi", "Bluetooth", "Mobile data", "Do not disturb", "Airplane mode",
             "Location", "Battery saver", "Auto rotate").flatMap { label ->
-            listOf("Boss, $label is on.", "Boss, $label is off.")
+            listOf("${Persona.ADDRESS}, $label is on.", "${Persona.ADDRESS}, $label is off.")
         }
     }
 }

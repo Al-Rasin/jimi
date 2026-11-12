@@ -4,6 +4,7 @@ import android.Manifest
 import android.content.Context
 import android.content.pm.PackageManager
 import android.net.Uri
+import com.alrasin.jarvis.core.PhoneNumbers
 import com.alrasin.jarvis.core.Tool
 import com.alrasin.jarvis.core.ToolResult
 import com.alrasin.jarvis.data.NotificationDao
@@ -45,12 +46,12 @@ fun chatReadTool(context: Context, contacts: Contacts, notifications: Notificati
 private fun smsFrom(context: Context, person: Contacts.Contact, count: Int): ToolResult {
     if (context.checkSelfPermission(Manifest.permission.READ_SMS) != PackageManager.PERMISSION_GRANTED)
         return ToolResult.fail("I need the SMS permission. Open Jarvis setup.")
-    val tail = person.number.filter { it.isDigit() }.takeLast(9)
+    val tail = PhoneNumbers.tail(person.number)
     if (tail.length < Contacts.MIN_MATCH_DIGITS) return ToolResult.fail("${person.name} has no usable phone number.")
     val texts = ArrayList<String>()
     context.contentResolver.query(Uri.parse("content://sms/inbox"), arrayOf("address", "body"), null, null, "date DESC")?.use { cur ->
         while (cur.moveToNext() && texts.size < count) {
-            if (cur.getString(0).orEmpty().filter { it.isDigit() }.endsWith(tail)) cur.getString(1)?.let { texts.add(it.take(300)) }
+            if (PhoneNumbers.endsWith(cur.getString(0).orEmpty(), tail)) cur.getString(1)?.let { texts.add(it.take(300)) }
         }
     }
     if (texts.isEmpty()) return ToolResult.fail("No SMS from ${person.name}.")

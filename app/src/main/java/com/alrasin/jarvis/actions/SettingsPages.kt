@@ -3,6 +3,7 @@ package com.alrasin.jarvis.actions
 import android.content.Context
 import android.content.Intent
 import android.provider.Settings
+import com.alrasin.jarvis.brain.Persona
 import com.alrasin.jarvis.core.JarvisLog
 import com.alrasin.jarvis.core.ToolResult
 import com.alrasin.jarvis.core.isLocked
@@ -46,7 +47,7 @@ class SettingsPages(private val context: Context) {
             if (k != null && (!k.appFirst || locked || service == null)) knownSet(k, state == "on")?.takeIf { it.ok || locked }?.let { return it }
             if (k == null) stored(name, state == "on")?.let { return it }
         }
-        if (locked) return ToolResult.fail("Unlock the phone first, Boss.")
+        if (locked) return ToolResult.fail("Unlock the phone first, ${Persona.ADDRESS}.")
         val page = best(name, pages)
         val flip = state == "on" || state == "off"
         val opened = when {

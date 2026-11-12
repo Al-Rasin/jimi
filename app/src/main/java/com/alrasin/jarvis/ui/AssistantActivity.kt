@@ -50,6 +50,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.alrasin.jarvis.brain.Persona
 import com.alrasin.jarvis.service.JarvisCoreService
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.delay
@@ -202,13 +203,13 @@ private fun Panel(vm: PanelViewModel, onClose: () -> Unit) {
                     AnimatedContent(if (idle) "Jimi" else phase, label = "phase") { p -> HudLabel(p, active = !idle) }
                     if (!talking && heard != AssistantActivity.NOTHING_HEARD) {
                         Text(
-                            "How can I help, Boss?",
+                            "How can I help, ${Persona.ADDRESS}?",
                             style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Light),
                             color = PanelColors.Text, textAlign = TextAlign.Center,
                         )
                     }
                     if (heard == AssistantActivity.NOTHING_HEARD) {
-                        Text("I didn't catch that, Boss.", color = PanelColors.Dim)
+                        Text("I didn't catch that, ${Persona.ADDRESS}.", color = PanelColors.Dim)
                     }
                 }
             }
