@@ -326,6 +326,7 @@ private val CLOUD_KEY_ROWS = listOf(
     KeyRowSpec(Secrets.OPENROUTER_KEY, "OpenRouter key", "starts with sk-or-"),
     KeyRowSpec(Secrets.CLOUDFLARE_ACCOUNT, "Cloudflare account ID", "from the Cloudflare dashboard", hidden = false, testable = false),
     KeyRowSpec(Secrets.CLOUDFLARE_KEY, "Cloudflare token", "Workers AI token"),
+    KeyRowSpec(Secrets.OPENAI_KEY, "OpenAI key (paid)", "starts with sk-"),
 )
 
 @Composable

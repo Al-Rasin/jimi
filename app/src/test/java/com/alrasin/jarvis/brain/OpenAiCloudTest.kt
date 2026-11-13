@@ -32,6 +32,21 @@ class OpenAiCloudTest {
         assertEquals(mapOf("exclude" to true), body(Preset.OPENROUTER)["reasoning"])
     }
 
+    @Test fun openAiUsesCompletionTokenField() {
+        val body = body(Preset.OPENAI)
+        assertEquals("gpt-5-nano", body["model"])
+        assertEquals("minimal", body["reasoning_effort"])
+        assertEquals(320L, (body["max_completion_tokens"] as Number).toLong())
+        assertNull(body["max_tokens"])
+        assertEquals("https://api.openai.com/v1/chat/completions", Preset.OPENAI.url)
+    }
+
+    @Test fun openAiIsLastInChain() {
+        assertEquals("Groq+Gemini+OpenAI",
+            CloudBrain.chain(CloudKeys(main = "AIzaTest", groq = "gsk_x", openAi = "sk-x"))?.name)
+        assertEquals("OpenAI", CloudBrain.chain(CloudKeys(openAi = "sk-x"))?.name)
+    }
+
     @Test fun cloudflareUrlHasAccount() {
         assertEquals(
             "https://api.cloudflare.com/client/v4/accounts/abc123/ai/v1/chat/completions",

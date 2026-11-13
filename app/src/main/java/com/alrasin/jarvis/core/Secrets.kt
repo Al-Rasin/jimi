@@ -60,8 +60,9 @@ class Secrets @Inject constructor(@ApplicationContext context: Context) {
         const val OPENROUTER_KEY = "openrouter_api_key"
         const val CLOUDFLARE_KEY = "cloudflare_api_token"
         const val CLOUDFLARE_ACCOUNT = "cloudflare_account_id"
+        const val OPENAI_KEY = "openai_api_key"
 
         /** Any of these saved = cloud can run (Cloudflare needs its account ID too). */
-        val CLOUD_KEYS = listOf(CLOUD_KEY, GROQ_KEY, OPENROUTER_KEY, CLOUDFLARE_KEY)
+        val CLOUD_KEYS = listOf(CLOUD_KEY, GROQ_KEY, OPENROUTER_KEY, CLOUDFLARE_KEY, OPENAI_KEY)
     }
 }

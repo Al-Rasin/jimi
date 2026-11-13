@@ -12,6 +12,7 @@ import com.alrasin.jarvis.core.str
 /**
  * One OpenAI-style chat service (D-063 §L.6). [extra] goes into every request body (e.g. thinking off).
  * [thinkTokens] is added to max_tokens for models that think before answering, so the answer is not cut off.
+ * [tokenField] is the name of the length limit: OpenAI's own reasoning models want "max_completion_tokens".
  */
 data class Preset(
     val label: String,
@@ -19,12 +20,19 @@ data class Preset(
     val model: String,
     val extra: Map<String, Any> = emptyMap(),
     val thinkTokens: Int = 0,
+    val tokenField: String = "max_tokens",
 ) {
     companion object {
         /** Free: 30 requests/min, 1,000/day per model (2026-10). */
         val GROQ = Preset(
             "Groq", "https://api.groq.com/openai/v1/chat/completions", "openai/gpt-oss-120b",
             mapOf("reasoning_effort" to "low", "include_reasoning" to false), thinkTokens = 400,
+        )
+
+        /** Paid (D-078): cheapest GPT-5 model, thinking kept minimal so answers come fast. */
+        val OPENAI = Preset(
+            "OpenAI", "https://api.openai.com/v1/chat/completions", "gpt-5-nano",
+            mapOf("reasoning_effort" to "minimal"), thinkTokens = 200, tokenField = "max_completion_tokens",
         )
 
         /** Free router: picks a free model by itself (names of free models change often). */
@@ -67,7 +75,7 @@ class OpenAiProvider(private val preset: Preset, private val apiKey: String) : C
                 history.flatMap { listOf(msg("user", it.user), msg("assistant", it.reply)) } + msg("user", text)
             return Json.write(
                 mapOf(
-                    "model" to preset.model, "messages" to messages, "max_tokens" to maxTokens + preset.thinkTokens,
+                    "model" to preset.model, "messages" to messages, preset.tokenField to maxTokens + preset.thinkTokens,
                     "stream" to stream,
                 ) + preset.extra,
             )
