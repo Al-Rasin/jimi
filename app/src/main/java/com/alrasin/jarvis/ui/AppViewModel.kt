@@ -160,6 +160,7 @@ class AppViewModel @Inject constructor(
     val nightExplore = settings.nightExplore.state(false)
     val carMode = settings.carMode.state(true)
     val headphonesMode = settings.headphonesMode.state(true)
+    val readMessages = settings.readMessages.state(true)
     val bedtimeMode = settings.bedtimeMode.state(false)
     val proactive = settings.proactive.state(true)
     val readImportant = settings.readImportant.state(false)
@@ -313,6 +314,7 @@ class AppViewModel @Inject constructor(
     fun setFollowUp(v: Boolean) = viewModelScope.launch { settings.setFollowUp(v) }
     fun setCarMode(v: Boolean) = viewModelScope.launch { settings.setCarMode(v) }
     fun setHeadphonesMode(v: Boolean) = viewModelScope.launch { settings.setHeadphonesMode(v) }
+    fun setReadMessages(v: Boolean) = viewModelScope.launch { settings.setReadMessages(v) }
     fun setBedtimeMode(v: Boolean) = viewModelScope.launch { settings.setBedtimeMode(v) }
     fun setProactive(v: Boolean) = viewModelScope.launch { settings.setProactive(v) }
     fun setReadImportant(v: Boolean) = viewModelScope.launch { settings.setReadImportant(v) }

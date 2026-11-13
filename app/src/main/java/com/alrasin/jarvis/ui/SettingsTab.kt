@@ -58,6 +58,7 @@ internal fun SettingsTab(vm: AppViewModel, onSetup: () -> Unit, onDeviceCheck: (
     val nightExplore by vm.nightExplore.collectAsStateWithLifecycle()
     val carMode by vm.carMode.collectAsStateWithLifecycle()
     val headphonesMode by vm.headphonesMode.collectAsStateWithLifecycle()
+    val readMessages by vm.readMessages.collectAsStateWithLifecycle()
     val bedtimeMode by vm.bedtimeMode.collectAsStateWithLifecycle()
     val proactive by vm.proactive.collectAsStateWithLifecycle()
     val readImportant by vm.readImportant.collectAsStateWithLifecycle()
@@ -222,6 +223,9 @@ internal fun SettingsTab(vm: AppViewModel, onSetup: () -> Unit, onDeviceCheck: (
             RowsCard("Modes") {
                 ToggleRow("Car mode", carMode, "Short answers, reads messages, no screen tasks") { vm.setCarMode(it) }
                 ToggleRow("Headphones mode", headphonesMode, "Short answers, reads messages") { vm.setHeadphonesMode(it) }
+                if (carMode || headphonesMode) {
+                    ToggleRow("Read messages aloud", readMessages, "New chats, in car or headphones") { vm.setReadMessages(it) }
+                }
                 ToggleRow("Bedtime mode", bedtimeMode, "Quiet voice and Do Not Disturb") { vm.setBedtimeMode(it) }
                 if (bedtimeMode) BedtimeHours(bedtimeHours, vm::setBedtimeHours)
             }

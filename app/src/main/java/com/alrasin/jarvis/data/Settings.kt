@@ -49,6 +49,7 @@ class Settings @Inject constructor(@ApplicationContext private val context: Cont
     private val bedtimeHoursKey = stringPreferencesKey("bedtime_hours")
     private val proactiveKey = booleanPreferencesKey("proactive_talk")
     private val readImportantKey = booleanPreferencesKey("read_important_alerts")
+    private val readMessagesKey = booleanPreferencesKey("read_messages_aloud")
 
     val assistantMode: Flow<AssistantMode> = context.dataStore.data.map { AssistantMode.fromStored(it[assistantModeKey]) }
     val setupComplete: Flow<Boolean> = read(setupCompleteKey, false)
@@ -126,6 +127,10 @@ class Settings @Inject constructor(@ApplicationContext private val context: Cont
     val bedtimeHours: Flow<String> = read(bedtimeHoursKey, ContextModes.DEFAULT_HOURS)
     suspend fun setCarMode(v: Boolean) = write(carModeKey, v)
     suspend fun setHeadphonesMode(v: Boolean) = write(headphonesModeKey, v)
+
+    /** Car / headphones mode reads new chat messages aloud; this switch turns only that part off. */
+    val readMessages: Flow<Boolean> = read(readMessagesKey, true)
+    suspend fun setReadMessages(v: Boolean) = write(readMessagesKey, v)
     suspend fun setBedtimeMode(v: Boolean) = write(bedtimeModeKey, v)
     suspend fun setBedtimeHours(v: String) = write(bedtimeHoursKey, v)
 

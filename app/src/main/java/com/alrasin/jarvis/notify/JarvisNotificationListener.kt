@@ -102,7 +102,7 @@ class JarvisNotificationListener : NotificationListenerService() {
         val chat = n.category == Notification.CATEGORY_MESSAGE || n.extras.containsKey(Notification.EXTRA_MESSAGES)
         if (!chat) return
         val line = ContextModes.messageLine(row.appName, row.title, row.text) ?: return
-        if (line == lastReadLine || !settings.listeningEnabled.first()) return
+        if (line == lastReadLine || !settings.readMessages.first() || !settings.listeningEnabled.first()) return
         lastReadLine = line
         JarvisCoreService.say(this, line)
     }
@@ -116,7 +116,8 @@ class JarvisNotificationListener : NotificationListenerService() {
         if (!settings.readImportant.first() || !settings.listeningEnabled.first()) return
         val mode = ContextNow.mode
         val now = System.currentTimeMillis()
-        val line = Proactive.importantLine(row, mode.quiet, mode.readMessages, now, lastImportantAt) ?: return
+        val chatsRead = mode.readMessages && settings.readMessages.first()
+        val line = Proactive.importantLine(row, mode.quiet, chatsRead, now, lastImportantAt) ?: return
         lastImportantAt = now
         JarvisCoreService.say(this, line)
     }
