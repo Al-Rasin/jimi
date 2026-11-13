@@ -35,6 +35,9 @@ class PhoneSpeechRecognizer(context: Context) {
                     JarvisLog.i("STT engine=Phone start online=$online language=$LANGUAGE")
                     recognizer = phone
                     suspendCancellableCoroutine { continuation ->
+                        var partial: String? = null
+                        var peakDb = -100f
+                        var speechAt = 0L
                         fun finish(text: String?) {
                             if (continuation.isActive) continuation.resume(text)
                         }
@@ -44,18 +47,29 @@ class PhoneSpeechRecognizer(context: Context) {
                                     ?.firstOrNull { it.isNotBlank() },
                             )
                             override fun onError(error: Int) {
-                                JarvisLog.i("STT engine=Phone error=$error online=$online")
-                                finish(null)
+                                val ms = android.os.SystemClock.elapsedRealtime() - started
+                                JarvisLog.i("STT engine=Phone error=$error online=$online at $ms ms " +
+                                    "speech=${speechAt > 0} peak=${peakDb.toInt()} dB partial=${partial != null}")
+                                // NO_MATCH after real speech: the last partial guess is better than nothing.
+                                finish(if (error == SpeechRecognizer.ERROR_NO_MATCH) partial else null)
                             }
                             override fun onReadyForSpeech(params: Bundle?) {
                                 JarvisLog.i("STT engine=Phone ready in ${android.os.SystemClock.elapsedRealtime() - started} ms")
                                 if (continuation.isActive) onReady()
                             }
-                            override fun onBeginningOfSpeech() = Unit
-                            override fun onRmsChanged(rmsdB: Float) = Unit
+                            override fun onBeginningOfSpeech() {
+                                speechAt = android.os.SystemClock.elapsedRealtime()
+                                JarvisLog.i("STT engine=Phone speech began at ${speechAt - started} ms")
+                            }
+                            override fun onRmsChanged(rmsdB: Float) { if (rmsdB > peakDb) peakDb = rmsdB }
                             override fun onBufferReceived(buffer: ByteArray?) = Unit
-                            override fun onEndOfSpeech() = Unit
-                            override fun onPartialResults(partialResults: Bundle?) = Unit
+                            override fun onEndOfSpeech() {
+                                JarvisLog.i("STT engine=Phone speech ended at ${android.os.SystemClock.elapsedRealtime() - started} ms")
+                            }
+                            override fun onPartialResults(partialResults: Bundle?) {
+                                partialResults?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
+                                    ?.firstOrNull { it.isNotBlank() }?.let { partial = it }
+                            }
                             override fun onEvent(eventType: Int, params: Bundle?) = Unit
                         })
                         val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
@@ -64,6 +78,7 @@ class PhoneSpeechRecognizer(context: Context) {
                             // D-043: Google's online recognizer when internet works, its offline pack otherwise.
                             putExtra(RecognizerIntent.EXTRA_PREFER_OFFLINE, !online)
                             putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 1)
+                            putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, true)
                             if (Build.VERSION.SDK_INT >= 33) {
                                 putStringArrayListExtra(RecognizerIntent.EXTRA_BIASING_STRINGS,
                                     ArrayList(hotwords.take(SttHotwords.MAX_PHRASES)))

@@ -271,16 +271,33 @@ class JarvisCoreService : LifecycleService() {
     }
 
     private fun acknowledgeWake(tone: Chimes) {
-        // While the user talks: open the cloud connection, or load the local tool model when the cloud is not usable.
-        lifecycleScope.launch(Dispatchers.IO) { if (cloud.enabled()) cloud.warm() else models.preloadTools() }
-        // Memory/wiki ranking model (small, on-device); loads once, no-op when missing.
-        lifecycleScope.launch(Dispatchers.IO) { SharedEmbedder.get(this@JarvisCoreService) }
+        warmUpForCommand()
         val audio = voice.wakeAudio()
         if (!spokenWake || audio == null) { tone.wake(); return }
         val epoch = speechEpoch
         lifecycleScope.launch(Dispatchers.IO) {
             TextToSpeech.playPcm(audio.samples, audio.sampleRate) { epoch != speechEpoch }
         }
+    }
+
+    private fun warmUpForCommand() {
+        // While the user talks: open the cloud connection, or load the local tool model when the cloud is not usable.
+        lifecycleScope.launch(Dispatchers.IO) { if (cloud.enabled()) cloud.warm() else models.preloadTools() }
+        // Memory/wiki ranking model (small, on-device); loads once, no-op when missing.
+        lifecycleScope.launch(Dispatchers.IO) { SharedEmbedder.get(this@JarvisCoreService) }
+    }
+
+    /**
+     * Spoken wake reply played to the end before Google's recognizer starts. Played while Google listens, the reply is
+     * taken as the user's speech: the echo canceler wipes it, Google ends with "no match" before the real command.
+     */
+    private suspend fun playWakeReplyFirst(): Boolean {
+        val audio = voice.wakeAudio()
+        if (!spokenWake || audio == null) return false
+        warmUpForCommand()
+        val epoch = speechEpoch
+        withContext(Dispatchers.IO) { TextToSpeech.playPcm(audio.samples, audio.sampleRate) { epoch != speechEpoch } }
+        return true
     }
 
     private fun say(text: String, epoch: Int = speechEpoch) {
@@ -569,11 +586,13 @@ class JarvisCoreService : LifecycleService() {
             _phase.value = PHASE_PREPARING
             JarvisLog.i("STT engine=Phone capture=$source; sherpa microphone released")
             try {
+                val replied = source == "voice" && playWakeReplyFirst()
+                if (epoch != speechEpoch) return true
                 val raw = coroutineScope {
                     val recognition = async { phone.recognize(snapshot.hotwords, onReady = {
                         if (epoch == speechEpoch) {
                             _phase.value = if (source == "follow_up") PHASE_FOLLOW_UP else PHASE_HEARING
-                            if (source == "voice") acknowledgeWake(tone) else tone.listen()
+                            if (source != "voice") tone.listen() else if (!replied) acknowledgeWake(tone)
                         }
                     }) }
                     val cancellation = launch {
