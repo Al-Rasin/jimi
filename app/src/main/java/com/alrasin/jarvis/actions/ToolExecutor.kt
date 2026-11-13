@@ -132,7 +132,8 @@ internal class ToolSafetyGate {
     ): Outcome {
         val risk = when {
             declaredRisk != Risk.SAFE -> declaredRisk
-            call.tool in setOf("delete_reminder", "forget_fact", "cancel_alarm") -> Risk.CONFIRM
+            call.tool in setOf("delete_reminder", "forget_fact") -> Risk.CONFIRM
+            call.tool == "cancel_alarm" && call.arg("only") != "timer" -> Risk.CONFIRM
             call.tool == "run_recipe" && call.arg("risky") == "true" -> Risk.CONFIRM
             call.tool == "share_contact" && call.arg("to") != null -> Risk.CONFIRM
             (locked || lockdown) && call.tool == "scan_qr" && call.arg("source") == "screen" -> Risk.VOICE_ID

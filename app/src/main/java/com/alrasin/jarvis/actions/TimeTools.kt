@@ -94,8 +94,12 @@ fun timeTools(context: Context): List<Tool> = listOf(
     },
     SimpleTool(
         "cancel_alarm", "Turn off alarms and timers; time=HH:mm (24h) turns off only that alarm",
-        listOf(arg("time", "24h HH:mm of the one alarm to turn off", required = false)),
+        listOf(
+            arg("time", "24h HH:mm of the one alarm to turn off", required = false),
+            arg("only", "timer = stop timers only, keep alarms", required = false),
+        ),
     ) { c, _ ->
+        if (c.arg("only") == "timer") return@SimpleTool cancelTimers(context)
         c.arg("time")?.let { cancelOneAlarm(context, it) }?.let { return@SimpleTool it }
         val alarmsSent = context.launchClock(Intent(AlarmClock.ACTION_DISMISS_ALARM)
             .putExtra(AlarmClock.EXTRA_ALARM_SEARCH_MODE, AlarmClock.ALARM_SEARCH_MODE_ALL))
@@ -187,6 +191,16 @@ internal fun hasScheduledAlarm(next: Long?): Boolean = next != null
 
 internal fun timerSetResult(seconds: Int): ToolResult =
     ToolResult.ok("Timer set for ${speakDuration(seconds)}.")
+
+/** Stops running timers only; alarms are left alone. */
+private suspend fun cancelTimers(context: Context): ToolResult {
+    val sent = context.launchClock(Intent(AlarmClock.ACTION_DISMISS_TIMER))
+    if (timerRunning()) stopTimerInClock(context)
+    val stillRunning = timerRunning()
+    JarvisLog.i("cancel_alarm: timers only, request=$sent still running=$stillRunning")
+    return if (stillRunning) ToolResult.fail("I couldn't stop the timer. Check the Clock app.")
+    else ToolResult.ok("Okay, the timer is off.")
+}
 
 internal fun cancelAlarmResult(noNextAlarm: Boolean): ToolResult =
     if (noNextAlarm) ToolResult.ok("Okay, alarms and timers are off.")

@@ -55,4 +55,13 @@ class AlarmCheckRuleTest {
         assertEquals("1200", timer.args["seconds"])
         assertEquals("cancel_alarm", RuleMatcher.match("turn off all alarms", now)!!.tool)
     }
+
+    @Test fun timerCancelKeepsAlarms() {
+        val now = LocalDateTime.parse("2026-10-22T10:00")
+        val timer = RuleMatcher.match("cancel the timer", now)!!
+        assertEquals("cancel_alarm", timer.tool)
+        assertEquals("timer", timer.args["only"])
+        assertNull(RuleMatcher.match("turn off all alarms", now)!!.args["only"])
+        assertNull(RuleMatcher.match("stop the alarms and timers", now)!!.args["only"])
+    }
 }

@@ -83,6 +83,12 @@ class ToolGateSafetyTest {
         assertEquals(0, action.runs)
     }
 
+    @Test fun timerOnlyCancelNeedsNoConfirm() = runBlocking {
+        val action = FakeAction()
+        val call = ToolCall("cancel_alarm", mapOf("only" to "timer"))
+        assertTrue(ToolSafetyGate().execute(call, Risk.SAFE, false, false, null, action::run) is Outcome.Done)
+    }
+
     @Test fun privateReadsRefuseFailedVerificationAndPanicButRemainSafeUnlocked() = runBlocking {
         val action = FakeAction()
         for (name in listOf("read_messages", "read_notes", "list_reminders", "recall_facts", "read_screen", "read_notifications", "notification_summary")) {

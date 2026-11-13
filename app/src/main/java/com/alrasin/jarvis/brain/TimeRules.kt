@@ -28,7 +28,10 @@ internal object TimeRules {
             TimeParser.durationOnly(m.groupValues[1])?.let { return call("set_timer", "seconds" to it.toString()) }
         }
         val all = "(?:the |my |all )*(?:alarms?|timers?)"
-        if (t.matches(re("(?:cancel|stop|delete|turn off|switch off|dismiss|remove|clear) $all(?: and $all)?"))) return call("cancel_alarm")
+        if (t.matches(re("(?:cancel|stop|delete|turn off|switch off|dismiss|remove|clear) $all(?: and $all)?"))) {
+            // "cancel the timer" must never touch the user's alarms.
+            return if (t.contains("timer") && !t.contains("alarm")) call("cancel_alarm", "only" to "timer") else call("cancel_alarm")
+        }
         if (t.matches(TIME_WHOLE_RE_2)) return call("set_alarm")
         oneAlarm(t, now)?.let { return it }
         // alarm
