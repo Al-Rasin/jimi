@@ -115,7 +115,9 @@ class SpeechToText(context: Context, dir: File? = null, hotwords: Collection<Str
             if (done) return
             require(count in 0..chunk.size)
             feed(chunk, count)
-            if (endpoint.accept(count, text, activity.hasSpeech(chunk, count)) != null) {
+            // A half-decoded wake ("hey ji") is not a command: do not end the capture on the silence after it.
+            val endpointText = if (stripWake && WakePhrase.mayBeWakeStart(text)) "" else text
+            if (endpoint.accept(count, endpointText, activity.hasSpeech(chunk, count)) != null) {
                 // Right-context padding flushes the final decoder frames, including at the hard limit.
                 stream.acceptWaveform(FloatArray(LEAD_SILENCE), SAMPLE_RATE)
                 stream.inputFinished()

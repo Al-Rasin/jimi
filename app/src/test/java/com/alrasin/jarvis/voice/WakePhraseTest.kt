@@ -16,6 +16,10 @@ class WakePhraseTest {
     @Test fun onlyWakeDetected() = assertEquals(true, WakePhrase.isOnlyWake("hey jimmy"))
     @Test fun wakeWithCommandIsNotOnlyWake() = assertEquals(false, WakePhrase.isOnlyWake("hey jimmy set a timer"))
     @Test fun blankIsNotOnlyWake() = assertEquals(false, WakePhrase.isOnlyWake(""))
+    @Test fun heyAloneMayBeWake() = assertEquals(true, WakePhrase.mayBeWakeStart("hey"))
+    @Test fun heyJiMayBeWake() = assertEquals(true, WakePhrase.mayBeWakeStart("hey ji"))
+    @Test fun commandIsNotWakeStart() = assertEquals(false, WakePhrase.mayBeWakeStart("turn on wifi"))
+    @Test fun longGreetingIsNotWakeStart() = assertEquals(false, WakePhrase.mayBeWakeStart("hey what time is it"))
     @Test fun replyIsNotOnlyWake() = assertEquals(false, WakePhrase.isOnlyWake("yes please"))
 }
 

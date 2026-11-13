@@ -21,4 +21,16 @@ object WakePhrase {
 
     /** True when [text] is only the wake phrase ("hey jimmy"): the user wants a new command, not a reply. */
     fun isOnlyWake(text: String): Boolean = text.isNotBlank() && strip(text).isEmpty()
+
+    private val wordSplit = Regex(SEPARATOR)
+    private val greetings = setOf("hey", "hay", "hi", "hello", "ok", "okay", "a")
+
+    /**
+     * True while the decoder has only the start of the wake ("hey", "hey ji"): not a command yet, so the capture
+     * must not end on silence here.
+     */
+    fun mayBeWakeStart(text: String): Boolean {
+        val words = text.trim().split(wordSplit).filter { it.isNotEmpty() }
+        return words.size in 1..2 && words.first().lowercase() in greetings
+    }
 }
