@@ -5,6 +5,7 @@ import com.alrasin.jarvis.brain.CloudBrain
 import com.alrasin.jarvis.brain.CloudProvider
 import com.alrasin.jarvis.brain.ModelBrain
 import com.alrasin.jarvis.llm.ChatFormat
+import com.alrasin.jarvis.llm.ChatModels
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -59,14 +60,14 @@ private class LocalAgentModel(private val directory: File, private val models: M
         job.ensureActive()
         val file = directory.listFiles().orEmpty().filter {
             it.extension.equals("gguf", true) && (it.name.startsWith("qwen3", true) || it.name.startsWith("gemma-3", true))
-        }.sortedBy { !it.name.startsWith("qwen3", true) }.firstOrNull()
+        }.sortedWith(compareBy({ !it.name.startsWith("qwen3", true) }, { ChatModels.isQwen35(it.name) }, { it.name })).firstOrNull()
             ?: error("Install a Qwen3 or Gemma-3 chat GGUF to use offline screen assistance.")
         models.withScreenModel(file) { llama ->
             job.ensureActive()
             val input = AgentPrompt.input(task, snapshot, history, 6_000)
             val prompt = if (file.name.startsWith("gemma", true))
                 "<bos><start_of_turn>user\n${AgentPrompt.SYSTEM}\n$input<end_of_turn>\n<start_of_turn>model\n"
-            else ChatFormat.qwen(AgentPrompt.SYSTEM, emptyList(), input)
+            else ChatFormat.qwen(AgentPrompt.SYSTEM, emptyList(), input, noThinkTag = !ChatModels.isQwen35(file.name))
             val output = llama.generate(prompt, AgentPrompt.GRAMMAR, 192,
                 stop = listOf("<|im_end|>", "<end_of_turn>")) { job.isActive }
             job.ensureActive()

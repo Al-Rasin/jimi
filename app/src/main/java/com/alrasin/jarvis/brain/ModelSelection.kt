@@ -9,11 +9,14 @@ internal object ModelSelection {
         if (route == IntentRouter.Route.CHAT && selection == ChatModels.LFM) {
             ChatModels.findLfm(dir)?.let { return it }
         }
+        if (route == IntentRouter.Route.CHAT && selection == ChatModels.QWEN35) {
+            ChatModels.findQwen35(dir)?.let { return it }
+        }
         val prefixes = if (route == IntentRouter.Route.CHAT) listOf("qwen3", "gemma-3")
             else listOf("functiongemma")
         return dir.listFiles().orEmpty()
             .filter { it.isFile && it.extension.equals("gguf", ignoreCase = true) }
-            .sortedByDescending { it.name.contains("jarvis") }
+            .sortedWith(compareBy<File>({ !it.name.contains("jarvis") }, { ChatModels.isQwen35(it.name) }))
             .firstOrNull { file -> prefixes.any { file.name.startsWith(it, ignoreCase = true) } }
     }
 }

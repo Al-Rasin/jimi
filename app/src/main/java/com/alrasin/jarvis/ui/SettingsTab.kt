@@ -95,7 +95,7 @@ internal fun SettingsTab(vm: AppViewModel, onSetup: () -> Unit, onDeviceCheck: (
     val voice by vm.voice.collectAsStateWithLifecycle()
     var page by rememberSaveable { mutableStateOf("") }
     val close = { page = "" }
-    val localLabel = mapOf(ChatModels.DEFAULT to "Qwen3 / Gemma", ChatModels.LFM to "LFM2.5 1.2B")
+    val localLabel = mapOf(ChatModels.DEFAULT to "Qwen3 / Gemma", ChatModels.LFM to "LFM2.5 1.2B", ChatModels.QWEN35 to "Qwen3.5 0.8B (test)")
 
     when (page) {
         "speech" -> SubPage("Speech", close) {

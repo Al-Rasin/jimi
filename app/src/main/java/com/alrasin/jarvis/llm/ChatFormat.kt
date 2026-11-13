@@ -28,12 +28,13 @@ object ChatFormat {
         append("<|im_start|>user\n$user<|im_end|>\n<|im_start|>assistant\n")
     }
 
-    fun qwen(system: String, history: List<Exchange>, user: String): String = buildString {
+    /** Qwen3.5 has no "/no_think" switch; the empty think block alone turns thinking off ([noThinkTag] = false). */
+    fun qwen(system: String, history: List<Exchange>, user: String, noThinkTag: Boolean = true): String = buildString {
         append("<|im_start|>system\n$system<|im_end|>\n")
         history.takeLast(3).forEach {
             append("<|im_start|>user\n${it.user}<|im_end|>\n<|im_start|>assistant\n${it.reply}<|im_end|>\n")
         }
-        append("<|im_start|>user\n$user /no_think<|im_end|>\n<|im_start|>assistant\n<think>\n\n</think>\n\n")
+        append("<|im_start|>user\n$user${if (noThinkTag) " /no_think" else ""}<|im_end|>\n<|im_start|>assistant\n<think>\n\n</think>\n\n")
     }
 
     /** Splits finished sentences off a growing buffer. Returns (sentences, rest). */

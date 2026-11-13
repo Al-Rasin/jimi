@@ -107,7 +107,7 @@ class Settings @Inject constructor(@ApplicationContext private val context: Cont
     /** Google's online voice when the internet works (D-074). Off by default: it sends spoken text to Google. */
     val onlineVoice: Flow<Boolean> = read(onlineVoiceKey, false)
     val chatModel: Flow<String> = context.dataStore.data.map {
-        if (it[chatModelKey] == ChatModels.LFM) ChatModels.LFM else ChatModels.DEFAULT
+        it[chatModelKey]?.takeIf { v -> v in ChatModels.ALL } ?: ChatModels.DEFAULT
     }
 
     suspend fun setChatModel(v: String) = write(chatModelKey, v)

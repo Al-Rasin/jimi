@@ -82,4 +82,11 @@ class ChatFormatTest {
         assertEquals("Hi.", ChatFormat.clean("<|im_start|>assistant Hi. /nothink<end_of_turn>"))
         assertEquals("Ok.", ChatFormat.clean("<think>\n\n</think>\n\nOk. /think"))
     }
+
+    @Test fun qwen35PromptHasNoNoThinkTagButKeepsEmptyThink() {
+        val p = ChatFormat.qwen("sys", emptyList(), "hi", noThinkTag = false)
+        assertTrue(!p.contains("/no_think"))
+        assertTrue(p.endsWith("<|im_start|>assistant\n<think>\n\n</think>\n\n"))
+        assertTrue(ChatFormat.qwen("sys", emptyList(), "hi").contains("hi /no_think"))
+    }
 }

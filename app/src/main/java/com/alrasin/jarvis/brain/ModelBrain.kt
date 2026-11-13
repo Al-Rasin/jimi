@@ -223,7 +223,7 @@ class ModelBrain @Inject constructor(
                         append("${it.user}<end_of_turn>\n<start_of_turn>model\n${it.reply}<end_of_turn>\n<start_of_turn>user\n")
                     }
                     append("$text<end_of_turn>\n<start_of_turn>model\n")
-                } else ChatFormat.qwen(system, chatHistory, text)
+                } else ChatFormat.qwen(system, chatHistory, text, noThinkTag = !ChatModels.isQwen35(m.file.name))
                 var buf = ""
                 val visibleAnswer = StringBuilder()
                 var firstPiece = true

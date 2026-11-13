@@ -40,4 +40,19 @@ class ChatRouteModelTest {
         assertEquals(tool, ModelSelection.fileFor(IntentRouter.Route.TOOL, folder.root, ChatModels.LFM))
         assertNull(ModelSelection.fileFor(IntentRouter.Route.WEB, folder.root))
     }
+
+    @Test fun qwen35OnlyWhenSelectedAndPlainQwen3StaysDefault() {
+        val q35 = folder.newFile("Qwen3.5-0.8B-Q4_0.gguf")
+        val qwen = folder.newFile("Qwen3-0.6B-Q4_0.gguf")
+        assertEquals(q35, ModelSelection.fileFor(IntentRouter.Route.CHAT, folder.root, ChatModels.QWEN35))
+        assertEquals(qwen, ModelSelection.fileFor(IntentRouter.Route.CHAT, folder.root))
+    }
+
+    @Test fun qwen35AloneIsStillUsedAndMissingFallsBack() {
+        val q35 = folder.newFile("Qwen3.5-0.8B-Q4_0.gguf")
+        assertEquals(q35, ModelSelection.fileFor(IntentRouter.Route.CHAT, folder.root))
+        q35.delete()
+        val qwen = folder.newFile("Qwen3-0.6B-Q4_0.gguf")
+        assertEquals(qwen, ModelSelection.fileFor(IntentRouter.Route.CHAT, folder.root, ChatModels.QWEN35))
+    }
 }
