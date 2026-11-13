@@ -160,6 +160,8 @@ class AppViewModel @Inject constructor(
     val nightExplore = settings.nightExplore.state(false)
     val carMode = settings.carMode.state(true)
     val headphonesMode = settings.headphonesMode.state(true)
+    /** Modes on right now (headphones / car connected), set by the core service. */
+    val modeNow = com.alrasin.jarvis.core.ContextNow.flow
     val readMessages = settings.readMessages.state(true)
     val bedtimeMode = settings.bedtimeMode.state(false)
     val proactive = settings.proactive.state(true)

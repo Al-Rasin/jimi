@@ -58,6 +58,7 @@ internal fun SettingsTab(vm: AppViewModel, onSetup: () -> Unit, onDeviceCheck: (
     val nightExplore by vm.nightExplore.collectAsStateWithLifecycle()
     val carMode by vm.carMode.collectAsStateWithLifecycle()
     val headphonesMode by vm.headphonesMode.collectAsStateWithLifecycle()
+    val modeNow by vm.modeNow.collectAsStateWithLifecycle()
     val readMessages by vm.readMessages.collectAsStateWithLifecycle()
     val bedtimeMode by vm.bedtimeMode.collectAsStateWithLifecycle()
     val proactive by vm.proactive.collectAsStateWithLifecycle()
@@ -221,8 +222,9 @@ internal fun SettingsTab(vm: AppViewModel, onSetup: () -> Unit, onDeviceCheck: (
                 ToggleRow("Learn apps at night", nightExplore) { vm.setNightExplore(it) }
             }
             RowsCard("Modes") {
-                ToggleRow("Car mode", carMode, "Short answers, reads messages, no screen tasks") { vm.setCarMode(it) }
-                ToggleRow("Headphones mode", headphonesMode, "Short answers, reads messages") { vm.setHeadphonesMode(it) }
+                // These turn on by themselves when a car / headphones connect; the switch only allows it.
+                ToggleRow("Car mode", carMode, if (modeNow.car) "On now: car connected" else "Auto in car Bluetooth. Short answers, no screen tasks") { vm.setCarMode(it) }
+                ToggleRow("Headphones mode", headphonesMode, if (modeNow.headphones) "On now: headphones connected" else "Auto when headphones connect. Short answers") { vm.setHeadphonesMode(it) }
                 if (carMode || headphonesMode) {
                     ToggleRow("Read messages aloud", readMessages, "New chats, in car or headphones") { vm.setReadMessages(it) }
                 }

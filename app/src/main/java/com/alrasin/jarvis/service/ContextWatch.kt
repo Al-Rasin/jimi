@@ -82,7 +82,8 @@ class ContextWatch(private val context: Context, private val scope: CoroutineSco
         return audio.getDevices(AudioManager.GET_DEVICES_OUTPUTS).mapNotNull { d ->
             val kind = when (d.type) {
                 AudioDeviceInfo.TYPE_WIRED_HEADSET, AudioDeviceInfo.TYPE_WIRED_HEADPHONES -> ContextModes.Kind.WIRED
-                AudioDeviceInfo.TYPE_BLUETOOTH_A2DP, AudioDeviceInfo.TYPE_BLUETOOTH_SCO -> ContextModes.Kind.BLUETOOTH
+                AudioDeviceInfo.TYPE_BLUETOOTH_A2DP, AudioDeviceInfo.TYPE_BLUETOOTH_SCO, AudioDeviceInfo.TYPE_HEARING_AID,
+                TYPE_BLE_HEADSET, TYPE_BLE_SPEAKER -> ContextModes.Kind.BLUETOOTH
                 AudioDeviceInfo.TYPE_USB_HEADSET -> ContextModes.Kind.USB
                 AudioDeviceInfo.TYPE_BUILTIN_SPEAKER, AudioDeviceInfo.TYPE_BUILTIN_EARPIECE, AudioDeviceInfo.TYPE_TELEPHONY -> return@mapNotNull null
                 else -> ContextModes.Kind.OTHER
@@ -90,6 +91,12 @@ class ContextWatch(private val context: Context, private val scope: CoroutineSco
             val name = d.productName?.toString().orEmpty()
             ContextModes.Output(kind, name, name.isNotEmpty() && name in cars)
         }
+    }
+
+    private companion object {
+        // LE Audio earbuds (API 31 names; the numbers are the same on older phones, they just never appear there).
+        const val TYPE_BLE_HEADSET = 26
+        const val TYPE_BLE_SPEAKER = 27
     }
 
     /** Names of paired Bluetooth devices that say they are car audio or hands-free kits. */
