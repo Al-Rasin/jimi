@@ -28,6 +28,7 @@ import com.alrasin.jarvis.ui.Backdrop
 import com.alrasin.jarvis.voice.AudioRing
 import com.alrasin.jarvis.voice.BanglaSpeech
 import com.alrasin.jarvis.voice.BanglaSpeechToText
+import com.alrasin.jarvis.voice.NoiseCleaner
 import com.alrasin.jarvis.voice.PortableModels
 import com.alrasin.jarvis.voice.BargeIn
 import com.alrasin.jarvis.voice.SpeakerVerifier
@@ -110,6 +111,7 @@ class JarvisCoreService : LifecycleService() {
 
     @Volatile private var threshold = Settings.DEFAULT_THRESHOLD
     @Volatile private var banglaOn = false
+    @Volatile private var denoiseOn = false
     @Volatile private var missedRequested = false
     /** While busy, only echo-aware interruption detection consumes microphone audio. */
     @Volatile private var speaking = false
@@ -478,6 +480,7 @@ class JarvisCoreService : LifecycleService() {
     private fun startListening() {
         lifecycleScope.launch { settings.wakeThreshold.collect { threshold = it } }
         lifecycleScope.launch { settings.sttBangla.collect { banglaOn = it } }
+        lifecycleScope.launch { settings.sttDenoise.collect { denoiseOn = it } }
         wakeLock = getSystemService(PowerManager::class.java)
             .newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "jarvis:listen")
             .apply { acquire() }
@@ -523,6 +526,7 @@ class JarvisCoreService : LifecycleService() {
         val capturePolicy = SpeechCapturePolicy()
         val secondPass = SecondPassSpeechToText(this)
         val bangla = BanglaSpeechToText(this)
+        val cleaner = NoiseCleaner(this)
         val stt = runCatching { SpeechToText(this, hotwords = vocabulary.hotwords) }
             .onSuccess { JarvisLog.i("speech-to-text: ${it.modelName}") }
             .onFailure { JarvisLog.e("speech-to-text not loaded (run tools/fetch_speech.sh)", it) }
@@ -673,9 +677,10 @@ class JarvisCoreService : LifecycleService() {
                 if (cmd != null) {
                     wasSpeaking = false
                     clips.onChunk(0f, threshold, ring, tone)   // only finishes the pending wake clip
-                    cmd.accept(chunk)
+                    val heardChunk = cleaner.clean(chunk, denoiseOn)
+                    cmd.accept(heardChunk)
                     _micLevel.value = CommandAudio.level(chunk)
-                    commandAudio.add(chunk.copyOf())
+                    commandAudio.add(heardChunk)
                     val heard = cmd.text.let {
                         if (commandSource == "barge_in") BargeIn.stripInterruption(it) else it
                     }
@@ -729,6 +734,7 @@ class JarvisCoreService : LifecycleService() {
                         _reply.value = ""
                         _phase.value = PHASE_HEARING
                         showPanel()
+                        cleaner.reset()
                         if (!phoneCapture(commandSource, wake, commandEpoch)) command = stt.session(stripWake = wake)
                     }
                     continue
@@ -766,11 +772,13 @@ class JarvisCoreService : LifecycleService() {
                     _heard.value = ""
                     if (phoneCapture(req, false, commandEpoch)) continue
                     tone.listen()
+                    cleaner.reset()
+                    val firstChunk = cleaner.clean(chunk, denoiseOn)
                     command = stt.session(null, waitStart = if (req == "follow_up") FOLLOW_UP_WAIT else SpeechToText.WAIT_START)
-                        .also { it.accept(chunk) }
+                        .also { it.accept(firstChunk) }
                     commandSource = req
                     commandAudio.clear()
-                    commandAudio.add(chunk.copyOf())
+                    commandAudio.add(firstChunk)
                     wasBusy = true
                     _heard.value = ""
                     continue
@@ -786,8 +794,9 @@ class JarvisCoreService : LifecycleService() {
                     showPanel()
                     if (phoneCapture("voice", true, commandEpoch)) continue
                     acknowledgeWake(tone)
-                    val preRoll = ring.last(PRE_ROLL_SAMPLES)
-                    command = stt.session(preRoll)
+                    cleaner.reset()
+                    val preRoll = cleaner.clean(ring.last(PRE_ROLL_SAMPLES), denoiseOn)
+                    command = stt.session(preRoll, stripWake = true)
                     commandSource = "voice"
                     commandAudio.clear()
                     commandAudio.add(preRoll)
@@ -802,6 +811,7 @@ class JarvisCoreService : LifecycleService() {
             stt?.close()
             secondPass.close()
             bangla.close()
+            cleaner.close()
             rec.close()
             tone.close()
             detector.close()

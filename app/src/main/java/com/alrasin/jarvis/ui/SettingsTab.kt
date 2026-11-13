@@ -95,7 +95,7 @@ internal fun SettingsTab(vm: AppViewModel, onSetup: () -> Unit, onDeviceCheck: (
 
     when (page) {
         "speech" -> SubPage("Speech", close) {
-            RowsCard { SpeechEngineSetting(); RowDivider(); SecondPassSetting(); RowDivider(); BanglaModeSetting() }
+            RowsCard { SpeechEngineSetting(); RowDivider(); SecondPassSetting(); RowDivider(); BanglaModeSetting(); RowDivider(); NoiseCleaningSetting() }
         }
         "voice" -> SubPage("Voice", close) { VoiceCard(vm) }
         "city" -> SubPage("Home city", close) {

@@ -26,6 +26,7 @@ class Settings @Inject constructor(@ApplicationContext private val context: Cont
     private val followUpKey = booleanPreferencesKey("follow_up")
     private val sttSecondPassKey = booleanPreferencesKey("stt_second_pass")
     private val sttBanglaKey = booleanPreferencesKey("stt_bangla")
+    private val sttDenoiseKey = booleanPreferencesKey("stt_denoise")
     private val autoClearKey = booleanPreferencesKey("auto_clear_notifications")
     private val nightExploreKey = booleanPreferencesKey("night_explore")
     private val nightExploredKey = stringPreferencesKey("night_explored")
@@ -74,6 +75,8 @@ class Settings @Inject constructor(@ApplicationContext private val context: Cont
     val sttSecondPass: Flow<Boolean> = read(sttSecondPassKey, false)
     /** Bangla mode (#47): Whisper small after the wake word. Off by default (slow, big model). */
     val sttBangla: Flow<Boolean> = read(sttBanglaKey, false)
+    /** Noise cleaning (§K 3.5): GTCRN cleans command audio before speech-to-text. Off by default. */
+    val sttDenoise: Flow<Boolean> = read(sttDenoiseKey, false)
     val autoClearNotifications: Flow<Boolean> = read(autoClearKey, false)
     /** User OK for learning apps at night while charging (§J.5). Off by default. */
     val nightExplore: Flow<Boolean> = read(nightExploreKey, false)
@@ -133,6 +136,7 @@ class Settings @Inject constructor(@ApplicationContext private val context: Cont
     suspend fun setReadImportant(v: Boolean) = write(readImportantKey, v)
     suspend fun setSttSecondPass(v: Boolean) = write(sttSecondPassKey, v)
     suspend fun setSttBangla(v: Boolean) = write(sttBanglaKey, v)
+    suspend fun setSttDenoise(v: Boolean) = write(sttDenoiseKey, v)
     suspend fun setAutoClearNotifications(v: Boolean) = write(autoClearKey, v)
     suspend fun setNightExplore(v: Boolean) = write(nightExploreKey, v)
     suspend fun setNightExplored(v: String) = write(nightExploredKey, v)

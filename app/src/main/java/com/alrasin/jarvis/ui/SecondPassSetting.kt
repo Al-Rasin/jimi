@@ -32,3 +32,15 @@ internal fun BanglaModeSetting() {
         "Speak Bangla or mixed. Needs the Bangla speech model. Slower.",
     ) { scope.launch { settings.setSttBangla(it) } }
 }
+
+@Composable
+internal fun NoiseCleaningSetting() {
+    val context = LocalContext.current.applicationContext
+    val settings = remember(context) { Settings(context) }
+    val enabled by settings.sttDenoise.collectAsStateWithLifecycle(initialValue = false)
+    val scope = rememberCoroutineScope()
+    ToggleRow(
+        "Noise cleaning", enabled,
+        "For noisy rooms. Needs the noise cleaning model.",
+    ) { scope.launch { settings.setSttDenoise(it) } }
+}

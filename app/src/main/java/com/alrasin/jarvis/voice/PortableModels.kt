@@ -40,6 +40,9 @@ object PortableModels {
     fun banglaReady(context: Context): Boolean =
         BanglaSpeech.FILES.all { ModelFiles.present(File(dir(context, "stt_bangla"), it)) }
 
+    fun denoiseReady(context: Context): Boolean =
+        ModelFiles.present(File(dir(context, NoiseClean.GROUP), NoiseClean.MODEL))
+
     fun dir(context: Context, name: String) =
         File(context.getExternalFilesDir(null) ?: context.filesDir, "models/$name")
 
@@ -67,6 +70,8 @@ object PortableModels {
             "About 124 MB installed", true, "Experimental Moonshine tiny int8. Enable in Conversation after download; falls back while loading or if slower than 1.5 seconds."),
         ModelStatus("stt_bangla", "Bangla speech (optional)", banglaReady(context),
             "About 375 MB", true, "Whisper small int8. Hears Bangla and mixed Bangla + English, gives English. Slow (several seconds); turn on Bangla mode in Settings."),
+        ModelStatus(NoiseClean.GROUP, "Noise cleaning (optional)", denoiseReady(context),
+            "About 1 MB", true, "GTCRN. Cleans room noise from your command before speech-to-text; turn on Noise cleaning in Settings."),
         ModelStatus("speaker", "Voice ID (optional)", present(context, "speaker", "campplus.onnx"),
             "About 28 MB", true, "Enroll your voice in Settings after installing. Restart Jimi after adding this model."),
         ModelStatus("llm", "Local chat and tool models (optional)",
@@ -97,6 +102,7 @@ object PortableModels {
                 "tts" -> archive(context, "$RELEASES/tts-models/vits-piper-en_GB-alan-medium.tar.bz2", "tts", progress) {
                     it in voiceFiles || it.startsWith("espeak-ng-data/")
                 }
+                NoiseClean.GROUP -> Downloader.fetch("$RELEASES/speech-enhancement-models/${NoiseClean.MODEL}", File(dir(context, NoiseClean.GROUP), NoiseClean.MODEL), progress = progress)
                 "speaker" -> Downloader.fetch("$RELEASES/speaker-recongition-models/3dspeaker_speech_campplus_sv_en_voxceleb_16k.onnx", File(dir(context, "speaker"), "campplus.onnx"), progress = progress)
                 else -> error("This model must be supplied with the APK or imported")
             }
