@@ -611,6 +611,11 @@ class JarvisCoreService : LifecycleService() {
                 val normalized = raw?.let(SpeechToText::normalize).orEmpty()
                 val stripped = WakePhrase.strip(normalized)
                 val heard = if (source == "barge_in") BargeIn.stripInterruption(stripped) else stripped
+                if (heard.isBlank() && source == "follow_up" && WakePhrase.isOnlyWake(normalized)) {
+                    JarvisLog.i("follow-up heard only the wake phrase; listening for the command")
+                    listenRequest = "tap"
+                    return true
+                }
                 if (heard.isBlank()) {
                     capturePolicy.phoneFailed()
                     _heard.value = ""
@@ -707,6 +712,18 @@ class JarvisCoreService : LifecycleService() {
                         if (commandSource == "barge_in") BargeIn.stripInterruption(it) else it
                     }
                     _heard.value = heard
+                    if (cmd.done && heard.isEmpty() && commandSource == "follow_up" && WakePhrase.isOnlyWake(cmd.raw)) {
+                        // "Hey Jimi" said during the follow-up window: start a fresh command capture.
+                        JarvisLog.i("follow-up heard only the wake phrase; listening for the command")
+                        cmd.close()
+                        tone.listen()
+                        cleaner.reset()
+                        commandAudio.clear()
+                        _phase.value = PHASE_HEARING
+                        command = stt?.session(stripWake = true)
+                        commandSource = "tap"
+                        continue
+                    }
                     if (cmd.done) {
                         if (heard.isNotEmpty()) tone.endListening()
                         command = null
@@ -796,7 +813,7 @@ class JarvisCoreService : LifecycleService() {
                     tone.listen()
                     cleaner.reset()
                     val firstChunk = cleaner.clean(chunk, denoiseOn)
-                    command = stt.session(null, waitStart = if (req == "follow_up") FOLLOW_UP_WAIT else SpeechToText.WAIT_START)
+                    command = stt.session(null, waitStart = if (req == "follow_up") FOLLOW_UP_WAIT else SpeechToText.WAIT_START, stripWake = req == "follow_up")
                         .also { it.accept(firstChunk) }
                     commandSource = req
                     commandAudio.clear()

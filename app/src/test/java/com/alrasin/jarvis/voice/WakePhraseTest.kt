@@ -13,6 +13,10 @@ class WakePhraseTest {
     @Test fun stripsIzumi() = assertEquals("open youtube", WakePhrase.strip("izumi open youtube"))
     @Test fun emptyStaysEmpty() = assertEquals("", WakePhrase.strip(""))
     @Test fun onlyWakeGivesEmpty() = assertEquals("", WakePhrase.strip("hey jimmy"))
+    @Test fun onlyWakeDetected() = assertEquals(true, WakePhrase.isOnlyWake("hey jimmy"))
+    @Test fun wakeWithCommandIsNotOnlyWake() = assertEquals(false, WakePhrase.isOnlyWake("hey jimmy set a timer"))
+    @Test fun blankIsNotOnlyWake() = assertEquals(false, WakePhrase.isOnlyWake(""))
+    @Test fun replyIsNotOnlyWake() = assertEquals(false, WakePhrase.isOnlyWake("yes please"))
 }
 
 class SpeechTextNormalizeTest {

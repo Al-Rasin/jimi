@@ -18,4 +18,7 @@ object WakePhrase {
         // Consume one exact prefix: later words may be a contact name or part of the command.
         return text.replaceFirst(prefix, "").trim()
     }
+
+    /** True when [text] is only the wake phrase ("hey jimmy"): the user wants a new command, not a reply. */
+    fun isOnlyWake(text: String): Boolean = text.isNotBlank() && strip(text).isEmpty()
 }
