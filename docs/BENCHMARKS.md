@@ -117,3 +117,15 @@ First call without warm-up is ~4× slower → app warms up at load. Speaker ID s
 | zipformer en 2023-06-26 int8 (Mac only) | "hazy me", "has jimmy" | — | — |
 | NeMo fast-conformer transducer 480ms int8 | "hi jimmy", "hi jamie" | 0.4 | 5 s |
 | **Kroko zipformer en 2025-08-06 (in app)** | "hey jimmy" ×3, "state heijamin" | 0.2 | 11 s |
+
+## How to run the speech benchmark on the phone (#48)
+1. Record 16 kHz mono WAV clips (quiet room + noisy room). For each `x.wav`, put `x.txt` beside it with the exact words said.
+2. Push: `adb push clips/ /sdcard/Android/data/com.alrasin.jarvis/files/clips/`
+3. Run per model (English Kroko built-in, other sherpa model dir, or Bangla Whisper):
+   - `adb shell am start -n com.alrasin.jarvis/.ui.MainActivity --es stt_dir /sdcard/Android/data/com.alrasin.jarvis/files/clips --ez no_speak true`
+   - add `--es stt_model <model dir>` or `--es stt_model bangla`
+4. Results: one row per run appended to `/sdcard/Android/data/com.alrasin.jarvis/files/bench/stt.md` (model, clips, rtf, WER, load). Per-clip lines in debug log (`STT ...`). Paste rows below.
+
+### Phone results (owed)
+| Model | Clips | rtf | WER (scored) | Load |
+|---|---|---|---|---|
