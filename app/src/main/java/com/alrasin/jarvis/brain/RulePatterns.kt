@@ -116,3 +116,4 @@ internal val SKILLS_RE_7 = Regex("^(?:turn|switch) (?:the )?(.+?) (?:switch|togg
 internal val SKILLS_RE_8 = Regex("^(?:flip|toggle) (?:the )?(.+?)(?: switch| toggle| option| checkbox)?$")
 internal val APPS_RE = Regex("^(?:close|kill|exit|quit|force stop|stop) (?:the )?(.+?)(?: app| application)?$")
 internal val APPS_RE_2 = Regex("^(?:open|launch|start|run|show)(?: the| my)? (.+?)(?: app| application)?$")
+internal val SELF_TEST_WHOLE_RE = Regex("^(?:(?:run |do |start )?(?:a |an |your )?(?:self ?test|self check|health check|diagnostics?|full test)|test (?:yourself|your ?self|your skills|your tools|all tools)|check yourself)$")

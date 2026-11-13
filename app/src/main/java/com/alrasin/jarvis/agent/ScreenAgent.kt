@@ -43,6 +43,9 @@ class ScreenAgent(
     private val history = mutableListOf<String>()
     private data class Pending(val action: AgentAction, val snapshot: ScreenSnapshot)
     private var pending: Pending? = null
+    /** Last action that ran and the screen before it, so the next look can say what changed (#69). */
+    private var acted: Pending? = null
+    private var noEffect = 0
     val hasPendingConfirmation: Boolean get() = pending != null
     var hasPendingQuestion: Boolean = false
         private set
@@ -74,6 +77,8 @@ class ScreenAgent(
         started = now()
         history.clear()
         done.clear()
+        acted = null
+        noEffect = 0
         succeeded = false
         stuck = false
         onStep(model.description)
@@ -160,6 +165,10 @@ class ScreenAgent(
             if (!allowed()) return limitResult()
             // Never act inside a money app (D-072): stop before the model picks a tap there.
             if (PhoneProfile.isPaymentPackage(snapshot.packageName)) { stuck = true; return AgentResult(PAYMENT_STOP) }
+            if (!check(snapshot)) {
+                stuck = true
+                return AgentResult("My taps are not changing the screen. Please try it yourself or ask again.")
+            }
             val action = model.next(task, snapshot, history.toList())
             if (!allowed()) return limitResult()
             steps++
@@ -197,6 +206,24 @@ class ScreenAgent(
         return AgentResult("Stopped after $steps steps. The task may be incomplete.")
     }
 
+    /**
+     * Check step (#69): tells the model what its last action changed, and flags taps that did nothing or
+     * text that did not show up. False after three steps in a row with no effect (the agent is stuck).
+     */
+    private fun check(after: ScreenSnapshot): Boolean {
+        val (action, before) = acted ?: return true
+        acted = null
+        val notes = buildList {
+            add(ScreenDiff.describe(before, after))
+            if (ScreenDiff.typedMissing(action, before, after)) add("The typed text is not on the screen.")
+        }
+        val none = ScreenDiff.noEffect(action, before, after)
+        noEffect = if (none) noEffect + 1 else 0
+        history += "Step $steps result: " + notes.joinToString(" ") +
+            if (none) " That step did not work; try a different element or way." else ""
+        return noEffect < 3
+    }
+
     private fun validTarget(action: AgentAction, snapshot: ScreenSnapshot): Boolean = when (action) {
         is AgentAction.Tap -> snapshot.elements.any { it.index == action.element && it.clickable }
         is AgentAction.Type -> snapshot.elements.any { it.index == action.element && it.editable }
@@ -214,6 +241,7 @@ class ScreenAgent(
         val ok = if (action == AgentAction.Wait) { delay(500); allowed() }
         else screen.perform(action, snapshot).also { if (it && allowed()) delay(250) }
         if (ok) done += Performed(action, snapshot.elements.firstOrNull { it.index == action.target() }, snapshot.packageName)
+        if (ok && action != AgentAction.Wait) acted = Pending(action, snapshot)
         return ok
     }
 }

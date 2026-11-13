@@ -14,6 +14,8 @@ import com.alrasin.jarvis.agent.recipeTools
 import com.alrasin.jarvis.agent.skillTools
 import com.alrasin.jarvis.core.Secrets
 import com.alrasin.jarvis.core.Tool
+import com.alrasin.jarvis.core.ToolContext
+import com.alrasin.jarvis.core.ToolResult
 import com.alrasin.jarvis.data.MemoryDao
 import com.alrasin.jarvis.data.NoteDao
 import com.alrasin.jarvis.data.NotificationDao
@@ -87,6 +89,7 @@ class ToolRegistry @Inject constructor(
         addAll(recipeTools(context, planner, apps, recipes))
         add(learnTool(context, explorer, planner, apps))
         addAll(teachTools(context, teach, recipes))
+        add(selfTestTool(context) { c -> get(c.tool)?.run(c, ToolContext(context, "self test", locked = false)) ?: ToolResult.fail("no ${c.tool}") })
     }
 
     private val byName = all.associateBy { it.name }.also {

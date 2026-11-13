@@ -215,6 +215,7 @@ object RuleMatcher {
     }
 
     private fun system(t: String): ToolCall? {
+        if (t.matches(SELF_TEST_WHOLE_RE)) return call("self_test")
         setting(t)?.let { return it }
         SYSTEM_RE.find(t)
             ?.let { return call("set_brightness", "level" to it.groupValues[1]) }

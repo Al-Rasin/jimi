@@ -55,6 +55,14 @@ class ToolShortlistTest {
         assertEquals(picked.map { tools.indexOf(it) }.sorted(), picked.map { tools.indexOf(it) })
     }
 
+    @Test fun defaultShortlistIsFiveUnlessTied() {
+        val picked = names("text rahim on whatsapp and call him and play music and set alarm and brightness and weather")
+        assertTrue(picked.size in 1..ToolShortlist.MAX)
+        // One clear tool: no padding with weak matches beyond the tie rule.
+        assertTrue(names("set an alarm for six").size <= ToolShortlist.MAX)
+        assertTrue(names("set an alarm for six").contains("set_alarm"))
+    }
+
     @Test fun nothingLikelyGivesEmpty() {
         assertEquals(emptyList<String>(), names("hmm okay"))
         assertEquals(emptyList<String>(), names(""))

@@ -12,7 +12,9 @@ private val WORDS_RE = Regex("[^a-z0-9]+")
  * Pure Kotlin: unit tested.
  */
 object ToolShortlist {
-    const val SIZE = 8
+    /** ~5 tools keep the prompt short (fast on the phone); ties with the 5th still get in, up to [MAX]. */
+    const val SIZE = 5
+    const val MAX = 8
 
     /** Spoken words → tools they usually mean, for words that are not in the tool descriptions. */
     private val HINTS: Map<String, List<String>> = mapOf(
@@ -69,7 +71,7 @@ object ToolShortlist {
         "website" to listOf("open_url"), "site" to listOf("open_url"), "search" to listOf("web_search", "search_in_app"), "find" to listOf("find_in_app", "search_in_app"), "google" to listOf("web_search"),
         "who" to listOf("wiki_lookup", "web_search"), "what" to listOf("wiki_lookup", "web_search"), "news" to listOf("news"), "dollar" to listOf("currency"), "taka" to listOf("currency"), "currency" to listOf("currency"), "exchange" to listOf("currency"),
         "prayer" to listOf("prayer_times"), "namaz" to listOf("prayer_times"), "azan" to listOf("prayer_times"), "maghrib" to listOf("prayer_times"), "fajr" to listOf("prayer_times"),
-        "headlines" to listOf("news"), "screenshot" to listOf("take_screenshot"), "capture" to listOf("take_screenshot"),
+        "headlines" to listOf("news"), "screenshot" to listOf("take_screenshot"), "capture" to listOf("take_screenshot"), "diagnostic" to listOf("self_test"), "selftest" to listOf("self_test"),
         "screen" to listOf("read_screen", "ask_screen", "take_screenshot", "set_brightness"), "lock" to listOf("lock_phone"),
         "unlock" to listOf("unlock_phone"), "home" to listOf("go_home"), "back" to listOf("go_back"), "recent" to listOf("open_recents"),
         "remember" to listOf("remember_fact", "recall_facts"), "forget" to listOf("forget_fact"),
@@ -95,21 +97,33 @@ object ToolShortlist {
     fun words(text: String): List<String> =
         text.lowercase().split(WORDS_RE).filter { it.isNotEmpty() && it !in STOP }
 
-    /** Up to [size] tools, in registry order. Empty when nothing in the command points at any tool. */
-    /** [appWords]: words from installed app names (phone profile); saying one hints "open_app". */
-    fun pick(text: String, tools: List<Tool>, size: Int = SIZE, appWords: Set<String> = emptySet()): List<Tool> {
+    private val bags = java.util.concurrent.ConcurrentHashMap<Tool, Set<String>>()
+
+    /** Words a tool is described with; built once per tool. */
+    private fun bag(t: Tool): Set<String> = bags.getOrPut(t) {
+        (words(t.name.replace('_', ' ')) + words(t.description) +
+            t.args.flatMap { a -> words(a.description) + a.choices.orEmpty().flatMap(::words) }).toSet()
+    }
+
+    /**
+     * Up to [size] tools (more only when tied with the last one, never above [max]), in registry order.
+     * Empty when nothing in the command points at any tool.
+     * [appWords]: words from installed app names (phone profile); saying one hints "open_app".
+     */
+    fun pick(text: String, tools: List<Tool>, size: Int = SIZE, appWords: Set<String> = emptySet(), max: Int = if (size == SIZE) MAX else size): List<Tool> {
         val said = words(text)
         if (said.isEmpty()) return emptyList()
         val score = HashMap<String, Int>()
         for (t in tools) {
-            val bag = (words(t.name.replace('_', ' ')) + words(t.description) +
-                t.args.flatMap { a -> words(a.description) + a.choices.orEmpty().flatMap(::words) }).toSet()
+            val bag = bag(t)
             val hits = said.count { w -> w in bag || (w.length > 4 && bag.any { it.startsWith(w.dropLast(1)) }) }
             if (hits > 0) score[t.name] = hits
         }
         said.forEach { w -> (HINTS[w] ?: HINTS[w.removeSuffix("s")])?.forEach { score[it] = (score[it] ?: 0) + 2 } }
         if (said.any { it in appWords }) score["open_app"] = (score["open_app"] ?: 0) + 2
-        val keep = score.entries.sortedByDescending { it.value }.take(size).map { it.key }.toSet()
+        val ranked = score.entries.sortedByDescending { it.value }
+        val cut = ranked.getOrNull(size - 1)?.value ?: 0
+        val keep = (ranked.take(size) + ranked.drop(size).takeWhile { it.value == cut }).take(max).map { it.key }.toSet()
         return tools.filter { it.name in keep }
     }
 }
