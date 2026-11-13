@@ -103,4 +103,17 @@ class MemoryRetrieverTest {
         assertEquals(wifi, candidate.memory)
         assertTrue(candidate.requiresConfirmation)
     }
+
+    @Test fun embedderFindsFactWithNoSharedWords() {
+        val office = Memory(7, "I sit at Rahman Tower in Gulshan", 5)
+        val all = memories + office
+        assertTrue(MemoryRetriever.retrieve("where do I work", all).none { it == office })
+        val fake: (String, List<String>) -> FloatArray = { _, texts -> FloatArray(texts.size) { if ("Tower" in texts[it]) 0.7f else 0.05f } }
+        assertEquals(office, MemoryRetriever.retrieve("where do I work", all, similar = fake).first())
+    }
+
+    @Test fun noEmbedderSameAsBefore() {
+        val none: (String, List<String>) -> FloatArray? = { _, _ -> null }
+        assertEquals(MemoryRetriever.retrieve("where did I park", memories), MemoryRetriever.retrieve("where did I park", memories, similar = none))
+    }
 }

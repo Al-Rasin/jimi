@@ -1,6 +1,7 @@
 package com.alrasin.jarvis.actions
 
 import android.content.Context
+import com.alrasin.jarvis.knowledge.SharedEmbedder
 import com.alrasin.jarvis.knowledge.WikiOffline
 import com.alrasin.jarvis.agent.appmap.AppExplorer
 import com.alrasin.jarvis.agent.appmap.Planner
@@ -74,7 +75,7 @@ class ToolRegistry @Inject constructor(
         addAll(notificationTools(notifications))
         add(dailySummaryTool(context, contacts, notifications))
         val web = Web()
-        addAll(webTools(web, FastWeather(context), { location.get() }, homeCity = { settings.homeCity.first() }, wikiOffline = WikiOffline.forPhone(context)))
+        addAll(webTools(web, FastWeather(context), { location.get() }, homeCity = { settings.homeCity.first() }, wikiOffline = WikiOffline.forPhone(context), similar = { q, t -> SharedEmbedder.similarities(context, q, t) }))
         addAll(freeApiTools(web, { location.get() }, homeCity = { settings.homeCity.first() }))
         add(storeSearchTool(context))
         add(navigationTool(context, location))

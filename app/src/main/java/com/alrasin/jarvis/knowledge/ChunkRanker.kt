@@ -22,6 +22,20 @@ class ChunkRanker(private val embedder: () -> Embedder? = { null }) {
     companion object {
         private const val MIN_COSINE = 0.25f
         private const val MAX_CHARS = 700
+        private const val KEYWORD_BONUS = 0.15f
+
+        /**
+         * Final order of items: [keywordOrder] is the keyword ranking (best first), [sims] the embedder score of every
+         * item (null = no model, keep keyword order). Meaning wins; a keyword hit gets a small bonus and is never
+         * dropped, an item with no keyword hit needs [MIN_COSINE].
+         */
+        fun merge(keywordOrder: List<Int>, sims: FloatArray?, keep: Int): List<Int> {
+            if (sims == null) return keywordOrder.take(keep)
+            val rank = keywordOrder.withIndex().associate { (r, i) -> i to r }
+            return sims.indices.filter { it in rank || sims[it] >= MIN_COSINE }
+                .sortedByDescending { i -> sims[i] + (rank[i]?.let { KEYWORD_BONUS * (1f - it.toFloat() / keywordOrder.size) } ?: 0f) }
+                .take(keep)
+        }
 
         private val STOP = setOf(
             "a", "an", "the", "is", "are", "was", "were", "be", "been", "of", "in", "on", "at", "to", "for", "and", "or",

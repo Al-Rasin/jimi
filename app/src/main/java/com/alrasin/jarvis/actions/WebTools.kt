@@ -8,6 +8,7 @@ import com.alrasin.jarvis.core.ToolResult
 import com.alrasin.jarvis.core.asObj
 import com.alrasin.jarvis.core.obj
 import com.alrasin.jarvis.core.str
+import com.alrasin.jarvis.knowledge.ChunkRanker
 import com.alrasin.jarvis.knowledge.WikiOffline
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -69,6 +70,7 @@ fun webTools(
     newsCache: AnswerCache<List<String>> = AnswerCache(TimeUnit.MINUTES.toMillis(30)),
     homeCity: suspend () -> String,
     wikiOffline: WikiOffline? = null,
+    similar: (String, List<String>) -> FloatArray? = { _, _ -> null },
 ): List<Tool> {
 
     fun normalizeUrl(raw: String): String? {
@@ -90,7 +92,10 @@ fun webTools(
             val excerpt = text.take(2400)
             return ToolResult.ok(excerpt.take(400), "$excerpt\nSource: $url")
         }
-        val chunks = PageRanker.rank(question, text, url, doc.title().ifBlank { title }, topN = 3, maxChars = 2400)
+        // Keyword pick of 8 passages, then the embedder (when on the phone) keeps the 3 that mean the question (§K 11.3)
+        val wide = PageRanker.rank(question, text, url, doc.title().ifBlank { title }, topN = 8, maxChars = 6000)
+        val sims = withContext(Dispatchers.Default) { similar(question, wide.map { it.text }) }
+        val chunks = budget(ChunkRanker.merge(wide.indices.toList(), sims, 3).map { wide[it] }, 2400)
         if (chunks.isEmpty()) {
             return ToolResult(false, "I couldn't find passages on that page that match your question.", "Source: $url")
         }
@@ -170,9 +175,10 @@ fun webTools(
             suspend fun wiki(url: String): Any? = Json.parse(
                 runCatching { web.get(url, Web.WIKI_UA) }.getOrElse { if (it is Web.HttpError && it.code < 500) throw it else web.get(url, Web.WIKI_UA) },
             )
+            var title = topic
             runCatching {
                 val s = wiki("https://en.wikipedia.org/w/api.php?action=opensearch&limit=1&format=json&search=${Web.enc(topic)}") as List<*>
-                val title = ((s.getOrNull(1) as? List<*>)?.firstOrNull() as? String) ?: return@SimpleTool ToolResult.fail("Wikipedia has nothing on $topic.")
+                title = ((s.getOrNull(1) as? List<*>)?.firstOrNull() as? String) ?: return@SimpleTool ToolResult.fail("Wikipedia has nothing on $topic.")
                 runCatching {
                     (wiki("https://en.wikipedia.org/api/rest_v1/page/summary/${Web.enc(title.replace(' ', '_'))}") as Map<*, *>)["extract"] as? String
                 }.getOrNull()?.takeIf { it.isNotBlank() } ?: wikiExtract(
@@ -180,16 +186,29 @@ fun webTools(
                 )
             }.fold({ t ->
                 if (t.isBlank()) ToolResult.fail("Wikipedia has nothing on $topic.")
-                else ToolResult.ok(t.split(TITLE_RE).take(2).joinToString(" "), t)
+                else ToolResult.ok(t.split(TITLE_RE).take(2).joinToString(" "), "$t\nSource: Wikipedia, $title")
             }, { e ->
                 // No internet: answer from the offline Kiwix copy when there is one (#42)
                 val offline = if (e is Web.HttpError || wikiOffline == null) null
                 else withContext(Dispatchers.IO) { wikiOffline.lookup(topic, ctx.heard) }
                 if (offline == null) webFailure("Wikipedia", e)
-                else ToolResult.ok(offline.text.split(TITLE_RE).take(2).joinToString(" "), "${offline.title} (offline Wikipedia)\n${offline.text}")
+                else ToolResult.ok(offline.text.split(TITLE_RE).take(2).joinToString(" "), "${offline.text}\nSource: offline Wikipedia, ${offline.title}")
             })
         },
     )
+}
+
+/** Keeps chunks in order until [maxChars] of text is used; the first one is always kept (cut if too long). */
+internal fun budget(chunks: List<PageRanker.Chunk>, maxChars: Int): List<PageRanker.Chunk> {
+    val out = mutableListOf<PageRanker.Chunk>()
+    var left = maxChars
+    for (c in chunks) {
+        if (out.isEmpty() && c.text.length > left) return listOf(c.copy(text = c.text.take(left)))
+        if (c.text.length > left) continue
+        out += c
+        left -= c.text.length
+    }
+    return out
 }
 
 /** Intro text from the action=query&prop=extracts answer (fallback when the REST summary fails). */

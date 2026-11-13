@@ -64,13 +64,7 @@ class WikiOffline(
         fun forPhone(context: Context): WikiOffline {
             val models = File(context.getExternalFilesDir(null) ?: context.filesDir, "models")
             val sd = Environment.getExternalStorageDirectory()
-            var embedder: Embedder? = null
-            val ranker = ChunkRanker {
-                synchronized(models) {
-                    embedder ?: runCatching { Embedder.load(File(models, "embed")) }
-                        .onFailure { JarvisLog.e("embedder load failed", it) }.getOrNull().also { embedder = it }
-                }
-            }
+            val ranker = ChunkRanker { SharedEmbedder.get(context) }
             return WikiOffline({ listOf(File(models, "wiki"), File(sd, "Kiwix"), File(sd, "Download")) }, ranker)
         }
         private val CITE_RE = Regex("\\[(?:\\d+|[a-z]|citation needed|note \\d+)]")

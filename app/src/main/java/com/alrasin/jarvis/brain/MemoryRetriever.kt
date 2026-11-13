@@ -1,6 +1,7 @@
 package com.alrasin.jarvis.brain
 
 import com.alrasin.jarvis.core.TextNorm
+import com.alrasin.jarvis.knowledge.ChunkRanker
 import kotlin.math.ln
 
 object MemoryRetriever {
@@ -10,11 +11,30 @@ object MemoryRetriever {
     data class ForgetCandidate(val memory: Memory, val requiresConfirmation: Boolean)
 
     /** The budget includes newlines between complete memory texts. */
-    fun retrieve(question: String, memories: List<Memory>, topK: Int = 4, charBudget: Int = 1200): List<Memory> {
+    /**
+     * [similar] (optional, the on-phone embedder) also finds facts that share meaning but no words with the question,
+     * e.g. "where do I work" → "my office is in Gulshan" (§K 11.3). Null result = keyword ranking only.
+     */
+    fun retrieve(
+        question: String,
+        memories: List<Memory>,
+        topK: Int = 4,
+        charBudget: Int = 1200,
+        similar: (String, List<String>) -> FloatArray? = { _, _ -> null },
+    ): List<Memory> {
         if (topK <= 0 || charBudget <= 0) return emptyList()
         val result = mutableListOf<Memory>()
         var remaining = charBudget
-        for (memory in ranked(question, memories)) {
+        val keyword = ranked(question, memories)
+        val pool = memories.sortedByDescending { it.timeMs }.take(MAX_EMBED)
+        val sims = if (pool.isEmpty()) null else similar(question, pool.map { it.text })
+        val order = if (sims == null) keyword else {
+            val index = pool.withIndex().associate { (i, m) -> m to i }
+            val all = (keyword + pool).distinct()
+            val full = FloatArray(all.size) { i -> index[all[i]]?.let { sims[it] } ?: 0f }
+            ChunkRanker.merge(keyword.indices.toList(), full, all.size).map { all[it] }
+        }
+        for (memory in order) {
             val cost = memory.text.length + if (result.isEmpty()) 0 else 1
             if (cost > remaining) continue
             result += memory
@@ -74,6 +94,8 @@ object MemoryRetriever {
             .map { SYNONYMS[it] ?: it }.toList()
     }
 
+    /** Newest facts the embedder looks at (vectors are cached, so only new facts cost time). */
+    private const val MAX_EMBED = 100
     private val WIFI = Regex("\\bwi[ -]fi\\b")
     private val POSSESSIVE = Regex("'s\\b")
     private val WORD = Regex("[\\p{L}\\p{N}]+")

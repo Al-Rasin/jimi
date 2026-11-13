@@ -13,13 +13,20 @@ import java.text.Normalizer
 class Embedder private constructor(private val tokenizer: WordPiece, private val session: OrtSession) : AutoCloseable {
     private val env = OrtEnvironment.getEnvironment()
 
+    // Facts and notes are asked about again and again: keep their vectors (small, ~1.5 KB each).
+    private val cache = object : LinkedHashMap<String, FloatArray>(64, 0.75f, true) {
+        override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, FloatArray>?) = size > CACHE_SIZE
+    }
+
     fun similarities(query: String, chunks: List<String>): FloatArray {
         val q = embed(query)
         return FloatArray(chunks.size) { ChunkRanker.cosine(q, embed(chunks[it])) }
     }
 
     @Synchronized
-    fun embed(text: String): FloatArray {
+    fun embed(text: String): FloatArray = cache[text] ?: compute(text).also { cache[text] = it }
+
+    private fun compute(text: String): FloatArray {
         val ids = tokenizer.encode(text, MAX_TOKENS)
         val n = ids.size
         val inputs = mutableMapOf<String, OnnxTensor>()
@@ -52,6 +59,7 @@ class Embedder private constructor(private val tokenizer: WordPiece, private val
 
     companion object {
         private const val MAX_TOKENS = 128
+        private const val CACHE_SIZE = 512
 
         fun meanPool(tokens: List<FloatArray>): FloatArray {
             val out = FloatArray(tokens.firstOrNull()?.size ?: 0)
