@@ -26,7 +26,9 @@ import com.alrasin.jarvis.data.WakeEventDao
 import com.alrasin.jarvis.ui.AssistantActivity
 import com.alrasin.jarvis.ui.Backdrop
 import com.alrasin.jarvis.voice.AudioRing
+import com.alrasin.jarvis.voice.BanglaSpeech
 import com.alrasin.jarvis.voice.BanglaSpeechToText
+import com.alrasin.jarvis.voice.PortableModels
 import com.alrasin.jarvis.voice.BargeIn
 import com.alrasin.jarvis.voice.SpeakerVerifier
 import com.alrasin.jarvis.voice.SpeechToText
@@ -107,6 +109,7 @@ class JarvisCoreService : LifecycleService() {
     @Inject lateinit var mapFreshness: AppMapFreshness
 
     @Volatile private var threshold = Settings.DEFAULT_THRESHOLD
+    @Volatile private var banglaOn = false
     @Volatile private var missedRequested = false
     /** While busy, only echo-aware interruption detection consumes microphone audio. */
     @Volatile private var speaking = false
@@ -360,6 +363,12 @@ class JarvisCoreService : LifecycleService() {
                 if (epoch != speechEpoch) return@launch
                 val text = refine?.invoke() ?: text
                 if (refine != null) JarvisLog.i("latency: second-pass refine ${SystemClock.elapsedRealtime() - asked} ms")
+                if (text.isBlank()) {   // Bangla mode tried a blank English command and heard nothing either
+                    synchronized(speechState) {
+                        if (epoch == speechEpoch) _heard.value = if (source == "follow_up") "" else AssistantActivity.NOTHING_HEARD
+                    }
+                    return@launch
+                }
                 synchronized(speechState) {
                     if (epoch != speechEpoch) return@launch
                     _heard.value = text
@@ -468,6 +477,7 @@ class JarvisCoreService : LifecycleService() {
 
     private fun startListening() {
         lifecycleScope.launch { settings.wakeThreshold.collect { threshold = it } }
+        lifecycleScope.launch { settings.sttBangla.collect { banglaOn = it } }
         wakeLock = getSystemService(PowerManager::class.java)
             .newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "jarvis:listen")
             .apply { acquire() }
@@ -682,7 +692,9 @@ class JarvisCoreService : LifecycleService() {
                         val source = commandSource
                         synchronized(speechState) {
                             if (commandEpoch == speechEpoch) {
-                                onCommand(corrector.correct(heard), cmd.raw, source, wakeId, clips.lastWakePeak, path, audio, tone) {
+                                // Pure Bangla often gives blank English text; let Whisper try before "nothing heard".
+                                val banglaMayHear = BanglaSpeech.use(banglaOn, PortableModels.banglaReady(this), audio.size)
+                                onCommand(corrector.correct(heard), cmd.raw, source, wakeId, clips.lastWakePeak, path, audio, tone, banglaMayHear) {
                                     val decoded = if (settings.sttBangla.first()) bangla.hear(audio, cmd.text, true, cmd.stripWake)
                                         else secondPass.refine(audio, cmd.text, settings.sttSecondPass.first(), cmd.stripWake)
                                     corrector.correct((if (source == "barge_in") BargeIn.stripInterruption(decoded) else decoded).ifBlank { heard })
@@ -815,12 +827,12 @@ class JarvisCoreService : LifecycleService() {
     /** A command was heard: answer it. Empty after a follow-up means the conversation is over. */
     private fun onCommand(
         text: String, raw: String, source: String, wakeId: Long?, wakeScore: Float, audioPath: String?, audio: ShortArray,
-        tone: Chimes, refine: (suspend () -> String)? = null,
+        tone: Chimes, refineEmpty: Boolean = false, refine: (suspend () -> String)? = null,
     ) {
         JarvisLog.i("heard ($source): ${text.length} characters")
         if (source == "voice") _wakeId.value = wakeId
         if (wakeId != null) Notifications.showWakeCheck(this, wakeId, wakeScore, heard = text.ifEmpty { "(nothing)" })
-        if (text.isEmpty()) {
+        if (text.isEmpty() && !(refineEmpty && refine != null)) {
             _heard.value = if (source == "follow_up") "" else AssistantActivity.NOTHING_HEARD
             tone.timeout()
             _phase.value = PHASE_WAKE
