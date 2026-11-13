@@ -31,10 +31,22 @@ object Proactive {
         return "${Persona.ADDRESS}, it's ${if (h == 0) 12 else h}:${m.toString().padStart(2, '0')} at night. Time to sleep?"
     }
 
-    /** One line for an important alert, or null. Chat apps are skipped when [skipChats]: car/headphones mode already reads them, or "Read messages aloud" is off. */
-    fun importantLine(row: NotificationLog, quiet: Boolean, skipChats: Boolean, nowMs: Long, lastReadMs: Long): String? {
+    /** Triage reasons that mean "someone wrote to you", from any app (LinkedIn, Instagram, …), not only chat apps. */
+    private val CHAT_REASONS = setOf("message app", "category msg", "possible personal message", "personal message metadata")
+
+    /** Chat-like: a chat app, a message-like triage reason, or the listener saw a message-style notification ([chat]). */
+    fun isChatLike(row: NotificationLog, chat: Boolean = false): Boolean =
+        chat || Triage.isChatApp(row.pkg) || row.reason in CHAT_REASONS
+
+    /**
+     * One line for an important alert, or null. Chat-like alerts from any app are skipped when [skipChats]:
+     * car/headphones mode already reads them, or "Read messages aloud" is off.
+     */
+    fun importantLine(
+        row: NotificationLog, quiet: Boolean, skipChats: Boolean, nowMs: Long, lastReadMs: Long, chat: Boolean = false,
+    ): String? {
         if (quiet || !row.important || Triage.isMoneyApp(row.pkg)) return null
-        if (skipChats && Triage.isChatApp(row.pkg)) return null
+        if (skipChats && isChatLike(row, chat)) return null
         if (nowMs - lastReadMs < READ_GAP_MS) return null
         if (Triage.isChatApp(row.pkg)) {
             return ContextModes.messageLine(row.appName, row.title, row.text)?.let { "${Persona.ADDRESS}, $it" }

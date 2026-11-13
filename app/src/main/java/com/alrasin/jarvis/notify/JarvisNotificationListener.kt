@@ -118,7 +118,9 @@ class JarvisNotificationListener : NotificationListenerService() {
         val now = System.currentTimeMillis()
         // Setting off = no chat is ever read aloud; mode on = readAloud already read it.
         val skipChats = mode.readMessages || !settings.readMessages.first()
-        val line = Proactive.importantLine(row, mode.quiet, skipChats, now, lastImportantAt) ?: return
+        val n = sbn.notification
+        val chat = n.category == Notification.CATEGORY_MESSAGE || n.extras.containsKey(Notification.EXTRA_MESSAGES)
+        val line = Proactive.importantLine(row, mode.quiet, skipChats, now, lastImportantAt, chat) ?: return
         lastImportantAt = now
         JarvisCoreService.say(this, line)
     }
