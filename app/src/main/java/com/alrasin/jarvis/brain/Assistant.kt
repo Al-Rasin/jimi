@@ -315,6 +315,11 @@ class Assistant @Inject constructor(
                     if (said != null && !Persona.isMemoryQuestion(text)) return Reply(said, tool = "cloud", expectAnswer = said.trimEnd().endsWith('?'))
                     if (picked != null && picked.tool != CloudBrain.NONE.tool) return tools.run(picked, input, "cloud")
                     if (picked == null) models.toolCall(text, contextLine())?.let { return tools.run(it, input, "llm") }
+                    // Local model unsure or missing and the router was unsure too: one cloud try if cloud is on (§K 14.2).
+                    val backup = if (picked == null && smoke == null && !intent.isConfident) cloud.toolCall(text, state.cloudHistory.toList(), backup = true) else null
+                    val backupSaid = backup?.takeIf { it.tool == CloudBrain.NONE.tool }?.arg("say")
+                    if (backupSaid != null && !Persona.isMemoryQuestion(text)) return Reply(backupSaid, tool = "cloud", expectAnswer = backupSaid.trimEnd().endsWith('?'))
+                    if (backup != null && backup.tool != CloudBrain.NONE.tool) return tools.run(backup, input, "cloud")
                 }
                 if (AgentRouting.needsScreen(text)) {
                     if (smoke != null) {
@@ -334,6 +339,10 @@ class Assistant @Inject constructor(
         }
         trace("chat", ToolCall("chat"))
         models.chat(query, state.history.toList(), facts, speak)?.let { return Reply(it.text, tool = "chat", spokenAlready = it.streamed, expectAnswer = it.text.trimEnd().endsWith('?')) }
+        // No local chat model (or it failed): cloud as backup when it is on (§K 14.2).
+        if (smoke == null) cloud.chat(query, state.cloudHistory.toList(), facts, forced, speak, backup = true)?.let {
+            return Reply(it.text, tool = "cloud", spokenAlready = it.streamed, expectAnswer = it.text.trimEnd().endsWith('?'))
+        }
         trace("fallback", ok = false)
         return Reply(Persona.CANT)
     }

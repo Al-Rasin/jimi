@@ -182,8 +182,9 @@ class CloudBrain @Inject constructor(
      */
     suspend fun chat(
         text: String, history: List<Exchange>, facts: List<String>, forced: Boolean, onSentence: (String) -> Unit = {},
+        backup: Boolean = false,
     ): ModelBrain.ChatOut? {
-        if (!enabled() || !(forced || settings.cloudForChat.first())) return null
+        if (!enabled() || !mayAsk(settings.cloudForChat.first(), forced, backup)) return null
         val p = provider() ?: return null
         val sendFacts = settings.cloudSendFacts.first()
         val query = ASK.replace(text, "").trim().ifEmpty { text }
@@ -219,8 +220,8 @@ class CloudBrain @Inject constructor(
      * arg "say" when the model gave one, saving a second round trip), or null on error / when off.
      * The call still goes through the normal security gate.
      */
-    suspend fun toolCall(text: String, history: List<Exchange> = emptyList()): ToolCall? {
-        if (!enabled() || !settings.cloudForChat.first()) return null
+    suspend fun toolCall(text: String, history: List<Exchange> = emptyList(), backup: Boolean = false): ToolCall? {
+        if (!enabled() || !mayAsk(settings.cloudForChat.first(), forced = false, backup = backup)) return null
         val p = provider() ?: return null
         val t0 = System.currentTimeMillis()
         val phone = registry.profile.current()?.let { "\n" + PhoneProfile.cloudLine(it) }.orEmpty()
@@ -322,6 +323,13 @@ class CloudBrain @Inject constructor(
         }
 
         val NONE = ToolCall("none")
+
+        /**
+         * Router rule (§K 14.2, D-079). [allChat] = "send all chat" toggle. [forced] = "think hard …".
+         * [backup] = the local model had no answer: ask the cloud only if it was not asked already (allChat off).
+         */
+        internal fun mayAsk(allChat: Boolean, forced: Boolean, backup: Boolean): Boolean =
+            if (backup) !allChat && !forced else allChat || forced
         private const val CHAT_TOKENS = 200
         private const val TOOL_TOKENS = 200
         private const val HISTORY = 4
