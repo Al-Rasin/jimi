@@ -19,6 +19,10 @@ class RuleMatcherTest {
         assertEquals(c("setting", "name" to "dark mode", "state" to "on"), m("turn on dark mode"))
         assertEquals(c("setting", "name" to "reading mode", "state" to "off"), m("disable reading mode"))
         assertEquals(c("setting", "name" to "haptic feedback", "state" to "on"), m("turn on haptic feedback"))
+        assertEquals(c("setting", "name" to "dark mode", "state" to "status"), m("dark mode status"))
+        assertEquals(c("setting", "name" to "dark mode", "state" to "status"), m("is dark mode on"))
+        assertEquals(c("setting", "name" to "battery saver", "state" to "status"), m("is the battery saver enabled"))
+        assertEquals(c("setting", "name" to "dark mode", "state" to "status"), m("check dark mode"))
         // fixed toggles still win
         assertEquals(c("toggle", "target" to "airplane", "state" to "on"), m("turn on airplane mode"))
         assertEquals(null, m("turn on the tv")?.takeIf { it.tool == "setting" })

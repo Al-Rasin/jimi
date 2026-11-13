@@ -75,6 +75,8 @@ internal val SETTING_RE = Regex("^(?:open |show |go to |take me to )(?:the |my )
 internal val SETTING_RE_2 = Regex("^(turn on|switch on|enable|turn off|switch off|disable) (?:the |my )?(.+)$")
 internal val SETTING_RE_3 = Regex("\\b(?:mode|saver|sync|nfc|rotation|vibration|vibrate|haptics?|feedback|night light|eye comfort|dark theme|always on display|settings?)$")
 internal val SETTING_RE_4 = Regex(" settings?$")
+/** "is dark mode on", "dark mode status", "is battery saver enabled?" → read only. */
+internal val SETTING_STATUS_RE = Regex("^(?:is (?:the |my )?(.+?) (?:on|off|enabled|disabled|active)|(?:what(?:'s| is) )?(?:the |my )?(.+?) status|check (?:the |my )?(.+?))$")
 internal val SYSTEM_RE = Regex("^(?:set |change |turn )?(?:the )?(?:screen )?brightness(?: to| at)? (\\d+)(?: percent)?$")
 internal val SYSTEM_RE_2 = Regex("^(?:run|start)(?: the)? (?:routine )?([a-z ]+?)(?: routine)$")
 internal val SYSTEM_RE_3 = Regex("^run (?:the )?routine ([a-z ]+)$")

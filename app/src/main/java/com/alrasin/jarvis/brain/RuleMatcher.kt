@@ -200,6 +200,10 @@ object RuleMatcher {
 
     /** Any setting (D-056): "open nfc settings", "turn on dark mode", "disable battery saver mode". */
     private fun setting(t: String): ToolCall? {
+        SETTING_STATUS_RE.find(t)?.let { m ->
+            val name = m.groupValues.drop(1).first { it.isNotEmpty() }
+            if (SETTING_RE_3.containsMatchIn(name)) return call("setting", "name" to name.replace(SETTING_RE_4, ""), "state" to "status")
+        }
         SETTING_RE.find(t)?.let {
             return call("setting", "name" to it.groupValues[1], "state" to "open")
         }
