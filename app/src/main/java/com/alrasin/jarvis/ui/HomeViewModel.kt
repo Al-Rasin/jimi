@@ -11,6 +11,7 @@ import com.alrasin.jarvis.service.CoreState
 import com.alrasin.jarvis.service.JarvisCoreService
 import com.alrasin.jarvis.service.WakeFeedback
 import com.alrasin.jarvis.voice.BanglaSpeechToText
+import com.alrasin.jarvis.voice.NoiseCleaner
 import com.alrasin.jarvis.voice.SpeechScore
 import com.alrasin.jarvis.voice.SpeechToText
 import com.alrasin.jarvis.voice.TextToSpeech
@@ -139,17 +140,36 @@ class HomeViewModel @Inject constructor(
      * Debug: speech-to-text on every 16 kHz WAV in [dir], then say the first result. Logs speed, and word error rate
      * for clips with a `<name>.txt` of what was said; appends one summary row to `files/bench/stt.md` (#48).
      * `adb shell am start -n com.alrasin.jarvis/.ui.MainActivity --es stt_dir <dir> [--es stt_model <dir>|bangla]`
+     * Add `--ez stt_denoise true` to clean each clip with the noise model first (§K 3.5); rtf then includes cleaning.
      */
-    fun speechTest(dir: String, model: String? = null, speak: Boolean = true) = viewModelScope.launch(Dispatchers.Default) {
+    fun speechTest(
+        dir: String, model: String? = null, speak: Boolean = true, denoise: Boolean = false,
+    ) = viewModelScope.launch(Dispatchers.Default) {
+        val cleaner = NoiseCleaner(app)
         runCatching {
+            if (denoise) check(cleaner.ready()) { "noise cleaning model missing" }
+            fun cleaned(audio: ShortArray): ShortArray {
+                if (!denoise) return audio
+                cleaner.reset()
+                val out = ShortArray(audio.size)
+                var i = 0
+                while (i < audio.size) {
+                    val n = minOf(WakeWordDetector.CHUNK, audio.size - i)
+                    val part = cleaner.clean(audio.copyOfRange(i, i + n), enabled = true)
+                    part.copyInto(out, i, 0, minOf(part.size, out.size - i))
+                    i += n
+                }
+                return out
+            }
             val files = File(dir).listFiles { f -> f.name.endsWith(".wav") }.orEmpty().sortedBy { it.name }
             val clips = mutableListOf<SpeechScore.Clip>()
             val texts = mutableListOf<String>()
             fun run(name: String, loadMs: Long, decode: (ShortArray) -> String) {
                 JarvisLog.i("STT $name loaded in $loadMs ms")
                 for (f in files) {
-                    val audio = Wav.read(f)
+                    val raw = Wav.read(f)
                     val t0 = System.nanoTime()
+                    val audio = cleaned(raw)
                     val text = decode(audio)
                     val seconds = audio.size / 16000f
                     val rtf = (System.nanoTime() - t0) / 1e9f / seconds
@@ -159,7 +179,7 @@ class HomeViewModel @Inject constructor(
                     texts += text
                     JarvisLog.i("STT ${f.name} rtf=${"%.2f".format(rtf)}${wer?.let { " wer=${"%.2f".format(it)}" }.orEmpty()} \"$text\" → \"${WakePhrase.strip(text)}\"")
                 }
-                val row = SpeechScore.summaryRow(name, loadMs, clips)
+                val row = SpeechScore.summaryRow(if (denoise) "$name +denoise" else name, loadMs, clips)
                 val out = File(app.getExternalFilesDir(null), "bench/stt.md").apply { parentFile?.mkdirs() }
                 if (!out.exists()) out.writeText(SpeechScore.HEADER + "\n")
                 out.appendText(row + "\n")
@@ -193,6 +213,7 @@ class HomeViewModel @Inject constructor(
             }
             JarvisLog.i("STT test done")
         }.onFailure { JarvisLog.e("STT test failed", it) }
+        cleaner.close()
     }
 
     /**

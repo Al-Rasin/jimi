@@ -23,7 +23,8 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         intent.getStringExtra("test_dir")?.let { vm.scoreDir(it) }
         intent.getStringExtra("stt_dir")?.let {
-            vm.speechTest(it, intent.getStringExtra("stt_model"), speak = !intent.hasExtra("no_speak"))
+            vm.speechTest(it, intent.getStringExtra("stt_model"), speak = !intent.hasExtra("no_speak"),
+                denoise = intent.getBooleanExtra("stt_denoise", false))
         }
         intent.getStringExtra("voice_bench")?.let { vm.voiceBench(it) }
         window.decorView.doOnPreDraw {

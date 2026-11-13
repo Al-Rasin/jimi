@@ -146,3 +146,18 @@ Clips: 2 LibriSpeech English + 5 Bangla commands made with macOS `say -v Piya` (
   "call ammu" (meaning right), 3 wrong ("i will be back soon" for "flashlight on").
 - Whisper first decode is slow (warm-up, rtf 1.5); later clips rtf 0.3–0.5 here, so expect several seconds on the phone.
 - Needs real Bangla voice clips on the phone before judging Bangla mode.
+
+### Noise cleaning (§K 3.5), emulator (2026-11-13, NOT the phone)
+Built-in Kroko en, GTCRN `gtcrn_simple.onnx` (0.5 MB). 7 English clips (2 LibriSpeech + 5 commands from macOS `say`),
+plus copies with made-up noise (low rumble + 120/240 Hz hum) at 5 dB and 0 dB SNR.
+Run: add `--ez stt_denoise true` to the `stt_dir` command. rtf with cleaning includes the cleaning time.
+
+| Clips | WER off | WER on | rtf off | rtf on |
+|---|---|---|---|---|
+| clean | 15% | 15% | 0.12 | 0.30 |
+| 5 dB noise | 15% | 15% | 0.11 | 0.15 |
+| 0 dB noise | 29% | 25% | 0.05 | 0.26 |
+
+- Model loads in ~2 s (first use), runs with no errors; clean speech is not hurt.
+- Small gain only at very loud noise; Kroko already copes with steady hum. About 2x slower speech step.
+- Fake noise is easy noise. Real test needed: fan / traffic / TV recorded on the phone. Keep OFF by default.
