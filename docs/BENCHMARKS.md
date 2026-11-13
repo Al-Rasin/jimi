@@ -124,8 +124,25 @@ First call without warm-up is ~4× slower → app warms up at load. Speaker ID s
 3. Run per model (English Kroko built-in, other sherpa model dir, or Bangla Whisper):
    - `adb shell am start -n com.alrasin.jarvis/.ui.MainActivity --es stt_dir /sdcard/Android/data/com.alrasin.jarvis/files/clips --ez no_speak true`
    - add `--es stt_model <model dir>` or `--es stt_model bangla`
+   - If the log says a model file "does not exist" but it is there: adb made the folder with mode 2770, so the app
+     cannot read it. Fix: `adb shell chmod 777 <each pushed folder>`.
 4. Results: one row per run appended to `/sdcard/Android/data/com.alrasin.jarvis/files/bench/stt.md` (model, clips, rtf, WER, load). Per-clip lines in debug log (`STT ...`). Paste rows below.
 
 ### Phone results (owed)
 | Model | Clips | rtf | WER (scored) | Load |
 |---|---|---|---|---|
+
+### Emulator results (2026-11-13, NOT the phone)
+Mac M1 arm64 emulator, so speed is much faster than on the Helio G88; only the WER and the pipeline count.
+Clips: 2 LibriSpeech English + 5 Bangla commands made with macOS `say -v Piya` (synthetic voice, expected text in English).
+
+| Model | Clips | rtf | WER (scored) | Load |
+|---|---|---|---|---|
+| built-in Kroko en | 7 | 0.03 | 72% (7) | 2.6 s |
+| Whisper small bn→en | 7 | 0.63 | 54% (7) | 6.6 s |
+
+- English clips: both models near perfect (WER 0–6%).
+- Bangla clips: Kroko gives sound-alike junk ("amuken kuro"), WER 100% on all 5. Whisper got "open youtube" right,
+  "call ammu" (meaning right), 3 wrong ("i will be back soon" for "flashlight on").
+- Whisper first decode is slow (warm-up, rtf 1.5); later clips rtf 0.3–0.5 here, so expect several seconds on the phone.
+- Needs real Bangla voice clips on the phone before judging Bangla mode.
