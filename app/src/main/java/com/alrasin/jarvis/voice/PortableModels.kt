@@ -27,6 +27,7 @@ data class ModelStatus(
 object PortableModels {
     private const val RELEASES = "https://github.com/k2-fsa/sherpa-onnx/releases/download"
     private const val WAKE_RELEASE = "https://github.com/dscripka/openWakeWord/releases/download/v0.5.1"
+    private const val WHISPER_SMALL = "https://huggingface.co/csukuangfj/sherpa-onnx-whisper-small/resolve/main"
     private val lock = Mutex()
     private val wakeFeatures = listOf("melspectrogram.onnx", "embedding_model.onnx")
     private val speechFiles = setOf("encoder.onnx", "decoder.onnx", "joiner.onnx", "tokens.txt")
@@ -35,6 +36,9 @@ object PortableModels {
 
     fun secondPassReady(context: Context): Boolean =
         secondPassFiles.all { ModelFiles.present(File(dir(context, "stt_second_pass"), it)) }
+
+    fun banglaReady(context: Context): Boolean =
+        BanglaSpeech.FILES.all { ModelFiles.present(File(dir(context, "stt_bangla"), it)) }
 
     fun dir(context: Context, name: String) =
         File(context.getExternalFilesDir(null) ?: context.filesDir, "models/$name")
@@ -61,6 +65,8 @@ object PortableModels {
             "About 80 MB installed", true, "Other voices can be selected in the next step."),
         ModelStatus("stt_second_pass", "Second-pass speech (optional)", secondPassReady(context),
             "About 124 MB installed", true, "Experimental Moonshine tiny int8. Enable in Conversation after download; falls back while loading or if slower than 1.5 seconds."),
+        ModelStatus("stt_bangla", "Bangla speech (optional)", banglaReady(context),
+            "About 375 MB", true, "Whisper small int8. Hears Bangla and mixed Bangla + English, gives English. Slow (several seconds); turn on Bangla mode in Settings."),
         ModelStatus("speaker", "Voice ID (optional)", present(context, "speaker", "campplus.onnx"),
             "About 28 MB", true, "Enroll your voice in Settings after installing. Restart Jimi after adding this model."),
         ModelStatus("llm", "Local chat and tool models (optional)",
@@ -82,6 +88,12 @@ object PortableModels {
                 }
                 "stt" -> archive(context, "$RELEASES/asr-models/sherpa-onnx-streaming-zipformer-en-kroko-2025-08-06.tar.bz2", "stt", progress) { it in speechFiles }
                 "stt_second_pass" -> archive(context, "$RELEASES/asr-models/sherpa-onnx-moonshine-tiny-en-int8.tar.bz2", "stt_second_pass", progress) { it in secondPassFiles }
+                "stt_bangla" -> BanglaSpeech.FILES.forEachIndexed { index, name ->
+                    val file = File(dir(context, "stt_bangla"), name)
+                    if (!ModelFiles.present(file)) Downloader.fetch("$WHISPER_SMALL/$name", file, limit = 300L * 1024 * 1024) {
+                        progress((index + it) / BanglaSpeech.FILES.size)
+                    }
+                }
                 "tts" -> archive(context, "$RELEASES/tts-models/vits-piper-en_GB-alan-medium.tar.bz2", "tts", progress) {
                     it in voiceFiles || it.startsWith("espeak-ng-data/")
                 }

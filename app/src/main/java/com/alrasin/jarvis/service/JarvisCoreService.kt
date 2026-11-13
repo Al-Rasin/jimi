@@ -26,6 +26,7 @@ import com.alrasin.jarvis.data.WakeEventDao
 import com.alrasin.jarvis.ui.AssistantActivity
 import com.alrasin.jarvis.ui.Backdrop
 import com.alrasin.jarvis.voice.AudioRing
+import com.alrasin.jarvis.voice.BanglaSpeechToText
 import com.alrasin.jarvis.voice.BargeIn
 import com.alrasin.jarvis.voice.SpeakerVerifier
 import com.alrasin.jarvis.voice.SpeechToText
@@ -511,6 +512,7 @@ class JarvisCoreService : LifecycleService() {
         val phone = PhoneSpeechRecognizer(this)
         val capturePolicy = SpeechCapturePolicy()
         val secondPass = SecondPassSpeechToText(this)
+        val bangla = BanglaSpeechToText(this)
         val stt = runCatching { SpeechToText(this, hotwords = vocabulary.hotwords) }
             .onSuccess { JarvisLog.i("speech-to-text: ${it.modelName}") }
             .onFailure { JarvisLog.e("speech-to-text not loaded (run tools/fetch_speech.sh)", it) }
@@ -681,7 +683,8 @@ class JarvisCoreService : LifecycleService() {
                         synchronized(speechState) {
                             if (commandEpoch == speechEpoch) {
                                 onCommand(corrector.correct(heard), cmd.raw, source, wakeId, clips.lastWakePeak, path, audio, tone) {
-                                    val decoded = secondPass.refine(audio, cmd.text, settings.sttSecondPass.first(), cmd.stripWake)
+                                    val decoded = if (settings.sttBangla.first()) bangla.hear(audio, cmd.text, true, cmd.stripWake)
+                                        else secondPass.refine(audio, cmd.text, settings.sttSecondPass.first(), cmd.stripWake)
                                     corrector.correct((if (source == "barge_in") BargeIn.stripInterruption(decoded) else decoded).ifBlank { heard })
                                 }
                             }
@@ -786,6 +789,7 @@ class JarvisCoreService : LifecycleService() {
             command?.close()
             stt?.close()
             secondPass.close()
+            bangla.close()
             rec.close()
             tone.close()
             detector.close()

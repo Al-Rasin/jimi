@@ -20,3 +20,15 @@ internal fun SecondPassSetting() {
         "Experimental. Keeps your words if it is slow.",
     ) { scope.launch { settings.setSttSecondPass(it) } }
 }
+
+@Composable
+internal fun BanglaModeSetting() {
+    val context = LocalContext.current.applicationContext
+    val settings = remember(context) { Settings(context) }
+    val enabled by settings.sttBangla.collectAsStateWithLifecycle(initialValue = false)
+    val scope = rememberCoroutineScope()
+    ToggleRow(
+        "Bangla mode", enabled,
+        "Speak Bangla or mixed. Needs the Bangla speech model. Slower.",
+    ) { scope.launch { settings.setSttBangla(it) } }
+}
