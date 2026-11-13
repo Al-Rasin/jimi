@@ -158,7 +158,7 @@ class VoiceBox(
         return audio
     }
 
-    /** Warm only feedback on a disposable, single-thread engine; replies never share its lock. */
+    /** Pre-makes common replies on a disposable, single-thread engine while idle; replies never share its lock. */
     private fun warmPhrases(v: TextToSpeech) {
         phraseWarm?.cancel()
         val speed = v.speed
@@ -175,7 +175,9 @@ class VoiceBox(
                     ttsLock.withLock { if (current()) cachedAudio = cachedAudio + (key to audio) }
                 }
             }
-            val missing = FEEDBACK_PHRASES.filter { cache.get(SpeechText.normalize(it)) == null }
+            // Feedback first (needed on every command), then the other common replies, so they never wait for synth (§K 15.2).
+            val missing = (FEEDBACK_PHRASES + PhraseCache.COMMON).distinct()
+                .filter { cache.get(SpeechText.normalize(it)) == null }
             if (missing.isEmpty()) return@launch
             while (isActive && !quiet()) delay(200)
             ensureActive()

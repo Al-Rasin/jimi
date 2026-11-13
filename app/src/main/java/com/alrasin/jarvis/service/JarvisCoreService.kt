@@ -44,6 +44,7 @@ import com.alrasin.jarvis.voice.WakePhrase
 import com.alrasin.jarvis.data.SpeechEngineSettings
 import com.alrasin.jarvis.voice.Chimes
 import com.alrasin.jarvis.voice.PhraseCache
+import com.alrasin.jarvis.knowledge.SharedEmbedder
 import com.alrasin.jarvis.voice.SpeechText
 import com.alrasin.jarvis.voice.TextToSpeech
 import com.alrasin.jarvis.voice.WakeFeedback as WakeFeedbackSignal
@@ -272,6 +273,8 @@ class JarvisCoreService : LifecycleService() {
     private fun acknowledgeWake(tone: Chimes) {
         // While the user talks: open the cloud connection, or load the local tool model when the cloud is not usable.
         lifecycleScope.launch(Dispatchers.IO) { if (cloud.enabled()) cloud.warm() else models.preloadTools() }
+        // Memory/wiki ranking model (small, on-device); loads once, no-op when missing.
+        lifecycleScope.launch(Dispatchers.IO) { SharedEmbedder.get(this@JarvisCoreService) }
         val audio = voice.wakeAudio()
         if (!spokenWake || audio == null) { tone.wake(); return }
         val epoch = speechEpoch
