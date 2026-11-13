@@ -325,6 +325,7 @@ object Keyguard {
 }
 
 fun unlockTool(context: Context, pin: suspend () -> String?) = SimpleTool("unlock_phone", "Unlock the phone", risk = Risk.VOICE_ID) { _, _ ->
+    if (!RootShell.available) return@SimpleTool Reply.failed("unlocking by voice needs root. Please unlock the phone yourself.")
     val p = pin()
     if (!Keyguard.unlock(context, p)) return@SimpleTool Reply.failed("I couldn't request an unlock. Please unlock the phone yourself.")
     pollUntil(20, 100) { !context.isLocked() }   // PIN check can take a moment on MIUI

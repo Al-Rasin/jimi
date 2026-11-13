@@ -10,7 +10,9 @@ import com.alrasin.jarvis.core.isLocked
 import com.alrasin.jarvis.core.launch
 import com.alrasin.jarvis.core.pollUntil
 import com.alrasin.jarvis.core.resolves
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.withContext
 
 // Regexes built once, not on every call (ROADMAP §L.4).
 private val DARK_WANTED_RE = Regex("\\blight (?:mode|theme)\\b")
@@ -112,6 +114,7 @@ class SettingsPages(private val context: Context) {
     /** Settings Android can set straight away (root), the same on every phone; null = not one of them. */
     private suspend fun direct(name: String, state: String?): ToolResult? {
         if (state != "on" && state != "off" || !DARK.containsMatchIn(name)) return null
+        if (!RootShell.available) return null   // no root: the Settings app flips it
         val on = darkWanted(name, state == "on")
         RootShell.run("cmd uimode night ${if (on) "yes" else "no"}")
         // MIUI sometimes ignores the uimode command; the secure key (2 = dark, 1 = light) is the same switch.
@@ -125,12 +128,18 @@ class SettingsPages(private val context: Context) {
         }
     }
 
+    /** Without root: what the phone shows now (works for the "auto" schedule too). */
+    private fun systemDark(): Boolean? = runCatching {
+        (context.resources.configuration.uiMode and android.content.res.Configuration.UI_MODE_NIGHT_MASK) ==
+            android.content.res.Configuration.UI_MODE_NIGHT_YES
+    }.getOrNull()
+
     private suspend fun darkOn(): Boolean? {
-        val out = RootShell.run("cmd uimode night", log = false).out.lowercase()
+        val out = RootShell.run("cmd uimode night", log = false).let { if (it.ok) it.out.lowercase() else "" }
         return when {
             "yes" in out -> true
             "no" in out -> false
-            else -> when (RootSettings.get("secure", "ui_night_mode")) { "2" -> true; "1" -> false; else -> null }
+            else -> when (RootSettings.get("secure", "ui_night_mode")) { "2" -> true; "1" -> false; else -> systemDark() }
         }
     }
 
@@ -186,7 +195,9 @@ class SettingsPages(private val context: Context) {
     private suspend fun type(service: JarvisAccessibilityService, old: String, query: String): Boolean {
         val clear = if (old.isEmpty()) "" else "input keyevent 123 ${"67 ".repeat(old.length)}; "
         val safe = query.filter { it.isLetterOrDigit() || it == ' ' || it == '-' }.replace(" ", "%s")
-        return RootShell.run("${clear}input text $safe").ok || service.replaceText(settingsPkg, query)
+        val root = withContext(Dispatchers.IO) { RootShell.available }
+        return (root && RootShell.run("${clear}input text $safe").ok) ||
+            service.replaceText(settingsPkg, query)
     }
 
     companion object {

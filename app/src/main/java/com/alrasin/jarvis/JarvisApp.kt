@@ -4,6 +4,7 @@ import android.app.Application
 import android.content.pm.ApplicationInfo
 import android.content.ComponentCallbacks2
 import com.alrasin.jarvis.actions.PlaceReminders
+import com.alrasin.jarvis.actions.RootSettings
 import com.alrasin.jarvis.core.JarvisLog
 import android.os.StrictMode
 import com.alrasin.jarvis.agent.appmap.NightExploreWorker
@@ -24,6 +25,7 @@ class JarvisApp : Application() {
                 .detectDiskReads().detectDiskWrites().detectNetwork().detectCustomSlowCalls()
                 .penaltyLog().build())
         }
+        RootSettings.init(this)
         Notifications.createChannels(this)
         NightExploreWorker.schedule(this)
         Thread { runCatching { PlaceReminders(this).restoreAll() } }.start()   // proximity alerts die on app update
