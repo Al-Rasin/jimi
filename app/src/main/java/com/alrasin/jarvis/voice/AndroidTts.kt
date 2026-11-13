@@ -31,6 +31,8 @@ class AndroidTts(context: Context, private val voiceName: String?) : AutoCloseab
     @Volatile private var localVoice: SystemVoice? = null
     @Volatile private var netVoice: SystemVoice? = null
     @Volatile private var netBlockedUntil = 0L
+    /** Other-language voices by language code; null = none installed (looked up once). */
+    private val langVoices = HashMap<String, SystemVoice?>()
     /** Use the online version of the voice when the internet works (setting, off by default). */
     @Volatile var online = false
     @Volatile private var tts: SystemTts = connect()
@@ -70,6 +72,37 @@ class AndroidTts(context: Context, private val voiceName: String?) : AutoCloseab
         runCatching { tts.shutdown() }
         tts = connect()
         synth(text, speed)
+    }
+
+    /**
+     * [text] said by an offline voice of [language] ("bn" = Bangla), then the normal voice is set back.
+     * Null when the phone has no such voice installed (Google: Settings > Speech > install voice data).
+     */
+    @Synchronized
+    fun generateIn(language: String, text: String, speed: Float): GeneratedAudio? {
+        val voice = (if (language in langVoices) langVoices[language] else findVoice(language).also { langVoices[language] = it })
+            ?: return null
+        return try {
+            tts.voice = voice
+            synth(text, speed)
+        } catch (e: IllegalStateException) {
+            JarvisLog.e("phone $language speech failed, reconnecting", e)
+            runCatching { tts.shutdown() }
+            tts = connect()
+            null
+        } finally {
+            localVoice?.let { tts.voice = it } ?: run { tts.language = Locale.US }
+        }
+    }
+
+    /** Best installed offline voice for [language]; Bangladesh first. */
+    private fun findVoice(language: String): SystemVoice? {
+        val voice = tts.voices.orEmpty()
+            .filter { it.locale.language == language && !it.isNetworkConnectionRequired &&
+                SystemTts.Engine.KEY_FEATURE_NOT_INSTALLED !in it.features.orEmpty() }
+            .minByOrNull { if (it.locale.country == "BD") 0 else 1 }
+        JarvisLog.i("phone $language voice: ${voice?.name ?: "none installed"}")
+        return voice
     }
 
     /** Online voice when allowed and working, else null (caller makes it offline). */

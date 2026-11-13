@@ -12,6 +12,12 @@ private val NORMALIZE_RE_3 = Regex("(?i)\\b[A-Z0-9._%+-]+@[A-Z0-9.-]+\\.[A-Z]{2,
 private val NORMALIZE_RE_4 = Regex("(?i)\\b(?:[a-z0-9-]+\\.)+(?:com|org|net|edu|gov|io|dev|bd)(?:/[^\\s<>]*)?")
 private val NORMALIZE_RE_5 = Regex("(?m)^\\s*(?:#{1,6}\\s*|[-*+>]\\s+|[0-9]+[.)]\\s+)")
 private val NORMALIZE_RE_6 = Regex("[`*_~|]")
+// Bangla letters only: Bangla digits and the taka sign alone are read by the English voice (normalize turns them English).
+private const val BN = "\\u0980-\\u09E5\\u09F0\\u09F1\\u09F4-\\u09FF"
+private val BANGLA_LETTER = Regex("[$BN]")
+// A Bangla stretch: starts with a Bangla letter, runs on over Bangla digits, spaces, joiners and punctuation (। is
+// U+0964), ends on a Bangla char or sentence mark. A Latin word in between starts a new (English) part.
+private val BANGLA_RUN = Regex("[$BN](?:[\\u0980-\\u09FF\\u0964\\u0965\\u200C\\u200D\\s,.!?;:'\"()-]*[\\u0980-\\u09FF\\u0964.!?])?")
 private val NORMALIZE_RE_7 = Regex("[\\u0980-\\u09F1\\u09F4-\\u09FF]+")
 private val NORMALIZE_RE_8 = Regex("\\b([0-9]{4})-([0-9]{2})-([0-9]{2})\\b")
 private val NORMALIZE_RE_9 = Regex("\\b([0-9]{1,2})[/-]([0-9]{1,2})[/-]([0-9]{4})\\b")
@@ -35,6 +41,28 @@ private val NORMALIZE_RE_27 = Regex("[.!?]{2,}")
 private val NORMALIZE_RE_28 = Regex("([.,!?;:])(?:\\s*[,;:])+")
 
 object SpeechText {
+    /** One stretch of text and whether it is Bangla script (said by a Bangla voice, not the English one). */
+    data class Part(val text: String, val bangla: Boolean)
+
+    fun hasBangla(text: String): Boolean = BANGLA_LETTER.containsMatchIn(text)
+
+    /**
+     * "Boss, Rahim says: কেমন আছো?" -> English "Boss, Rahim says:" + Bangla "কেমন আছো?".
+     * [normalize] removes Bangla (English voices cannot say it), so Bangla stretches are cut out first.
+     * Bangla stretches keep their own words, digits and punctuation; empty English bits are dropped.
+     */
+    fun parts(text: String): List<Part> {
+        val out = mutableListOf<Part>()
+        var at = 0
+        for (m in BANGLA_RUN.findAll(text)) {
+            text.substring(at, m.range.first).takeIf { it.any(Char::isLetterOrDigit) }?.let { out += Part(it.trim(), false) }
+            out += Part(m.value.trim(), true)
+            at = m.range.last + 1
+        }
+        text.substring(at).takeIf { it.any(Char::isLetterOrDigit) }?.let { out += Part(it.trim(), false) }
+        return out
+    }
+
     private val small = listOf("zero", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine",
         "ten", "eleven", "twelve", "thirteen", "fourteen", "fifteen", "sixteen", "seventeen", "eighteen", "nineteen")
     private val tens = listOf("", "", "twenty", "thirty", "forty", "fifty", "sixty", "seventy", "eighty", "ninety")

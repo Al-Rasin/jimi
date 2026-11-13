@@ -58,7 +58,7 @@ class VoiceBox(
 
     /** Audio for [text], or null when [wanted] turned false (the user said "stop") or no voice is loaded. */
     suspend fun make(text: String, wanted: () -> Boolean): PhraseCache.Audio? =
-        cachedAudio[SpeechText.normalize(text)] ?: ttsLock.withLock {
+        (if (SpeechText.hasBangla(text)) null else cachedAudio[SpeechText.normalize(text)]) ?: ttsLock.withLock {
             if (wanted()) tts?.await()?.let { v -> audioFor(v, text) } else null
         }
 
@@ -139,6 +139,8 @@ class VoiceBox(
 
     /** Common short replies come from [PhraseCache] (made once per voice + speed), the rest is made now. */
     private fun audioFor(v: TextToSpeech, text: String): PhraseCache.Audio {
+        // Bangla is cut out by normalize; the voice splits it off itself. Chat lines, never cached.
+        if (SpeechText.hasBangla(text)) return SpeechGate.synth { v.generate(text) }.let { PhraseCache.Audio(it.samples, it.sampleRate) }
         val spoken = SpeechText.normalize(text)
         val common = spoken in COMMON_PHRASES
         var cache = if (common) phrases?.takeIf { it.voiceId == v.voice.id && it.speed == v.speed } else null

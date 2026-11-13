@@ -283,4 +283,21 @@ class SpeechTextTest {
     @Test fun parenthesizedPhoneIsOneDigitSequence() {
         assertEquals("two zero two five five five zero one zero zero", spoken("(202) 555-0100"))
     }
+
+    @Test fun banglaLettersAreFoundButDigitsAndTakaAreNot() {
+        assertTrue(SpeechText.hasBangla("কেমন আছো"))
+        assertFalse(SpeechText.hasBangla("৳500"))
+        assertFalse(SpeechText.hasBangla("১২৩"))
+        assertFalse(SpeechText.hasBangla("Hello there"))
+    }
+
+    @Test fun mixedTextSplitsIntoEnglishAndBanglaParts() {
+        assertEquals(
+            listOf(SpeechText.Part("Boss, Rahim says:", false), SpeechText.Part("কেমন আছো?", true)),
+            SpeechText.parts("Boss, Rahim says: কেমন আছো?"),
+        )
+        val mid = SpeechText.parts("আমি office যাচ্ছি।")
+        assertEquals(listOf(true, false, true), mid.map { it.bangla })
+        assertEquals("office", mid[1].text)
+    }
 }

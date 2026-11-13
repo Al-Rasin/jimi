@@ -301,7 +301,9 @@ class JarvisCoreService : LifecycleService() {
     }
 
     private fun say(text: String, epoch: Int = speechEpoch) {
-        val chunks = if (voice.isCached(text)) listOf(SpeechText.normalize(text))
+        // Bangla (a chat line): one piece, the voice splits Bangla from English itself; chunks() would cut the Bangla out.
+        val chunks = if (SpeechText.hasBangla(text)) listOf(text)
+            else if (voice.isCached(text)) listOf(SpeechText.normalize(text))
             else {
                 // Each piece gets its own tune, so short pieces sound broken. Only the reply's first piece is short (fast start).
                 val max = if (voice.phoneEngine) PHONE_VOICE_WORDS else VOICE_WORDS

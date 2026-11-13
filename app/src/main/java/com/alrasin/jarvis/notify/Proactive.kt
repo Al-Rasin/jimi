@@ -31,10 +31,10 @@ object Proactive {
         return "${Persona.ADDRESS}, it's ${if (h == 0) 12 else h}:${m.toString().padStart(2, '0')} at night. Time to sleep?"
     }
 
-    /** One line for an important alert, or null. Chat apps are skipped when car/headphones mode already reads them. */
-    fun importantLine(row: NotificationLog, quiet: Boolean, chatsRead: Boolean, nowMs: Long, lastReadMs: Long): String? {
+    /** One line for an important alert, or null. Chat apps are skipped when [skipChats]: car/headphones mode already reads them, or "Read messages aloud" is off. */
+    fun importantLine(row: NotificationLog, quiet: Boolean, skipChats: Boolean, nowMs: Long, lastReadMs: Long): String? {
         if (quiet || !row.important || Triage.isMoneyApp(row.pkg)) return null
-        if (chatsRead && Triage.isChatApp(row.pkg)) return null
+        if (skipChats && Triage.isChatApp(row.pkg)) return null
         if (nowMs - lastReadMs < READ_GAP_MS) return null
         if (Triage.isChatApp(row.pkg)) {
             return ContextModes.messageLine(row.appName, row.title, row.text)?.let { "${Persona.ADDRESS}, $it" }

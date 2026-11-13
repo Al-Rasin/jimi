@@ -31,6 +31,10 @@ class TextToSpeech(
 ) : AutoCloseable {
     private val tts: OfflineTts?
     private val phone: AndroidTts?
+    private val app = context.applicationContext
+    /** Sherpa voices cannot say Bangla: the phone engine is opened the first time Bangla comes (null = not there). */
+    private var banglaEngine: AndroidTts? = null
+    private var banglaTried = false
     @Volatile private var stopped = false
     /** 1.0 = normal; can change between sentences without reloading. */
     @Volatile var speed = speed
@@ -77,6 +81,7 @@ class TextToSpeech(
         private set
 
     fun generate(text: String): GeneratedAudio {
+        if (SpeechText.hasBangla(text)) return mixed(text)
         val spoken = SpeechText.normalize(text)
         if (spoken.isBlank()) return GeneratedAudio(FloatArray(0), 24_000)
         val start = System.currentTimeMillis()
@@ -92,6 +97,28 @@ class TextToSpeech(
         return audio
     }
 
+    /** English parts in this voice, Bangla parts in the phone's Bangla voice; no Bangla voice = say so once. */
+    private fun mixed(text: String): GeneratedAudio {
+        val engine = phone ?: bangla()
+        var told = false
+        val pieces = SpeechText.parts(text).mapNotNull { part ->
+            val audio = if (!part.bangla) generate(part.text)
+                else engine?.generateIn("bn", part.text, speed)
+                    ?: if (told) null else generate(NO_BANGLA).also { told = true }
+            audio?.takeIf { it.samples.isNotEmpty() }
+        }
+        return join(pieces)
+    }
+
+    @Synchronized
+    private fun bangla(): AndroidTts? {
+        if (!banglaTried) {
+            banglaTried = true
+            banglaEngine = runCatching { AndroidTts(app, null) }.onFailure { JarvisLog.e("no phone engine for Bangla", it) }.getOrNull()
+        }
+        return banglaEngine
+    }
+
     /** Stops the sentence being played now (user tapped stop / said "stop"). */
     fun stop() {
         stopped = true
@@ -101,7 +128,8 @@ class TextToSpeech(
     /** Blocks until the sentence has been played or [stop] is called. Returns false if stopped. */
     fun speak(text: String): Boolean {
         stopped = false
-        val chunks = if (voice.pack.engine == Engine.SUPERTONIC) SpeechText.chunks(text)
+        val chunks = if (SpeechText.hasBangla(text)) listOf(text)
+            else if (voice.pack.engine == Engine.SUPERTONIC) SpeechText.chunks(text)
             else listOf(SpeechText.normalize(text)).filter { it.isNotBlank() }
         for (chunk in chunks) {
             if (stopped) return false
@@ -120,10 +148,41 @@ class TextToSpeech(
     override fun close() {
         tts?.release()
         phone?.close()
+        banglaEngine?.close()
     }
 
     companion object {
         private const val DIR = "tts"
+        private const val NO_BANGLA = "a message in Bangla"
+        private const val PART_GAP_MS = 120
+
+        /** Pieces back to back at the first piece's rate, a short gap between (voices may differ: 22 vs 24 kHz). */
+        internal fun join(pieces: List<GeneratedAudio>): GeneratedAudio {
+            if (pieces.isEmpty()) return GeneratedAudio(FloatArray(0), 24_000)
+            val rate = pieces.first().sampleRate
+            val gap = FloatArray(rate * PART_GAP_MS / 1000)
+            val parts = pieces.flatMapIndexed { i, p ->
+                val pcm = resample(p.samples, p.sampleRate, rate)
+                if (i == 0) listOf(pcm) else listOf(gap, pcm)
+            }
+            val out = FloatArray(parts.sumOf { it.size })
+            var at = 0
+            for (p in parts) { p.copyInto(out, at); at += p.size }
+            return GeneratedAudio(out, rate)
+        }
+
+        /** Straight-line resample; good enough for speech between two close rates. */
+        internal fun resample(pcm: FloatArray, from: Int, to: Int): FloatArray {
+            if (from == to || pcm.isEmpty()) return pcm
+            val n = (pcm.size.toLong() * to / from).toInt().coerceAtLeast(1)
+            return FloatArray(n) { i ->
+                val x = i.toDouble() * from / to
+                val a = x.toInt().coerceAtMost(pcm.size - 1)
+                val b = (a + 1).coerceAtMost(pcm.size - 1)
+                val f = (x - a).toFloat()
+                pcm[a] * (1 - f) + pcm[b] * f
+            }
+        }
         /** Supertonic quality/speed: more denoising steps = cleaner voice, slower. */
         private const val SUPERTONIC_STEPS = 3
         private const val ESPEAK = "espeak-ng-data"
