@@ -1,5 +1,7 @@
 package com.alrasin.jarvis.ui
 
+import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.foundation.text.KeyboardOptions
 import com.alrasin.jarvis.brain.Routines
 import com.alrasin.jarvis.brain.ContextModes
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -139,7 +141,8 @@ internal fun SettingsTab(vm: AppViewModel, onSetup: () -> Unit, onDeviceCheck: (
             RowsCard {
                 Hint(if (pinSet) "Saved, encrypted." else "Not set. Needed for \"unlock my phone\".")
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    OutlinedTextField(pin, { pin = it.filter(Char::isDigit) }, Modifier.weight(1f), label = { Text("PIN (empty = remove)") }, singleLine = true)
+                    OutlinedTextField(pin, { pin = it.filter(Char::isDigit) }, Modifier.weight(1f), label = { Text("PIN (empty = remove)") }, singleLine = true,
+                        visualTransformation = PasswordVisualTransformation(), keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.NumberPassword))
                     FilledTonalButton(onClick = { vm.setPin(pin); pin = "" }) { Text("Save") }
                 }
             }

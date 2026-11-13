@@ -171,7 +171,9 @@ class PhoneCalendar(private val context: Context) {
         val ms = start.atZone(ZoneId.systemDefault()).toInstant().toEpochMilli()
         val values = ContentValues().apply {
             put(Events.DTSTART, ms)
-            put(Events.DTEND, ms + (e.end - e.start).coerceAtLeast(15 * 60_000L))
+            // An all-day event becomes a timed one: give it one hour, not its old 24 h span.
+            val span = if (e.allDay) 60 * 60_000L else (e.end - e.start).coerceAtLeast(15 * 60_000L)
+            put(Events.DTEND, ms + span)
             if (e.allDay) {
                 put(Events.ALL_DAY, 0)
                 put(Events.EVENT_TIMEZONE, TimeZone.getDefault().id)

@@ -1,5 +1,6 @@
 package com.alrasin.jarvis.agent
 
+import com.alrasin.jarvis.actions.PhoneProfile
 import com.alrasin.jarvis.core.JarvisLog
 import com.alrasin.jarvis.core.pollUntil
 import kotlinx.coroutines.CancellationException
@@ -7,6 +8,8 @@ import kotlinx.coroutines.Job
 import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.withTimeoutOrNull
+
+private const val PAYMENT_STOP = "I don't work inside payment or bank apps."
 
 // Regexes built once, not on every call (ROADMAP §L.4).
 private val START_RE = Regex("^(?:please )?(?:open|launch|start|go to) (?:the |my )?(.+?)(?: app)?(?:,)? (?:and(?: then)?|then) .+$", RegexOption.IGNORE_CASE)
@@ -155,6 +158,8 @@ class ScreenAgent(
             if (!allowed()) return limitResult()
             val snapshot = screen.snapshot()
             if (!allowed()) return limitResult()
+            // Never act inside a money app (D-072): stop before the model picks a tap there.
+            if (PhoneProfile.isPaymentPackage(snapshot.packageName)) { stuck = true; return AgentResult(PAYMENT_STOP) }
             val action = model.next(task, snapshot, history.toList())
             if (!allowed()) return limitResult()
             steps++

@@ -33,6 +33,8 @@ class PhoneProfileTest {
         assertTrue(PhoneProfile.isPaymentPackage("com.bKash.customer"))
         assertTrue(PhoneProfile.isPaymentPackage("com.konasl.nagad"))
         assertTrue(PhoneProfile.isPaymentPackage("com.google.android.apps.nbu.paisa.user"))
+        assertTrue(PhoneProfile.isPaymentPackage("com.dbbl.mbs.apps.main"))
+        assertTrue(PhoneProfile.isPaymentPackage("com.ebl.skybanking"))
         assertFalse(PhoneProfile.isPaymentPackage("com.whatsapp"))
     }
 

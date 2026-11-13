@@ -135,7 +135,11 @@ private class LiveRecipeScreen(
     }
 
     private suspend fun tap(step: RecipeStep): Boolean {
-        val node = bySelectors(step.selectors) ?: run {
+        val node = bySelectors(step.selectors)?.also { n ->
+            // A saved selector can point at a Send/Pay button after an app update: same risk check as a named tap.
+            val label = "${n.text ?: ""} ${n.contentDescription ?: ""} ${n.viewIdResourceName ?: ""}"
+            if (!risky && Skills.isRisky(label)) return false
+        } ?: run {
             val s = Skills.read(service) ?: return false
             val pick = if (RecipeBook.isFirstResult(step.target)) {
                 val below = s.items.filter { it.editable }.minByOrNull { it.top }?.bottom ?: 0

@@ -79,7 +79,7 @@ class ToolExecutor @Inject constructor(private val registry: ToolRegistry) {
 
     private suspend fun run(tool: Tool, call: ToolCall, ctx: ToolContext): ToolResult =
         runCatching { tool.run(call, ctx) }
-            .onFailure { JarvisLog.e("tool ${call.tool} failed", it) }
+            .onFailure { if (it is kotlinx.coroutines.CancellationException) throw it; JarvisLog.e("tool ${call.tool} failed", it) }
             .getOrElse { ToolResult.fail("Sorry, ${call.tool.replace('_', ' ')} didn't work this time.") }   // cause is in the log
 }
 
@@ -91,13 +91,14 @@ internal fun needsScreen(call: ToolCall): Boolean = when (call.tool) {
     "search_in_app", "find_in_app", "open_result", "tap_named", "go_tab", "read_list", "toggle_named", "run_recipe" -> true
     "send_sms" -> call.arg("app").equals("messenger", ignoreCase = true)
     "ir_remote" -> call.arg("device") == "ac"
+    "share_contact" -> !call.arg("to").isNullOrBlank()
     "call" -> call.arg("app")?.lowercase() in setOf("whatsapp", "messenger")
     else -> false
 }
 
 /** Car mode: no tasks that make the driver look at the screen. Messages and calls stay allowed (they are voice-only). */
 internal fun drivingBlock(call: ToolCall, mode: ContextMode): Boolean =
-    mode.noScreen && needsScreen(call) && call.tool !in setOf("send_whatsapp", "send_sms", "call", "read_screen", "ask_screen")
+    mode.noScreen && needsScreen(call) && call.tool !in setOf("send_whatsapp", "send_sms", "call", "read_screen", "ask_screen", "share_contact")
 
 internal fun unlockNeed(call: ToolCall, locked: Boolean, voiceOk: Boolean?, isPaymentApp: Boolean = false): Unlock = when {
     !locked || !needsScreen(call) -> Unlock.NONE
@@ -137,6 +138,7 @@ internal class ToolSafetyGate {
             call.tool == "run_recipe" && call.arg("risky") == "true" -> Risk.CONFIRM
             call.tool == "share_contact" && call.arg("to") != null -> Risk.CONFIRM
             (locked || lockdown) && call.tool == "scan_qr" && call.arg("source") == "screen" -> Risk.VOICE_ID
+            call.tool == "tap" && Skills.isRisky(call.arg("text").orEmpty()) -> Risk.CONFIRM
             call.tool in setOf("tap_named", "toggle_named", "open_result", "find_in_app") &&
                 Skills.isRisky(call.arg("name") ?: call.arg("query").orEmpty()) -> Risk.CONFIRM
             (locked || lockdown) && call.tool in setOf(
@@ -181,7 +183,9 @@ internal class ToolSafetyGate {
             "clear_notifications" -> "Clear all your notifications"
             "calendar_move" -> "Move ${arg("query")?.let { "\"$it\"" } ?: "your next event"} to ${CalendarSpeech.moveSay(arg("date"), arg("time"), java.time.LocalDate.now())}"
             "calendar_delete" -> "Delete ${arg("query")?.let { "\"$it\"" } ?: "your next event"} from your calendar"
-            "cancel_alarm" -> arg("time")?.let(::spokenClock)?.let { "Turn off your $it alarm" } ?: "Cancel all your alarms and timers"
+            "cancel_alarm" -> arg("time")?.takeIf { it.isNotBlank() }
+                ?.let { alarmTime(it)?.format(java.time.format.DateTimeFormatter.ofPattern("h:mm a", java.util.Locale.US)) ?: it }
+                ?.let { "Turn off your $it alarm" } ?: "Cancel all your alarms and timers"
             "delete_reminder" -> when (val text = arg("text")) {
                 "all" -> "Delete all your reminders"
                 null -> "Delete that reminder"
@@ -222,6 +226,3 @@ internal class ToolSafetyGate {
     private fun spoken(text: String): String = text.replace('_', ' ').replace(TextNorm.SPACES, " ").trim()
 }
 
-/** "07:00" → "7:00 AM"; null when not HH:mm. */
-private fun spokenClock(hhmm: String): String? =
-    runCatching { java.time.LocalTime.parse(hhmm.padStart(5, '0')).format(java.time.format.DateTimeFormatter.ofPattern("h:mm a", java.util.Locale.US)) }.getOrNull()

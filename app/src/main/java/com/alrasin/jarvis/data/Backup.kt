@@ -32,7 +32,7 @@ class Backup @Inject constructor(
             },
             "tool_call_log" to db.toolLogDao().all().map {
                 mapOf(
-                    "time" to it.timeMs, "heard" to it.heard, "tool" to it.tool, "args" to Json.parse(it.argsJson),
+                    "time" to it.timeMs, "heard" to it.heard, "tool" to it.tool, "args" to (runCatching { Json.parse(it.argsJson) }.getOrNull() ?: it.argsJson),
                     "source" to it.source, "ok" to it.ok, "result" to it.result, "corrected" to it.corrected,
                 )
             },
@@ -41,7 +41,7 @@ class Backup @Inject constructor(
             "memory_fact" to db.memoryDao().all().map { mapOf("time" to it.timeMs, "text" to it.text) },
             "app_rule" to db.notificationDao().rules().map { mapOf("pkg" to it.pkg, "mode" to it.mode) },
             "routine" to db.routineDao().snapshot().map {
-                mapOf("name" to it.name, "steps" to Json.parse(it.stepsJson), "enabled" to it.enabled)
+                mapOf("name" to it.name, "steps" to (runCatching { Json.parse(it.stepsJson) }.getOrNull() ?: it.stepsJson), "enabled" to it.enabled)
             },
             "notification_log" to db.notificationDao().all().map {
                 mapOf(

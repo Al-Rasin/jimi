@@ -26,6 +26,16 @@ class TimeParserTest {
         assertEquals(LocalDateTime.of(2026, 10, 22, 20, 0), at("tonight at 8"))
     }
 
+    @Test fun nightAndCounts() {
+        assertEquals(LocalDateTime.of(2026, 10, 23, 0, 0), at("tonight at 12"))
+        assertEquals(LocalDateTime.of(2026, 10, 23, 1, 0), at("at 1 at night"))
+        assertEquals(LocalDateTime.of(2026, 10, 23, 9, 0), at("tomorrow buy 3 apples"))
+        assertEquals(LocalDateTime.of(2026, 10, 23, 6, 0), at("tomorrow 6 meeting"))
+        val early = LocalDateTime.of(2026, 10, 22, 3, 0)
+        assertEquals(LocalDateTime.of(2026, 10, 23, 1, 0), TimeParser.parse("tomorrow at 1 am", early)?.at)
+        assertEquals(LocalDateTime.of(2026, 10, 22, 7, 0), TimeParser.parse("tomorrow at 7 am", early)?.at)
+    }
+
     @Test fun relative() {
         assertEquals(LocalDateTime.of(2026, 10, 22, 12, 0), at("in two hours"))
         assertEquals(LocalDateTime.of(2026, 10, 22, 10, 30), at("in half an hour"))

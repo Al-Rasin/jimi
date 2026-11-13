@@ -24,6 +24,7 @@ fun screenTools(context: Context): List<Tool> {
         SimpleTool("tap", "Tap a button or text on the screen", listOf(arg("text", "visible text of the button"))) { c, _ ->
             val t = c.require("text", "Tap what?")
             val acc = a() ?: return@SimpleTool noA
+            if (inPaymentApp(acc)) return@SimpleTool ToolResult.fail(PAYMENT_NO)
             if (acc.clickText(t)) return@SimpleTool ToolResult.ok("Tapped $t.")
             val item = (ScreenOcr.find(acc, t) as? Skills.Pick.Found)?.item
                 ?: return@SimpleTool ToolResult.fail("I can't find $t on the screen.")
@@ -34,6 +35,7 @@ fun screenTools(context: Context): List<Tool> {
         SimpleTool("type_text", "Type text into the focused box", listOf(arg("text", "text to type"))) { c, _ ->
             val t = c.require("text", "Type what?")
             val acc = a() ?: return@SimpleTool noA
+            if (inPaymentApp(acc)) return@SimpleTool ToolResult.fail(PAYMENT_NO)
             if (acc.typeText(t)) ToolResult.ok("Typed.") else ToolResult.fail("I can't find a text box.")
         },
         SimpleTool("scroll", "Scroll the screen", listOf(arg("direction", "up or down", choices = listOf("up", "down")))) { c, _ ->
@@ -49,3 +51,8 @@ fun screenTools(context: Context): List<Tool> {
         SimpleTool("open_recents", "Show recent apps") { _, _ -> keyOr(AccessibilityService.GLOBAL_ACTION_RECENTS, 187, "Recent apps.") },
     )
 }
+
+private const val PAYMENT_NO = "This is a payment app. I only read it, I don't tap or type in it."
+
+private fun inPaymentApp(acc: JarvisAccessibilityService): Boolean =
+    acc.appPackage()?.let { PhoneProfile.isPaymentPackage(it) } == true

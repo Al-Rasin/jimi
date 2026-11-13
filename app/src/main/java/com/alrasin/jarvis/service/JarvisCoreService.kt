@@ -68,6 +68,9 @@ import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.NonCancellable
+import kotlinx.coroutines.cancelAndJoin
+import kotlinx.coroutines.withTimeoutOrNull
 import javax.inject.Inject
 import com.alrasin.jarvis.service.CoreState._running
 import com.alrasin.jarvis.service.CoreState._microphoneAvailable
@@ -360,7 +363,8 @@ class JarvisCoreService : LifecycleService() {
             awaitSpeech()
             delay(TAIL_MS)
             synchronized(speechState) {
-                if (epoch == speechEpoch) speaking = false
+                // A reply on the same epoch may still be talking: leave barge-in/echo guard on for it.
+                if (epoch == speechEpoch && replyJob?.isActive != true && speechLeft.get() == 0) speaking = false
             }
         }
     }
@@ -499,10 +503,16 @@ class JarvisCoreService : LifecycleService() {
         }
     }
 
+    /** Setting watchers for the listen loop; cancelled on restart so they don't pile up. */
+    private var listenWatchers: List<Job> = emptyList()
+
     private fun startListening() {
-        lifecycleScope.launch { settings.wakeThreshold.collect { threshold = it } }
-        lifecycleScope.launch { settings.sttBangla.collect { banglaOn = it } }
-        lifecycleScope.launch { settings.sttDenoise.collect { denoiseOn = it } }
+        listenWatchers.forEach { it.cancel() }
+        listenWatchers = listOf(
+            lifecycleScope.launch { settings.wakeThreshold.collect { threshold = it } },
+            lifecycleScope.launch { settings.sttBangla.collect { banglaOn = it } },
+            lifecycleScope.launch { settings.sttDenoise.collect { denoiseOn = it } },
+        )
         wakeLock = getSystemService(PowerManager::class.java)
             .newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "jarvis:listen")
             .apply { acquire() }
@@ -850,8 +860,14 @@ class JarvisCoreService : LifecycleService() {
             stopListener.close()
             command?.close()
             stt?.close()
-            secondPass.close()
-            bangla.close()
+            // A reply may still be decoding with these native models; wait for it so they aren't freed under it.
+            val replyDone = withContext(NonCancellable) {
+                withTimeoutOrNull(REFINE_WAIT_MS) { replyJob?.cancelAndJoin(); true } == true
+            }
+            if (replyDone) {
+                secondPass.close()
+                bangla.close()
+            } else JarvisLog.i("reply still busy; second-pass models left open")
             cleaner.close()
             rec.close()
             tone.close()
@@ -910,6 +926,7 @@ class JarvisCoreService : LifecycleService() {
 
     companion object {
         private val FILLERS = VoiceBox.FILLERS
+        private const val REFINE_WAIT_MS = 5_000L
         const val ACTION_STOP = "com.alrasin.jarvis.STOP"
         const val ACTION_MISSED = "com.alrasin.jarvis.MISSED"
         const val ACTION_SAY = "com.alrasin.jarvis.SAY"

@@ -107,6 +107,11 @@ class OpenAiCloudTest {
         assertEquals("from C", p.quick("s", emptyList(), "t", 10))
     }
 
+    @Test fun emptyAnswerTriesNext() = runBlocking {
+        val p = ProviderChain(listOf(Fake("A", false, listOf("  ")), Fake("B", false, listOf("from B"))))
+        assertEquals("from B", p.quick("s", emptyList(), "t", 10))
+    }
+
     @Test fun limitReachedModelRestsThenComesBack() = runBlocking {
         var clock = 0L
         val a = Fake("A", fail = true, code = 429)

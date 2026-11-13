@@ -96,6 +96,9 @@ object TimeParser {
         var part: String? = null
         var todayExplicit = false
         var hint: String? = null   // am | pm
+        var saidAmPm = false
+        var night = false          // "tonight", "at night": 12 or 1-4 o'clock means after midnight
+        var earlyTomorrow = false  // "tomorrow" said before 4 am = the coming morning
         fun cut(re: Regex): MatchResult? = re.find(rest)?.also { rest = " " + rest.replaceRange(it.range, " ").trim() + " " }
 
         cut(PARSE_RE)?.let { repeat = "daily" }
@@ -110,7 +113,8 @@ object TimeParser {
         }
         cut(PARSE_RE_3)?.let {
             // Still awake after midnight: "tomorrow 7 am" means the coming morning.
-            date = now.toLocalDate().plusDays(if (now.hour < 4) 0 else 1)
+            earlyTomorrow = now.hour < 4
+            date = now.toLocalDate().plusDays(if (earlyTomorrow) 0 else 1)
             part = it.groupValues[1].takeIf { value -> value.isNotEmpty() }
             hint = partHint(part)
         }
@@ -120,7 +124,7 @@ object TimeParser {
             if (it.value.contains("tonight")) { hint = "pm"; part = "night" }
         }
         cut(PARSE_RE_5)?.let { part = it.groupValues[1]; hint = partHint(part) }
-        cut(PARSE_RE_6)?.let { hint = "pm" }
+        cut(PARSE_RE_6)?.let { hint = "pm"; night = true }
 
         // 3. time of day
         var time: LocalTime? = null
@@ -152,12 +156,15 @@ object TimeParser {
                     // a bare number is only a time with "at"/am/pm/o'clock/minutes, or when a day word was given
                     val v = m.value
                     v.startsWith(" at ") || v.startsWith(" by ") || m.groupValues[2].isNotEmpty() || m.groupValues[3].isNotEmpty() ||
-                        v.contains("o clock") || m.groupValues[4].isNotEmpty() || date != null || weekday != null || monthDay != null || hint != null || repeat != "none"
+                        v.contains("o clock") || m.groupValues[4].isNotEmpty() ||
+                        ((date != null || weekday != null || monthDay != null || hint != null || repeat != "none") && !countsThings(rest, m))
                 }
             if (m != null) {
                 val h = m.groupValues[1].toInt()
                 val mi = m.groupValues[2].ifEmpty { "0" }.toInt()
                 if (h > 23 || mi > 59 || (ampm(m.groupValues[3]) != null && h !in 1..12)) return null
+                if (m.groupValues[4] == "at night") night = true
+                saidAmPm = m.groupValues[3].isNotEmpty()
                 hint = ampm(m.groupValues[3]) ?: partHint(m.groupValues[4].substringAfterLast(' ')) ?: hint
                 if (hint == null && (m.groupValues[1].startsWith("0") || m.value.contains(':') || h > 12)) hint = "fixed"
                 time = LocalTime.of(h, mi)
@@ -174,9 +181,13 @@ object TimeParser {
                 else -> tod
             }
         }
+        // "tonight at 12", "1 at night": past midnight, so the next calendar day.
+        val smallHours = (night || part == "night") && hint == "pm" && !saidAmPm && time != null &&
+            time!!.hour in setOf(12, 1, 2, 3, 4) && !text.contains(':')
+        if (smallHours) tod = LocalTime.of(time!!.hour % 12, time!!.minute)
         val today = now.toLocalDate()
         var at: LocalDateTime = when {
-            date != null -> LocalDateTime.of(date, tod)
+            date != null -> LocalDateTime.of(date, tod).let { if (smallHours && !todayExplicit) it.plusDays(1) else it }
             weekday != null -> {
                 val d = when (weekQualifier) {
                     "this", "next" -> today.minusDays((today.dayOfWeek.value - 1).toLong())
@@ -204,8 +215,18 @@ object TimeParser {
             at = if (!todayExplicit && hint == null && !text.contains(':') && time != null && time!!.hour in 1..11 && at.plusHours(12).isAfter(now)) at.plusHours(12)
             else at.plusDays(1)
         }
+        if (earlyTomorrow && !at.isAfter(now)) at = at.plusDays(1)
         return Match(at, repeat, clean(rest), time != null || part != null)
     }
+
+    /** "tomorrow buy 3 apples": a bare number followed by a thing word is a count, not a time. */
+    private fun countsThings(rest: String, m: MatchResult): Boolean {
+        val next = rest.substring(m.range.last + 1).trim().substringBefore(' ')
+        return next.length > 2 && next.all { it.isLetter() } && (next.endsWith("s") || next in UNITS) && next !in NOT_THINGS
+    }
+
+    private val UNITS = setOf("kg", "kilo", "litre", "liter", "taka", "tk", "dozen", "packet", "piece", "bottle", "box")
+    private val NOT_THINGS = setOf("is", "has", "was", "pls", "thanks", "always", "plus", "minus")
 
     private fun normalize(text: String): String = NumberWords.normalize(
         text.lowercase(Locale.ENGLISH).replace("o'clock", "o clock")

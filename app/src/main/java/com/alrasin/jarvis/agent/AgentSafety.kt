@@ -1,7 +1,7 @@
 package com.alrasin.jarvis.agent
 
 object AgentSafety {
-    private val risky = Regex("(?i)pay|buy|send|delete|purchase|checkout|place.?order|confirm|book.?ride|request.?ride|remove|transfer|submit")
+    private val risky = Regex("(?i)pay|buy|send|delete|purchase|checkout|place.?order|confirm|book.?ride|request.?ride|remove|transfer|submit|পাঠান|মুছুন|পেমেন্ট|কিনুন|নিশ্চিত|ট্রান্সফার")
     private val harmless = Regex("(?i)search|\\btabs?\\b|tab_|_tab")
     private val secret =Regex("(?i)password|passcode|\\bpin\\b|\\botp\\b|one.?time|verification.?code|security.?code")
 

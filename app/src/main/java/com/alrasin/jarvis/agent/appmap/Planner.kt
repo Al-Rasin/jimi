@@ -309,7 +309,8 @@ class Planner @Inject constructor(
         }
         val healed = SelfHeal.healedSelectors(winner)
         if (healed.isNotEmpty()) dao.updateElement(e.copy(selectorsJson = Json.write(healed)))
-        JarvisLog.i("self-heal: \"${e.label}\" → \"${winner.text.ifBlank { winner.desc }}\" ${winner.resourceId} in $pkg")
+        // No screen text in the log (it can be a chat name or message).
+        JarvisLog.i("self-heal: \"${e.label}\" → ${winner.resourceId.ifBlank { "(no id)" }} in $pkg")
         return winner.node
     }
 

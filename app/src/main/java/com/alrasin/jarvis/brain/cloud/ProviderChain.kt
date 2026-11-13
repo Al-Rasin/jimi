@@ -4,6 +4,8 @@ import com.alrasin.jarvis.brain.CloudProvider
 import com.alrasin.jarvis.brain.Exchange
 import com.alrasin.jarvis.core.JarvisLog
 import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.currentCoroutineContext
+import kotlinx.coroutines.ensureActive
 
 /**
  * Cloud models tried in order (D-063, replaces the 2-step fallback of D-055). On an error the next one answers.
@@ -38,8 +40,12 @@ class ProviderChain(
         for (i in order()) {
             var gave = false
             try {
-                return call(providers[i]) { gave = true }
+                val out = call(providers[i]) { gave = true }
+                if (out.isNotBlank() || gave) return out
+                last = IllegalStateException("${providers[i].name}: empty answer")
+                JarvisLog.i("cloud ${providers[i].name} gave an empty answer, trying next")
             } catch (e: Exception) {
+                currentCoroutineContext().ensureActive()
                 if (e is CancellationException || gave) throw e
                 last = e
                 if (e is CloudHttpException && e.code == 429) restUntil[i] = now() + restMs

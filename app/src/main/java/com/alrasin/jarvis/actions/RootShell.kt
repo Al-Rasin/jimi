@@ -25,7 +25,8 @@ object RootShell {
     suspend fun run(vararg cmds: String, timeoutMs: Long = 8_000, log: Boolean = true): Result = withContext(Dispatchers.IO) {
         val r = withTimeoutOrNull(timeoutMs) { Shell.cmd(*cmds).exec() }
         val res = if (r == null) Result(false, "timeout") else Result(r.isSuccess, (r.out + r.err).joinToString("\n"))
-        JarvisLog.i("root: ${cmds.joinToString("; ").take(120)} → ${if (res.ok) "ok" else if (log) "fail ${res.out.take(80)}" else "fail"}")
+        val shown = if (log) cmds.joinToString("; ").take(120) else cmds.joinToString("; ") { it.substringBefore(' ') + " <hidden>" }
+        JarvisLog.i("root: $shown → ${if (res.ok) "ok" else if (log) "fail ${res.out.take(80)}" else "fail"}")
         res
     }
 

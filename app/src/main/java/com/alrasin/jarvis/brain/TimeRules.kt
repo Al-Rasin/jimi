@@ -200,7 +200,8 @@ internal object TimeRules {
         val m = ONE_ALARM_RE.find(t) ?: return null
         val spec = m.groupValues[1].ifEmpty { m.groupValues[2] }
         if (!spec.any(Char::isDigit)) return call("cancel_alarm")
-        val at = TimeParser.parse("at $spec", now)?.takeIf { it.hasTime }?.at ?: return call("cancel_alarm")
+        // Unreadable time: pass it on so the tool asks "which alarm?" instead of cancelling all.
+        val at = TimeParser.parse("at $spec", now)?.takeIf { it.hasTime }?.at ?: return call("cancel_alarm", "time" to spec)
         return call("cancel_alarm", "time" to "%02d:%02d".format(at.hour, at.minute))
     }
 }

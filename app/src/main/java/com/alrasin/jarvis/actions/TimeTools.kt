@@ -26,7 +26,20 @@ import kotlinx.coroutines.delay
 private val CLOCK_HAS_ALARM_RE = Regex("enabled=1, alarmtime=(\\d+)")
 private val STOP_TIMER_IN_CLOCK_RE = Regex("(\\d+)x(\\d+)")
 private val READ_ALARM_TIME_RE = Regex("^(\\d{1,2})(?::(\\d{2}))?(?::00)?\\s*(am|pm|a m|p m)?$")
-private val CANCEL_ONE_ALARM_RE = Regex("^(\\d{1,2}):(\\d{2})$")
+private val CANCEL_ONE_ALARM_RE = Regex("^(\\d{1,2})(?:[:.](\\d{2}))?\\s*(a\\.?m\\.?|p\\.?m\\.?)?$", RegexOption.IGNORE_CASE)
+
+/** "07:30", "7:30 AM", "7 pm", "19.30" → that clock time; null when it is not a valid time. */
+internal fun alarmTime(text: String): LocalTime? {
+    val (hs, ms, ap) = CANCEL_ONE_ALARM_RE.find(text.trim())?.destructured ?: return null
+    var h = hs.toInt()
+    val m = ms.ifEmpty { "0" }.toInt()
+    if (ap.isNotEmpty()) {
+        if (h !in 1..12) return null
+        val pm = ap.first().lowercaseChar() == 'p'
+        h = h % 12 + if (pm) 12 else 0
+    } else if (ms.isEmpty()) return null
+    return runCatching { LocalTime.of(h, m) }.getOrNull()
+}
 
 /** Alarms and timers through the phone's Clock app. */
 fun timeTools(context: Context): List<Tool> = listOf(
@@ -100,7 +113,11 @@ fun timeTools(context: Context): List<Tool> = listOf(
         ),
     ) { c, _ ->
         if (c.arg("only") == "timer") return@SimpleTool cancelTimers(context)
-        c.arg("time")?.let { cancelOneAlarm(context, it) }?.let { return@SimpleTool it }
+        c.arg("time")?.takeIf { it.isNotBlank() }?.let { time ->
+            // A time was asked for: never fall through to "cancel all" when it can't be read.
+            val at = alarmTime(time) ?: return@SimpleTool ToolResult.fail("Which alarm? Say its time, like 7:30 AM.")
+            return@SimpleTool cancelOneAlarm(context, at)
+        }
         val alarmsSent = context.launchClock(Intent(AlarmClock.ACTION_DISMISS_ALARM)
             .putExtra(AlarmClock.EXTRA_ALARM_SEARCH_MODE, AlarmClock.ALARM_SEARCH_MODE_ALL))
         // MIUI Clock has no handler for DISMISS_TIMER; a running timer is stopped in its screen below.
@@ -303,10 +320,9 @@ fun speakDuration(secs: Int): String {
     ).joinToString(" and ").ifEmpty { "0 seconds" }
 }
 
-/** Clock's own search mode finds the alarm at that time; null when [time] is not HH:mm. MIUI Clock may ignore it, so check. */
-private suspend fun cancelOneAlarm(context: Context, time: String): ToolResult? {
-    val (h, m) = CANCEL_ONE_ALARM_RE.find(time)?.destructured ?: return null
-    val target = LocalTime.of(h.toInt(), m.toInt())
+/** Clock's own search mode finds the alarm at that time. MIUI Clock may ignore it, so check. */
+private suspend fun cancelOneAlarm(context: Context, target: LocalTime): ToolResult {
+    val time = target.toString()
     val spoken = target.format(DateTimeFormatter.ofPattern("h:mm a", Locale.ENGLISH))
     val wasNext = isAt(context.getSystemService(AlarmManager::class.java)?.nextAlarmClock?.triggerTime, target)
     val sent = context.launchClock(Intent(AlarmClock.ACTION_DISMISS_ALARM)

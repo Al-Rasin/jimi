@@ -158,7 +158,8 @@ class PhoneProfile(private val context: Context, private val apps: AppList) {
             "maps" to listOf("com.google.android.apps.maps", "com.ubercab", "com.pathao", "app.organicmaps"),
             "browser" to listOf("com.android.chrome", "org.mozilla", "com.opera", "com.brave", "com.mi.globalbrowser"),
             "email" to listOf("com.google.android.gm", "com.microsoft.office.outlook"),
-            "payments" to listOf("com.bKash", "com.konasl.nagad", "com.google.android.apps.nbu.paisa"),
+            "payments" to listOf("com.bKash", "com.konasl.nagad", "com.google.android.apps.nbu.paisa", "com.dbbl", "com.ucb.upay",
+                "com.upay", "com.paypal", "com.google.android.apps.walletnfcrel"),
         )
 
         internal fun roles(installed: List<AppList.App>): Map<String, List<String>> = ROLE_PACKAGES.mapValues { (_, prefixes) ->
@@ -167,7 +168,7 @@ class PhoneProfile(private val context: Context, private val apps: AppList) {
 
         /** True for banking/payment apps (ROADMAP: never auto-unlock for these). */
         internal fun isPaymentPackage(pkg: String): Boolean =
-            ROLE_PACKAGES["payments"].orEmpty().any { pkg.startsWith(it, ignoreCase = true) }
+            ROLE_PACKAGES["payments"].orEmpty().any { pkg.startsWith(it, ignoreCase = true) } || pkg.contains("bank", ignoreCase = true)
 
         /** Short spoken summary. */
         fun say(p: Profile): String = buildString {
