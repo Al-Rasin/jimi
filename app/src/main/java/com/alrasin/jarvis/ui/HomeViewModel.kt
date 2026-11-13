@@ -10,6 +10,8 @@ import com.alrasin.jarvis.data.WakeEventDao
 import com.alrasin.jarvis.service.CoreState
 import com.alrasin.jarvis.service.JarvisCoreService
 import com.alrasin.jarvis.service.WakeFeedback
+import com.alrasin.jarvis.voice.BanglaSpeechToText
+import com.alrasin.jarvis.voice.SpeechScore
 import com.alrasin.jarvis.voice.SpeechToText
 import com.alrasin.jarvis.voice.TextToSpeech
 import com.alrasin.jarvis.voice.Voices
@@ -134,19 +136,42 @@ class HomeViewModel @Inject constructor(
     }
 
     /**
-     * Debug: speech-to-text on every 16 kHz WAV in [dir], then say the first result. Logs speed.
-     * `adb shell am start -n com.alrasin.jarvis/.ui.MainActivity --es stt_dir <dir>`
+     * Debug: speech-to-text on every 16 kHz WAV in [dir], then say the first result. Logs speed, and word error rate
+     * for clips with a `<name>.txt` of what was said; appends one summary row to `files/bench/stt.md` (#48).
+     * `adb shell am start -n com.alrasin.jarvis/.ui.MainActivity --es stt_dir <dir> [--es stt_model <dir>|bangla]`
      */
     fun speechTest(dir: String, model: String? = null, speak: Boolean = true) = viewModelScope.launch(Dispatchers.Default) {
         runCatching {
-            var t0 = System.nanoTime()
-            val texts = SpeechToText(app, model?.let(::File)).use { stt ->
-                JarvisLog.i("STT ${stt.modelName} loaded in ${(System.nanoTime() - t0) / 1_000_000} ms")
-                val files = File(dir).listFiles { f -> f.name.endsWith(".wav") }.orEmpty().sortedBy { it.name }
-                files.map { f ->
+            val files = File(dir).listFiles { f -> f.name.endsWith(".wav") }.orEmpty().sortedBy { it.name }
+            val clips = mutableListOf<SpeechScore.Clip>()
+            val texts = mutableListOf<String>()
+            fun run(name: String, loadMs: Long, decode: (ShortArray) -> String) {
+                JarvisLog.i("STT $name loaded in $loadMs ms")
+                for (f in files) {
                     val audio = Wav.read(f)
-                    t0 = System.nanoTime()
-                    val text = stt.session().use { s ->
+                    val t0 = System.nanoTime()
+                    val text = decode(audio)
+                    val seconds = audio.size / 16000f
+                    val rtf = (System.nanoTime() - t0) / 1e9f / seconds
+                    val expected = File(f.path.removeSuffix(".wav") + ".txt").takeIf { it.isFile }?.readText()
+                    val wer = expected?.let { SpeechScore.wer(it, text) }
+                    clips += SpeechScore.Clip(f.name, seconds, rtf, wer)
+                    texts += text
+                    JarvisLog.i("STT ${f.name} rtf=${"%.2f".format(rtf)}${wer?.let { " wer=${"%.2f".format(it)}" }.orEmpty()} \"$text\" → \"${WakePhrase.strip(text)}\"")
+                }
+                val row = SpeechScore.summaryRow(name, loadMs, clips)
+                val out = File(app.getExternalFilesDir(null), "bench/stt.md").apply { parentFile?.mkdirs() }
+                if (!out.exists()) out.writeText(SpeechScore.HEADER + "\n")
+                out.appendText(row + "\n")
+                JarvisLog.i("STT summary $row")
+            }
+            var t0 = System.nanoTime()
+            if (model == "bangla") BanglaSpeechToText(app).use { stt ->
+                stt.loadForBench()
+                run("Whisper small bn→en", (System.nanoTime() - t0) / 1_000_000, stt::decodeForBench)
+            } else SpeechToText(app, model?.let(::File)).use { stt ->
+                run(stt.modelName, (System.nanoTime() - t0) / 1_000_000) { audio ->
+                    stt.session().use { s ->
                         var i = 0
                         while (i < audio.size) {
                             val n = minOf(WakeWordDetector.CHUNK, audio.size - i)
@@ -156,9 +181,6 @@ class HomeViewModel @Inject constructor(
                         s.accept(ShortArray(16_000))   // 1 s silence so the last words are decoded
                         s.text
                     }
-                    val rtf = (System.nanoTime() - t0) / 1e9f / (audio.size / 16000f)
-                    JarvisLog.i("STT ${f.name} rtf=${"%.2f".format(rtf)} \"$text\" → \"${WakePhrase.strip(text)}\"")
-                    text
                 }
             }
             if (!speak) { JarvisLog.i("STT test done"); return@runCatching }

@@ -39,6 +39,17 @@ class BanglaSpeechToText(context: Context) : AutoCloseable {
         return (if (stripWake) WakePhrase.strip(normalized) else normalized).ifBlank { streamingText }
     }
 
+    /** Benchmark only (#48): load now so load time is measured apart from decode time. */
+    fun loadForBench() {
+        if (recognizer == null) recognizer = load()
+    }
+
+    /** Benchmark only (#48): load if needed, decode with no deadline, return cleaned English ("" if junk). */
+    fun decodeForBench(audio: ShortArray): String {
+        loadForBench()
+        return BanglaSpeech.clean(decode(audio))?.let(SpeechToText::normalize).orEmpty()
+    }
+
     private fun decode(audio: ShortArray): String {
         val started = System.nanoTime()
         val model = checkNotNull(recognizer)
