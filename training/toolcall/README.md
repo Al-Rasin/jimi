@@ -10,6 +10,10 @@ Runs on the Mac (M1 8 GB) with MLX. Output: `models/functiongemma-270m-jarvis-v2
 - `cases.jsonl` — 45 held-out test phrases (`tool: null` = should chat).
 - `from_learned.py` — rows from what the phone learned (app maps, recipes, ✗-fixed commands) → `training/data/toolcall/learned.jsonl`.
   Private-looking labels are dropped. Add them with `make_dataset.py --learned training/data/toolcall/learned.jsonl`.
+- `teacher.py` — Gemini as teacher (#25): many varied commands per tool (Bangla-English mix, speech-to-text slips)
+  → `training/data/toolcall/teacher.jsonl`; `--mode chat` writes short spoken Q&A → `training/data/chat/teacher_chat.jsonl`.
+  Needs `GEMINI_API_KEY` in env (never saved). Only the tool list goes out. Eval phrases, private-looking and money rows dropped.
+  Try `--dry-run` first. Add rows with `make_dataset.py --learned training/data/toolcall/teacher.jsonl` (flag repeats).
 - `eval.py` — runs the cases through a Mac `llama-completion` with the app's prompt + grammar, prints a score.
 
 ## Steps
