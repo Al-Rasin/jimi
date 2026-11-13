@@ -243,7 +243,7 @@ internal class ToolRunner(
 
     suspend fun stepsFor(name: String): List<ToolCall>? {
         val json = routines.get(name)?.takeIf { it.enabled }?.stepsJson ?: Routines.DEFAULT_ROUTINES[name]?.let { Routines.stepsJson(it) } ?: return null
-        return (Json.parse(json) as List<*>).mapNotNull { (it as? Map<*, *>)?.let { m -> ToolCall.fromJson(Json.write(m)) } }
+        return Routines.fromJson(json)
     }
 
     suspend fun saveRoutine(name: String, steps: List<ToolCall>) = routines.put(Routine(name, Routines.stepsJson(steps)))

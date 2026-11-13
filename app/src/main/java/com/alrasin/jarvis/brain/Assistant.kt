@@ -305,6 +305,8 @@ class Assistant @Inject constructor(
                     trace("chain_partial", ok = false)
                     return Reply(TaskChain.partialReply(chain), tool = "chain")
                 }
+                // "My wife's name is Sara" in plain chat: save it; the user can say "forget that" (§K 10.1).
+                FactSpotter.spot(text)?.let { fact -> return tools.run(ToolCall("remember_fact", mapOf("text" to fact)), input, "spotted") }
                 if (!AgentRouting.needsMultiStep(text)) {
                     JarvisLog.i("route llm fallback: rule=${rule?.tool ?: "none"}, reason=${intent.reason}")
                     // Cloud picks in ~1 s when allowed (D-045); NONE means plain talk, null means ask the local model.
@@ -339,10 +341,16 @@ class Assistant @Inject constructor(
     private fun teachCall(text: String, rule: ToolCall?): ToolCall? =
         AssistantRouting.teachCallFor(text, rule, teach.active) { RuleMatcher.appNameMatches?.invoke(it) == true }
 
+    /** Phone state for the LOCAL tool picker only (§K 9.5); screen text never goes to the cloud (D-035). */
     private fun contextLine(): String {
         val now = LocalDateTime.now()
-        val app = JarvisAccessibilityService.instance?.appPackage()
-        return "time ${now.toLocalDate()} ${now.toLocalTime().withNano(0)}" + (app?.let { ", app $it" } ?: "")
+        val a11y = JarvisAccessibilityService.instance
+        val battery = runCatching {
+            context.getSystemService(android.os.BatteryManager::class.java)
+                .getIntProperty(android.os.BatteryManager.BATTERY_PROPERTY_CAPACITY)
+        }.getOrNull()
+        val screen = runCatching { a11y?.screenText(SCREEN_CHARS * 2) }.getOrNull()
+        return contextLine("${now.toLocalDate()} ${now.toLocalTime().withNano(0)}", a11y?.appPackage(), battery, screen)
     }
 
     private fun screenReply(result: AgentResult) = Reply(
@@ -354,6 +362,15 @@ class Assistant @Inject constructor(
     suspend fun saveRoutine(name: String, steps: List<ToolCall>) = tools.saveRoutine(name, steps)
 
     companion object {
+        private const val SCREEN_CHARS = 200
+
+        internal fun contextLine(time: String, app: String?, battery: Int?, screen: String?): String {
+            val snippet = screen?.replace(Regex("\\s+"), " ")?.trim()?.take(SCREEN_CHARS).orEmpty()
+            return "time $time" + (app?.let { ", app $it" } ?: "") +
+                (battery?.takeIf { it in 0..100 }?.let { ", battery $it%" } ?: "") +
+                (if (snippet.isEmpty()) "" else ", screen: $snippet")
+        }
+
         private const val PENDING_MS = 30_000L
         private const val LATE_YES_MS = 180_000L
         private const val HISTORY_IDLE_MS = 5 * 60_000L

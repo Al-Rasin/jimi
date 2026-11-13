@@ -187,7 +187,7 @@ class CloudBrain @Inject constructor(
         val p = provider() ?: return null
         val sendFacts = settings.cloudSendFacts.first()
         val query = ASK.replace(text, "").trim().ifEmpty { text }
-        val system = Persona.chatPrompt(query) + if (Persona.isMemoryQuestion(query) && sendFacts && facts.isNotEmpty()) "\nFacts about the user: " + facts.take(8).joinToString("; ") else ""
+        val system = Persona.chatPrompt(query, settings.personaNotes.first()) + if (Persona.isMemoryQuestion(query) && sendFacts && facts.isNotEmpty()) "\nFacts about the user: " + relevantFacts(query, facts).joinToString("; ") else ""
         val t0 = System.currentTimeMillis()
         var buf = ""
         var spoke = false
@@ -314,6 +314,12 @@ class CloudBrain @Inject constructor(
     }
 
     companion object {
+        /** Facts that match the question first (BM25, #43); the first 8 when none match (e.g. "what do you know about me"). */
+        internal fun relevantFacts(query: String, facts: List<String>): List<String> {
+            val memories = facts.mapIndexed { i, f -> MemoryRetriever.Memory(i.toLong(), f, -i.toLong()) }
+            return MemoryRetriever.retrieve(query, memories, topK = 8, charBudget = 1200).map { it.text }.ifEmpty { facts.take(8) }
+        }
+
         val NONE = ToolCall("none")
         private const val CHAT_TOKENS = 200
         private const val TOOL_TOKENS = 200

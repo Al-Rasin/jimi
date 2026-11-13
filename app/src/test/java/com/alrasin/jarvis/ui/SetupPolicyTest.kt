@@ -24,6 +24,11 @@ class SetupPolicyTest {
         assertTrue("CAMERA" in permissions(30))
     }
 
+    @Test fun phoneSetupCoversContactsCallsAndSms() {
+        listOf("READ_CONTACTS", "WRITE_CONTACTS", "CALL_PHONE", "READ_PHONE_STATE", "READ_CALL_LOG", "SEND_SMS", "READ_SMS")
+            .forEach { assertTrue(it, it in permissions(30)) }
+    }
+
     @Test fun voiceTestNeedsMicAndAllRequiredModels() {
         val ready = mapOf("wake_features" to true, "wake_jimi" to true, "stt" to true)
         assertTrue(SetupPolicy.wakeReady(true, ready))

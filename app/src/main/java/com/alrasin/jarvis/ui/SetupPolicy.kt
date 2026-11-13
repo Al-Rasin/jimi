@@ -7,6 +7,8 @@ object SetupPolicy {
         add("READ_CONTACTS" to "Contacts — find people by name")
         add("CALL_PHONE" to "Phone — place calls")
         add("READ_PHONE_STATE" to "Phone state — detect calls")
+        add("READ_CALL_LOG" to "Call log — say who is calling, call back")
+        add("WRITE_CONTACTS" to "Edit contacts — save new numbers")
         add("SEND_SMS" to "Send SMS — text messages")
         add("READ_SMS" to "Read SMS — message summaries")
         add("CAMERA" to "Camera — flashlight access")

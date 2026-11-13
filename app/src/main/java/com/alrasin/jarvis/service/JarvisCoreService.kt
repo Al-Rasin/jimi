@@ -21,6 +21,7 @@ import com.alrasin.jarvis.brain.ModelBrain
 import com.alrasin.jarvis.core.JarvisLog
 import com.alrasin.jarvis.core.isLocked
 import com.alrasin.jarvis.data.Settings
+import com.alrasin.jarvis.data.NotificationDao
 import com.alrasin.jarvis.data.WakeEventDao
 import com.alrasin.jarvis.ui.AssistantActivity
 import com.alrasin.jarvis.ui.Backdrop
@@ -95,6 +96,7 @@ import kotlin.coroutines.EmptyCoroutineContext
 class JarvisCoreService : LifecycleService() {
     @Inject lateinit var settings: Settings
     @Inject lateinit var dao: WakeEventDao
+    @Inject lateinit var notifications: NotificationDao
     @Inject lateinit var assistant: Assistant
     @Inject lateinit var models: ModelBrain
     @Inject lateinit var cloud: CloudBrain
@@ -139,7 +141,10 @@ class JarvisCoreService : LifecycleService() {
     private val speechLeft = AtomicInteger(0)
     private var listenJob: Job? = null
     private val alerts by lazy {
-        PhoneAlerts(this, lifecycleScope, { settings.listeningEnabled.first() }, { registry.contacts.nameFor(it) }) { announce(it) }
+        PhoneAlerts(
+            this, lifecycleScope, { settings.listeningEnabled.first() }, { registry.contacts.nameFor(it) },
+            proactive = { settings.proactive.first() }, importantSince = { since -> notifications.since(since).filter { it.important } },
+        ) { announce(it) }
     }
     private var wakeLock: PowerManager.WakeLock? = null
     private val contextWatch by lazy { ContextWatch(this, lifecycleScope, settings) }

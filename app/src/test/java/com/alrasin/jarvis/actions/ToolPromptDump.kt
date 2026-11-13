@@ -42,7 +42,7 @@ class ToolPromptDump {
             addAll(screenTools(ctx))
             addAll(dataTools(fake<NoteDao>(), fake<ReminderDao>(), ReminderScheduler(ctx, fake()), fake<MemoryDao>()))
             addAll(notificationTools(fake<NotificationDao>()))
-            addAll(webTools(Web()) { "Dhaka" })
+            addAll(webTools(Web(), homeCity = { "Dhaka" }))
         }
     }
 

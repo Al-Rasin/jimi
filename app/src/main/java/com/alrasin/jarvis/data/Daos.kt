@@ -71,6 +71,7 @@ interface RoutineDao {
     @Insert(onConflict = OnConflictStrategy.REPLACE) suspend fun put(r: Routine)
     @Query("SELECT * FROM routine WHERE name = :name") suspend fun get(name: String): Routine?
     @Query("SELECT * FROM routine ORDER BY name") fun all(): Flow<List<Routine>>
+    @Query("SELECT * FROM routine ORDER BY name") suspend fun snapshot(): List<Routine>
     @Query("DELETE FROM routine WHERE name = :name") suspend fun delete(name: String)
 }
 

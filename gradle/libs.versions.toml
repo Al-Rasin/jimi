@@ -18,6 +18,8 @@ okhttp = "4.12.0"
 jsoup = "1.18.3"
 anthropic = "2.34.0"
 commonsCompress = "1.27.1"
+xz = "1.12"
+zstdJni = "1.5.7-4"
 work = "2.9.1"
 mlkitText = "16.0.1"
 mlkitBarcode = "17.3.0"
@@ -52,6 +54,8 @@ okhttp = { group = "com.squareup.okhttp3", name = "okhttp", version.ref = "okhtt
 jsoup = { group = "org.jsoup", name = "jsoup", version.ref = "jsoup" }
 anthropic-java = { group = "com.anthropic", name = "anthropic-java", version.ref = "anthropic" }
 commons-compress = { group = "org.apache.commons", name = "commons-compress", version.ref = "commonsCompress" }
+xz = { group = "org.tukaani", name = "xz", version.ref = "xz" }
+zstd-jni = { group = "com.github.luben", name = "zstd-jni", version.ref = "zstdJni" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }

@@ -47,4 +47,12 @@ class PersonaTest {
         assertTrue(Persona.SYSTEM_PROMPT.contains("not Siri"))
         assertTrue(Persona.SYSTEM_PROMPT.contains("I'm not sure"))
     }
+
+    @Test fun styleNotesJoinChatPrompt() {
+        assertEquals("", Persona.styleNotes("  "))
+        val p = Persona.chatPrompt("tell me a story", " funny,\n short answers ")
+        assertTrue(p.startsWith(Persona.SYSTEM_PROMPT))
+        assertTrue(p.endsWith("reply length: funny, short answers"))
+        assertEquals(Persona.SYSTEM_PROMPT, Persona.chatPrompt("tell me a story"))
+    }
 }

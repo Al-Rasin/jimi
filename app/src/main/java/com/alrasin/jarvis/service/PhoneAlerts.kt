@@ -8,30 +8,60 @@ import android.os.BatteryManager
 import android.telephony.TelephonyManager
 import com.alrasin.jarvis.actions.CallText
 import com.alrasin.jarvis.brain.Persona
+import com.alrasin.jarvis.core.ContextNow
+import com.alrasin.jarvis.data.NotificationLog
+import com.alrasin.jarvis.notify.Proactive
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import java.util.Calendar
 
-/** Things Jimi says on its own from phone broadcasts: low battery and who is calling. */
+/** Things Jimi says on its own from phone broadcasts: low battery, who is calling, late-night nudge, missed alerts. */
 class PhoneAlerts(
     private val context: Context,
     private val scope: CoroutineScope,
     private val listeningEnabled: suspend () -> Boolean,
     private val contactName: suspend (String) -> String,
+    private val proactive: suspend () -> Boolean = { false },
+    private val importantSince: suspend (Long) -> List<NotificationLog> = { emptyList() },
     private val announce: (String) -> Unit,
 ) {
     private var batteryWarnedAt = 100
     private var ringAnnounced = false
+    @Volatile private var screenOffAt = 0L
+    @Volatile private var nudgedAt = 0L
 
     fun register() {
         context.registerReceiver(battery, IntentFilter(Intent.ACTION_BATTERY_CHANGED))
         context.registerReceiver(ringing, IntentFilter(TelephonyManager.ACTION_PHONE_STATE_CHANGED))
+        context.registerReceiver(screen, IntentFilter(Intent.ACTION_SCREEN_OFF).apply { addAction(Intent.ACTION_USER_PRESENT) })
     }
 
     fun unregister() {
         runCatching { context.unregisterReceiver(battery) }
         runCatching { context.unregisterReceiver(ringing) }
+        runCatching { context.unregisterReceiver(screen) }
+    }
+
+    /** Unlock after a long break: missed alerts first, else the late-night nudge (ROADMAP #44). One line at most. */
+    private val screen = object : BroadcastReceiver() {
+        override fun onReceive(context: Context, intent: Intent) {
+            val now = System.currentTimeMillis()
+            if (intent.action == Intent.ACTION_SCREEN_OFF) { screenOffAt = now; return }
+            val offAt = screenOffAt
+            screenOffAt = 0L
+            scope.launch {
+                if (!listeningEnabled() || !proactive()) return@launch
+                val quiet = ContextNow.mode.quiet
+                val away = if (offAt == 0L) 0L else now - offAt
+                val summary = if (away >= Proactive.AWAY_MS) Proactive.awaySummary(away, withContext(Dispatchers.IO) { importantSince(offAt) }, quiet) else null
+                val cal = Calendar.getInstance()
+                val line = summary ?: Proactive.lateNight(now, cal.get(Calendar.HOUR_OF_DAY) * 60 + cal.get(Calendar.MINUTE), nudgedAt, quiet)
+                    ?.also { nudgedAt = now }
+                line?.let(announce)
+            }
+        }
     }
 
     private val battery = object : BroadcastReceiver() {

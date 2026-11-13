@@ -56,6 +56,7 @@ import com.alrasin.jarvis.R
 import com.alrasin.jarvis.brain.Persona
 import com.alrasin.jarvis.data.ConversationTurn
 import com.alrasin.jarvis.data.NotificationLog
+import com.alrasin.jarvis.notify.NotificationHistorySearch
 import com.alrasin.jarvis.service.CoreState
 import com.alrasin.jarvis.service.JarvisCoreService
 import java.text.SimpleDateFormat
@@ -302,12 +303,18 @@ private fun AlertsTab(vm: AppViewModel) {
     val list by vm.notificationList.collectAsStateWithLifecycle()
     val rules by vm.rules.collectAsStateWithLifecycle()
     val ruleOf = rules.associate { it.pkg to it.mode }
+    var query by rememberSaveable { mutableStateOf("") }
+    val shown = if (query.isBlank()) list else NotificationHistorySearch.search(list, query)
     // same app + same title shown once, with a count (D-068)
-    val groups = list.groupBy { Triple(it.pkg, it.title, it.text) }.values.toList()
+    val groups = shown.groupBy { Triple(it.pkg, it.title, it.text) }.values.toList()
     val (important, other) = groups.partition { isImportant(it.first()) }
     TabList {
         item { PageTitle("Alerts") }
+        if (list.isNotEmpty()) item {
+            OutlinedTextField(query, { query = it }, Modifier.fillMaxWidth(), singleLine = true, label = { Text("Search alerts") })
+        }
         if (list.isEmpty()) item { EmptyState("No alerts yet", "New notifications show up here.") }
+        else if (shown.isEmpty()) item { EmptyState("No match", "Try other words.") }
         else {
             item { ListCard("Important", important.take(50), "Nothing important.") { NotificationRow(it, ruleOf[it.first().pkg], vm) } }
             item { ListCard("Other", other.take(50), "Nothing else.") { NotificationRow(it, ruleOf[it.first().pkg], vm) } }

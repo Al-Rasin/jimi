@@ -112,6 +112,9 @@ dependencies {
     implementation(libs.mlkit.barcode.scanning) // bundled QR/barcode model, works offline (§I.7)
     implementation(libs.mlkit.translate) // English↔Bengali models download once (~30 MB each), then offline (#37)
     implementation(libs.commons.compress)
+    // Offline Wikipedia (Kiwix .zim, #42): clusters are xz or zstd compressed
+    implementation(libs.xz)
+    implementation(variantOf(libs.zstd.jni) { artifactType("aar") })
     // Optional cloud chat (PLAN 14, off by default)
     implementation(libs.anthropic.java)
 

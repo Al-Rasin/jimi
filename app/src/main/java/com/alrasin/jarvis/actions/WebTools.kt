@@ -8,6 +8,7 @@ import com.alrasin.jarvis.core.ToolResult
 import com.alrasin.jarvis.core.asObj
 import com.alrasin.jarvis.core.obj
 import com.alrasin.jarvis.core.str
+import com.alrasin.jarvis.knowledge.WikiOffline
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import okhttp3.HttpUrl.Companion.toHttpUrlOrNull
@@ -67,6 +68,7 @@ fun webTools(
     here: suspend () -> CurrentLocation.Fix? = { null },
     newsCache: AnswerCache<List<String>> = AnswerCache(TimeUnit.MINUTES.toMillis(30)),
     homeCity: suspend () -> String,
+    wikiOffline: WikiOffline? = null,
 ): List<Tool> {
 
     fun normalizeUrl(raw: String): String? {
@@ -163,7 +165,7 @@ fun webTools(
             val generalReading = GENERAL_READING_RE.findAll(question).all { it.value.lowercase(java.util.Locale.ROOT) in readingWords }
             runCatching { readPage(url, question, generalReading) }.getOrElse { webFailure("that page", it) }
         },
-        SimpleTool("wiki_lookup", "Short Wikipedia summary", listOf(arg("topic", "topic"))) { c, _ ->
+        SimpleTool("wiki_lookup", "Short Wikipedia summary", listOf(arg("topic", "topic"))) { c, ctx ->
             val topic = c.require("topic", "Look up what?")
             suspend fun wiki(url: String): Any? = Json.parse(
                 runCatching { web.get(url, Web.WIKI_UA) }.getOrElse { if (it is Web.HttpError && it.code < 500) throw it else web.get(url, Web.WIKI_UA) },
@@ -179,7 +181,13 @@ fun webTools(
             }.fold({ t ->
                 if (t.isBlank()) ToolResult.fail("Wikipedia has nothing on $topic.")
                 else ToolResult.ok(t.split(TITLE_RE).take(2).joinToString(" "), t)
-            }, { webFailure("Wikipedia", it) })
+            }, { e ->
+                // No internet: answer from the offline Kiwix copy when there is one (#42)
+                val offline = if (e is Web.HttpError || wikiOffline == null) null
+                else withContext(Dispatchers.IO) { wikiOffline.lookup(topic, ctx.heard) }
+                if (offline == null) webFailure("Wikipedia", e)
+                else ToolResult.ok(offline.text.split(TITLE_RE).take(2).joinToString(" "), "${offline.title} (offline Wikipedia)\n${offline.text}")
+            })
         },
     )
 }

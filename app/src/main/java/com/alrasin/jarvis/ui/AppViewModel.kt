@@ -79,6 +79,7 @@ class AppViewModel @Inject constructor(
     private val appCards: AppCards,
     private val recipeDao: com.alrasin.jarvis.data.RecipeDao,
     private val teach: com.alrasin.jarvis.agent.TeachSession,
+    private val routineDao: com.alrasin.jarvis.data.RoutineDao,
 ) : AndroidViewModel(app) {
     private val secrets get() = secretsProvider.get()
     private val speaker get() = speakerProvider.get()
@@ -106,6 +107,34 @@ class AppViewModel @Inject constructor(
     fun answerAsk(id: Long, yes: Boolean) = viewModelScope.launch(Dispatchers.IO) {
         appMap.setAskStatus(id, if (yes) AppAskQueue.APPROVED else AppAskQueue.DENIED)
     }
+    /** Routines (ROADMAP #45, B §K 8.1): saved rows; built-ins show their default until edited. */
+    val routines = routineDao.all().state(emptyList())
+
+    /** Editable text for [name]: the saved steps, else the built-in default. */
+    fun routineText(name: String, saved: com.alrasin.jarvis.data.Routine?): String =
+        com.alrasin.jarvis.brain.Routines.toText(
+            saved?.let { com.alrasin.jarvis.brain.Routines.fromJson(it.stepsJson) }
+                ?: com.alrasin.jarvis.brain.Routines.DEFAULT_ROUTINES[name].orEmpty(),
+        )
+
+    /** Saves [text] as routine [name]; returns the error to show, or null when saved. */
+    fun saveRoutine(name: String, text: String, enabled: Boolean = true): String? {
+        val key = com.alrasin.jarvis.brain.Routines.key(name)
+        if (key.isEmpty()) return "Give it a name"
+        val parsed = com.alrasin.jarvis.brain.Routines.parse(text) { registry.get(it) != null }
+        if (parsed.error != null) return parsed.error
+        viewModelScope.launch(Dispatchers.IO) {
+            routineDao.put(com.alrasin.jarvis.data.Routine(key, com.alrasin.jarvis.brain.Routines.stepsJson(parsed.steps), enabled))
+        }
+        return null
+    }
+
+    fun setRoutineEnabled(r: com.alrasin.jarvis.data.Routine, on: Boolean) =
+        viewModelScope.launch(Dispatchers.IO) { routineDao.put(r.copy(enabled = on)) }
+
+    /** Deletes the saved row: built-ins go back to their default, others are gone. */
+    fun deleteRoutine(name: String) = viewModelScope.launch(Dispatchers.IO) { routineDao.delete(name) }
+
     /** Tasks the user taught by hand (§H.6), for rename / delete on the App knowledge page. */
     private val _taught = kotlinx.coroutines.flow.MutableStateFlow<List<com.alrasin.jarvis.data.RecipeRow>>(emptyList())
     val taught: kotlinx.coroutines.flow.StateFlow<List<com.alrasin.jarvis.data.RecipeRow>> = _taught
@@ -132,6 +161,8 @@ class AppViewModel @Inject constructor(
     val carMode = settings.carMode.state(true)
     val headphonesMode = settings.headphonesMode.state(true)
     val bedtimeMode = settings.bedtimeMode.state(false)
+    val proactive = settings.proactive.state(true)
+    val readImportant = settings.readImportant.state(false)
     val bedtimeHours = settings.bedtimeHours.state(ContextModes.DEFAULT_HOURS)
     val voiceId = settings.voiceId.state(false)
     val speakerThreshold = settings.speakerThreshold.state(Settings.DEFAULT_SPEAKER_THRESHOLD)
@@ -141,6 +172,7 @@ class AppViewModel @Inject constructor(
     val cloudEnabled = settings.cloudEnabled.state(false)
     val cloudForChat = settings.cloudForChat.state(true)
     val cloudSendFacts = settings.cloudSendFacts.state(false)
+    val personaNotes = settings.personaNotes.state("")
     /** Names of the saved cloud keys ([Secrets] names), so the screen can show "saved". */
     val savedKeys = MutableStateFlow<Set<String>>(emptySet())
     val homeCity = settings.homeCity.state("Dhaka")
@@ -282,6 +314,8 @@ class AppViewModel @Inject constructor(
     fun setCarMode(v: Boolean) = viewModelScope.launch { settings.setCarMode(v) }
     fun setHeadphonesMode(v: Boolean) = viewModelScope.launch { settings.setHeadphonesMode(v) }
     fun setBedtimeMode(v: Boolean) = viewModelScope.launch { settings.setBedtimeMode(v) }
+    fun setProactive(v: Boolean) = viewModelScope.launch { settings.setProactive(v) }
+    fun setReadImportant(v: Boolean) = viewModelScope.launch { settings.setReadImportant(v) }
     fun setBedtimeHours(v: String) = viewModelScope.launch { settings.setBedtimeHours(v) }
     fun setShowPanel(v: Boolean) = viewModelScope.launch { settings.setShowPanel(v) }
     fun setAutoClear(v: Boolean) = viewModelScope.launch { settings.setAutoClearNotifications(v) }
@@ -291,6 +325,7 @@ class AppViewModel @Inject constructor(
     fun setCloudEnabled(v: Boolean) = viewModelScope.launch { settings.setCloudEnabled(v) }
     fun setCloudForChat(v: Boolean) = viewModelScope.launch { settings.setCloudForChat(v) }
     fun setCloudSendFacts(v: Boolean) = viewModelScope.launch { settings.setCloudSendFacts(v) }
+    fun setPersonaNotes(v: String) = viewModelScope.launch { settings.setPersonaNotes(v.trim()) }
 
     private fun installedNow() = Voices.ALL.map { it.pack }.distinct().filter { Voices.installed(app, it) }.map { it.id }.toSet()
 
@@ -377,6 +412,15 @@ class AppViewModel @Inject constructor(
 
     fun export() = viewModelScope.launch(Dispatchers.IO) {
         _message.value = runCatching { "Saved: ${backup.export().path}" }.getOrElse { "Export failed: ${it.message}" }
+    }
+
+    /** Merge a backup JSON picked by the user (ROADMAP #46). */
+    fun restore(uri: android.net.Uri) = viewModelScope.launch(Dispatchers.IO) {
+        _message.value = runCatching {
+            val text = app.contentResolver.openInputStream(uri)?.use { it.readBytes().toString(Charsets.UTF_8) }
+                ?: error("can't open file")
+            backup.restore(text)
+        }.getOrElse { "Restore failed: ${it.message}" }
     }
 
     fun refreshModels() {

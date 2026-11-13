@@ -35,6 +35,7 @@ class Settings @Inject constructor(@ApplicationContext private val context: Cont
     private val cloudKey = booleanPreferencesKey("cloud_enabled")
     private val cloudChatKey = booleanPreferencesKey("cloud_for_chat")
     private val cloudFactsKey = booleanPreferencesKey("cloud_send_facts")
+    private val personaNotesKey = stringPreferencesKey("persona_notes")
     private val voiceKey = stringPreferencesKey("voice")
     private val voiceSpeedKey = floatPreferencesKey("voice_speed")
     private val onlineVoiceKey = booleanPreferencesKey("online_voice")
@@ -44,6 +45,8 @@ class Settings @Inject constructor(@ApplicationContext private val context: Cont
     private val headphonesModeKey = booleanPreferencesKey("headphones_mode")
     private val bedtimeModeKey = booleanPreferencesKey("bedtime_mode")
     private val bedtimeHoursKey = stringPreferencesKey("bedtime_hours")
+    private val proactiveKey = booleanPreferencesKey("proactive_talk")
+    private val readImportantKey = booleanPreferencesKey("read_important_alerts")
 
     val assistantMode: Flow<AssistantMode> = context.dataStore.data.map { AssistantMode.fromStored(it[assistantModeKey]) }
     val setupComplete: Flow<Boolean> = read(setupCompleteKey, false)
@@ -87,6 +90,8 @@ class Settings @Inject constructor(@ApplicationContext private val context: Cont
     val cloudForChat: Flow<Boolean> = read(cloudChatKey, true)
     /** Privacy (PLAN 14.3): remembered facts are sent only if this is on. Notes, notifications, screen text never are. */
     val cloudSendFacts: Flow<Boolean> = read(cloudFactsKey, false)
+    /** How Jimi should talk (tone, reply length), added to the chat prompt (ROADMAP #43, §K 10.3). */
+    val personaNotes: Flow<String> = read(personaNotesKey, "")
 
     /** Jimi's voice id (see Voices, D-038). */
     val voice: Flow<String> = context.dataStore.data.map { Voices.byId(VoiceDefaults.voice(it[voiceKey])).id }
@@ -105,6 +110,7 @@ class Settings @Inject constructor(@ApplicationContext private val context: Cont
     suspend fun setCloudEnabled(v: Boolean) = write(cloudKey, v)
     suspend fun setCloudForChat(v: Boolean) = write(cloudChatKey, v)
     suspend fun setCloudSendFacts(v: Boolean) = write(cloudFactsKey, v)
+    suspend fun setPersonaNotes(v: String) = write(personaNotesKey, v)
     suspend fun setFollowUp(v: Boolean) = write(followUpKey, v)
 
     /** Context modes (ROADMAP B §I.11): car and headphones on by default, bedtime off until the user picks it. */
@@ -116,6 +122,12 @@ class Settings @Inject constructor(@ApplicationContext private val context: Cont
     suspend fun setHeadphonesMode(v: Boolean) = write(headphonesModeKey, v)
     suspend fun setBedtimeMode(v: Boolean) = write(bedtimeModeKey, v)
     suspend fun setBedtimeHours(v: String) = write(bedtimeHoursKey, v)
+
+    /** Jimi speaks on its own (ROADMAP #44): late-night nudge and "while you were away". Read-out of alerts is opt-in. */
+    val proactive: Flow<Boolean> = read(proactiveKey, true)
+    val readImportant: Flow<Boolean> = read(readImportantKey, false)
+    suspend fun setProactive(v: Boolean) = write(proactiveKey, v)
+    suspend fun setReadImportant(v: Boolean) = write(readImportantKey, v)
     suspend fun setSttSecondPass(v: Boolean) = write(sttSecondPassKey, v)
     suspend fun setAutoClearNotifications(v: Boolean) = write(autoClearKey, v)
     suspend fun setNightExplore(v: Boolean) = write(nightExploreKey, v)

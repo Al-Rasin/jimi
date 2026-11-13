@@ -65,6 +65,7 @@ class JarvisNotificationListener : NotificationListenerService() {
                         if (learned.important) r.copy(important = true, reason = learned.reason) else r
                     }
                     readAloud(sbn, row)
+                    readImportant(sbn, row)
                     val clearable = sbn.isClearable && n.flags and Notification.FLAG_GROUP_SUMMARY == 0
                     if (clearable && !row.important && settings.autoClearNotifications.first()) {
                         val result = history.clear(listOf(row)) { cancelUnchanged(sbn, row) }
@@ -107,6 +108,18 @@ class JarvisNotificationListener : NotificationListenerService() {
     }
 
     @Volatile private var lastReadLine: String? = null
+    @Volatile private var lastImportantAt = 0L
+
+    /** "Read important alerts" setting (ROADMAP #44): say important alerts out loud, at most one per 2 minutes. */
+    private suspend fun readImportant(sbn: StatusBarNotification, row: NotificationLog) {
+        if (sbn.isOngoing || sbn.notification.flags and Notification.FLAG_GROUP_SUMMARY != 0) return
+        if (!settings.readImportant.first() || !settings.listeningEnabled.first()) return
+        val mode = ContextNow.mode
+        val now = System.currentTimeMillis()
+        val line = Proactive.importantLine(row, mode.quiet, mode.readMessages, now, lastImportantAt) ?: return
+        lastImportantAt = now
+        JarvisCoreService.say(this, line)
+    }
 
     override fun onNotificationRemoved(sbn: StatusBarNotification) {
         if (sbn.key == lastCallKey) lastCallKey = null

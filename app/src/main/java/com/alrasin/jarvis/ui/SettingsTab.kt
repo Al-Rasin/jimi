@@ -1,6 +1,9 @@
 package com.alrasin.jarvis.ui
 
+import com.alrasin.jarvis.brain.Routines
 import com.alrasin.jarvis.brain.ContextModes
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -56,6 +59,8 @@ internal fun SettingsTab(vm: AppViewModel, onSetup: () -> Unit, onDeviceCheck: (
     val carMode by vm.carMode.collectAsStateWithLifecycle()
     val headphonesMode by vm.headphonesMode.collectAsStateWithLifecycle()
     val bedtimeMode by vm.bedtimeMode.collectAsStateWithLifecycle()
+    val proactive by vm.proactive.collectAsStateWithLifecycle()
+    val readImportant by vm.readImportant.collectAsStateWithLifecycle()
     val bedtimeHours by vm.bedtimeHours.collectAsStateWithLifecycle()
     val voiceId by vm.voiceId.collectAsStateWithLifecycle()
     val city by vm.homeCity.collectAsStateWithLifecycle()
@@ -73,6 +78,8 @@ internal fun SettingsTab(vm: AppViewModel, onSetup: () -> Unit, onDeviceCheck: (
     val chatModel by vm.chatModel.collectAsStateWithLifecycle()
     LaunchedEffect(chatModel) { vm.refreshModels() }
     var cityText by remember(city) { mutableStateOf(city) }
+    val personaNotes by vm.personaNotes.collectAsStateWithLifecycle()
+    var notesText by remember(personaNotes) { mutableStateOf(personaNotes) }
     var pin by remember { mutableStateOf("") }
     val findWordSet by vm.findWordSet.collectAsStateWithLifecycle()
     val findNumbers by vm.findNumbers.collectAsStateWithLifecycle()
@@ -100,6 +107,14 @@ internal fun SettingsTab(vm: AppViewModel, onSetup: () -> Unit, onDeviceCheck: (
                 }
             }
         }
+        "style" -> SubPage("How Jimi talks", close) {
+            RowsCard {
+                Hint("Tone and reply length, e.g. \"funny, short answers\" or \"calm, more detail\".")
+                OutlinedTextField(notesText, { notesText = it.take(300) }, Modifier.fillMaxWidth(), label = { Text("Style") })
+                FilledTonalButton(onClick = { vm.setPersonaNotes(notesText); close() }) { Text("Save") }
+            }
+        }
+        "routines" -> SubPage("Routines", close) { RoutinesCard(vm) }
         "voiceid" -> SubPage("Voice ID", close) {
             LaunchedEffect(enrollStatus) { vm.refreshVoice() }
             RowsCard {
@@ -167,6 +182,7 @@ internal fun SettingsTab(vm: AppViewModel, onSetup: () -> Unit, onDeviceCheck: (
         }
         "assistant" -> SubPage("Assistant mode", close) { AssistantModeCard(vm) }
         "setup" -> SubPage("Setup & data", close) {
+            val restorePicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri -> uri?.let(vm::restore) }
             RowsCard {
                 NavRow("Setup wizard", onClick = onSetup)
                 RowDivider()
@@ -175,6 +191,8 @@ internal fun SettingsTab(vm: AppViewModel, onSetup: () -> Unit, onDeviceCheck: (
                 NavRow("Set up with root", onClick = vm::rootSetup)
                 RowDivider()
                 NavRow("Export all data (JSON)", onClick = vm::export)
+                RowDivider()
+                NavRow("Restore from backup") { restorePicker.launch(arrayOf("application/json", "text/*", "application/octet-stream")) }
             }
             if (message.isNotBlank()) Hint(message)
         }
@@ -197,6 +215,8 @@ internal fun SettingsTab(vm: AppViewModel, onSetup: () -> Unit, onDeviceCheck: (
                 ToggleRow("Keep listening after answer", followUp) { vm.setFollowUp(it) }
                 ToggleRow("Panel on wake", panel) { vm.setShowPanel(it) }
                 ToggleRow("Auto-clear noise alerts", autoClear) { vm.setAutoClear(it) }
+                ToggleRow("Speak on its own", proactive, "Late-night nudge, missed alerts") { vm.setProactive(it) }
+                ToggleRow("Read important alerts", readImportant) { vm.setReadImportant(it) }
                 ToggleRow("Learn apps at night", nightExplore) { vm.setNightExplore(it) }
             }
             RowsCard("Modes") {
@@ -211,6 +231,8 @@ internal fun SettingsTab(vm: AppViewModel, onSetup: () -> Unit, onDeviceCheck: (
                 NavRow("Speech") { page = "speech" }
                 RowDivider()
                 NavRow("Home city", city.ifBlank { "Not set" }) { page = "city" }
+                RowDivider()
+                NavRow("How Jimi talks", personaNotes.ifBlank { "Default" }.take(24)) { page = "style" }
             }
             RowsCard {
                 NavRow("Voice ID", if (voiceId) "On" else "Off") { page = "voiceid" }
@@ -228,6 +250,8 @@ internal fun SettingsTab(vm: AppViewModel, onSetup: () -> Unit, onDeviceCheck: (
             }
             RowsCard {
                 NavRow("App knowledge") { page = "apps" }
+                RowDivider()
+                NavRow("Routines") { page = "routines" }
                 RowDivider()
                 NavRow("Setup & data") { page = "setup" }
                 RowDivider()
@@ -321,6 +345,55 @@ private fun KeyRow(spec: KeyRowSpec, saved: Boolean, onSave: (String) -> Unit, o
         )
         Chip(if (value.isEmpty() && saved) "Remove" else "Save", selected = true) { onSave(value); value = ""; editing = false }
     }
+}
+
+/** Edit routines (ROADMAP #45, B §K 8.1): built-ins plus saved ones, one step per line as `tool key=value, …`. */
+@Composable
+private fun RoutinesCard(vm: AppViewModel) {
+    val saved by vm.routines.collectAsStateWithLifecycle()
+    val byName = saved.associateBy { it.name }
+    val names = (Routines.DEFAULT_ROUTINES.keys + byName.keys).distinct()
+    var editing by remember { mutableStateOf<String?>(null) }
+    var draftName by remember { mutableStateOf("") }
+    var draft by remember { mutableStateOf("") }
+    var error by remember { mutableStateOf<String?>(null) }
+    Hint("Say \"run <name> routine\". One step per line, e.g. toggle target=dnd, state=on")
+    if (editing != null) {
+        RowsCard(if (editing == "") "New routine" else editing!!.replace('_', ' ')) {
+            if (editing == "") OutlinedTextField(draftName, { draftName = it.take(40) }, Modifier.fillMaxWidth(), label = { Text("Name") }, singleLine = true)
+            OutlinedTextField(draft, { draft = it; error = null }, Modifier.fillMaxWidth(), label = { Text("Steps") }, minLines = 4)
+            error?.let { Hint(it) }
+            ChipRow {
+                Chip("Save", selected = true) {
+                    error = vm.saveRoutine(if (editing == "") draftName else editing!!, draft, byName[editing]?.enabled ?: true)
+                    if (error == null) editing = null
+                }
+                Chip("Cancel") { editing = null; error = null }
+            }
+        }
+        return
+    }
+    RowsCard {
+        names.forEachIndexed { i, name ->
+            if (i > 0) RowDivider()
+            val row = byName[name]
+            val builtIn = name in Routines.DEFAULT_ROUTINES
+            val steps = vm.routineText(name, row).lines().count { it.isNotBlank() }
+            val meta = listOfNotNull("$steps steps", if (builtIn && row != null) "edited" else null, if (row?.enabled == false) "off" else null)
+            ItemRow(name.replace('_', ' '), meta.joinToString(" · ")) {
+                Chip("Edit") { draft = vm.routineText(name, row); editing = name }
+                if (row != null && !builtIn) {
+                    Spacer(Modifier.width(6.dp))
+                    Chip(if (row.enabled) "Turn off" else "Turn on") { vm.setRoutineEnabled(row, !row.enabled) }
+                }
+                if (row != null) {
+                    Spacer(Modifier.width(6.dp))
+                    Chip(if (builtIn) "Reset" else "Delete") { vm.deleteRoutine(name) }
+                }
+            }
+        }
+    }
+    Chip("New routine", selected = true) { draftName = ""; draft = ""; error = null; editing = "" }
 }
 
 /** Tasks taught by hand ("learn order coffee" … "done", §H.6): rename or delete. */
