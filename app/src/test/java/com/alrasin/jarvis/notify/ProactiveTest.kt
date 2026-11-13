@@ -33,7 +33,9 @@ class ProactiveTest {
         assertNull(Proactive.importantLine(row("com.bkash.customerapp", "bKash", "Cash in"), false, false, now, 0))
         val wa = row("com.whatsapp", "WhatsApp", "Sara", "hi")
         assertNull(Proactive.importantLine(wa, false, chatsRead = true, nowMs = now, lastReadMs = 0))
-        assertEquals("Boss, WhatsApp: Sara: hi", Proactive.importantLine(wa, false, false, now, 0))
+        assertEquals("Boss, Sara says: hi", Proactive.importantLine(wa, false, false, now, 0))
+        val twice = row("com.whatsapp", "WhatsApp", "Chaity skitto", "Ohh\nChaity skitto: Ohh")
+        assertEquals("Boss, Chaity skitto says: Ohh", Proactive.importantLine(twice, false, false, now, 0))
         assertNull(Proactive.importantLine(row("x", "X", " ", " "), false, false, now, 0))
         assertEquals(120, Proactive.importantLine(row("x", "X", "", "a".repeat(300)), false, false, now, 0)!!.removePrefix("Boss, X: ").length)
     }

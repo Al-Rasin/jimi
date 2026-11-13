@@ -69,11 +69,13 @@ class ContextModesTest {
     }
 
     @Test fun messageLineNewestShort() {
-        assertEquals("WhatsApp from Rahim: on my way", ContextModes.messageLine("WhatsApp", "Rahim", "hi\nRahim: on my way\n"))
+        assertEquals("Rahim says: on my way", ContextModes.messageLine("WhatsApp", "Rahim", "hi\nRahim: on my way\n"))
+        // Real WhatsApp shape: plain text, then the same message with the sender (case can differ).
+        assertEquals("Chaity skitto says: Ohh", ContextModes.messageLine("WhatsApp", "Chaity skitto", "Ohh\nchaity Skitto: Ohh"))
         assertEquals("Messages: hello", ContextModes.messageLine("Messages", "", "hello"))
         assertNull(ContextModes.messageLine("X", "Y", "  \n "))
         val long = ContextModes.messageLine("A", "B", "x".repeat(300))!!
         assertTrue(long.endsWith("…"))
-        assertEquals("A from B: ".length + 158, long.length)
+        assertEquals("B says: ".length + 158, long.length)
     }
 }

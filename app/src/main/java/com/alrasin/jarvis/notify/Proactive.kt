@@ -1,5 +1,6 @@
 package com.alrasin.jarvis.notify
 
+import com.alrasin.jarvis.brain.ContextModes
 import com.alrasin.jarvis.brain.Persona
 import com.alrasin.jarvis.data.NotificationLog
 
@@ -35,6 +36,9 @@ object Proactive {
         if (quiet || !row.important || Triage.isMoneyApp(row.pkg)) return null
         if (chatsRead && Triage.isChatApp(row.pkg)) return null
         if (nowMs - lastReadMs < READ_GAP_MS) return null
+        if (Triage.isChatApp(row.pkg)) {
+            return ContextModes.messageLine(row.appName, row.title, row.text)?.let { "${Persona.ADDRESS}, $it" }
+        }
         val title = row.title.trim()
         val text = row.text.replace(Regex("\\s+"), " ").trim().take(MAX_TEXT)
         if (title.isEmpty() && text.isEmpty()) return null

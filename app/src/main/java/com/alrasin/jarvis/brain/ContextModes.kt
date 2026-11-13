@@ -44,14 +44,15 @@ object ContextModes {
         return if (parts.size <= maxSentences) text.trim() else parts.take(maxSentences).joinToString(" ")
     }
 
-    /** "WhatsApp from Rahim: on my way" — the newest line only, kept short. */
+    /** "Rahim says: on my way" — the newest line only, sender said once, kept short. */
     fun messageLine(app: String, title: String, text: String): String? {
+        val from = title.trim()
         val last = text.lines().lastOrNull { it.isNotBlank() }?.trim()?.let { line ->
-            if (title.isNotBlank() && line.startsWith("$title:")) line.removePrefix("$title:").trim() else line
+            // Chat apps repeat the sender inside the text ("Rahim: on my way"); drop it so the name is said once.
+            if (from.isNotEmpty() && line.startsWith("$from:", ignoreCase = true)) line.substring(from.length + 1).trim() else line
         } ?: return null
         if (last.isEmpty()) return null
         val body = if (last.length > 160) last.take(157).trimEnd() + "…" else last
-        val from = title.trim().ifEmpty { return "$app: $body" }
-        return "$app from $from: $body"
+        return if (from.isEmpty()) "$app: $body" else "$from says: $body"
     }
 }
