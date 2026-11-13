@@ -99,15 +99,21 @@ class TextToSpeech(
 
     /** English parts in this voice, Bangla parts in the phone's Bangla voice; no Bangla voice = say so once. */
     private fun mixed(text: String): GeneratedAudio {
+        val start = System.currentTimeMillis()
         val engine = phone ?: bangla()
         var told = false
-        val pieces = SpeechText.parts(text).mapNotNull { part ->
+        val parts = SpeechText.parts(text)
+        val pieces = parts.mapNotNull { part ->
             val audio = if (!part.bangla) generate(part.text)
                 else engine?.generateIn("bn", part.text, speed)
                     ?: if (told) null else generate(NO_BANGLA).also { told = true }
             audio?.takeIf { it.samples.isNotEmpty() }
         }
-        return join(pieces)
+        return join(pieces).also {
+            val made = System.currentTimeMillis() - start
+            JarvisLog.i("tts mixed ${parts.size} parts (${parts.count { p -> p.bangla }} Bangla): " +
+                "${it.samples.size * 1000L / it.sampleRate.coerceAtLeast(1)} ms audio in $made ms")
+        }
     }
 
     @Synchronized
@@ -128,7 +134,7 @@ class TextToSpeech(
     /** Blocks until the sentence has been played or [stop] is called. Returns false if stopped. */
     fun speak(text: String): Boolean {
         stopped = false
-        val chunks = if (SpeechText.hasBangla(text)) listOf(text)
+        val chunks = if (SpeechText.hasBangla(text)) SpeechText.banglaChunks(text)
             else if (voice.pack.engine == Engine.SUPERTONIC) SpeechText.chunks(text)
             else listOf(SpeechText.normalize(text)).filter { it.isNotBlank() }
         for (chunk in chunks) {

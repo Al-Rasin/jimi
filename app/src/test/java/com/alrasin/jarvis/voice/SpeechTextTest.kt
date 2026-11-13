@@ -300,4 +300,23 @@ class SpeechTextTest {
         assertEquals(listOf(true, false, true), mid.map { it.bangla })
         assertEquals("office", mid[1].text)
     }
+
+    @Test fun englishDigitsInsideBanglaStayInTheBanglaVoice() {
+        assertEquals(
+            listOf(SpeechText.Part("আমি সন্ধ্যা 7 টায় ফিরবো।", true)),
+            SpeechText.parts("আমি সন্ধ্যা 7 টায় ফিরবো।"),
+        )
+        assertEquals(listOf(SpeechText.Part("দাম 50%", true)), SpeechText.parts("দাম 50%"))
+    }
+
+    @Test fun banglaIsCutIntoSentences() {
+        val text = "Boss, Rahim says: আজকে কাজ ছিল। আমি 7 টায় ফিরবো! কালকে দেখা হবে 😊"
+        assertEquals(
+            listOf("Boss, Rahim says: আজকে কাজ ছিল।", "আমি 7 টায় ফিরবো!", "কালকে দেখা হবে 😊"),
+            SpeechText.banglaChunks(text),
+        )
+        assertEquals(listOf("এক দুই", "তিন"), SpeechText.banglaChunks("এক দুই তিন", maxWords = 2))
+        assertEquals(listOf("প্রথম লাইন", "দ্বিতীয়"), SpeechText.banglaChunks("প্রথম লাইন\n😊\nদ্বিতীয়"))
+        assertEquals(SpeechText.SENTENCE_PAUSE_MS, SpeechText.pauseAfterMs("কাজ ছিল।"))
+    }
 }

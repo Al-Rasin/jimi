@@ -15,9 +15,12 @@ private val NORMALIZE_RE_6 = Regex("[`*_~|]")
 // Bangla letters only: Bangla digits and the taka sign alone are read by the English voice (normalize turns them English).
 private const val BN = "\\u0980-\\u09E5\\u09F0\\u09F1\\u09F4-\\u09FF"
 private val BANGLA_LETTER = Regex("[$BN]")
-// A Bangla stretch: starts with a Bangla letter, runs on over Bangla digits, spaces, joiners and punctuation (। is
-// U+0964), ends on a Bangla char or sentence mark. A Latin word in between starts a new (English) part.
-private val BANGLA_RUN = Regex("[$BN](?:[\\u0980-\\u09FF\\u0964\\u0965\\u200C\\u200D\\s,.!?;:'\"()-]*[\\u0980-\\u09FF\\u0964.!?])?")
+// A Bangla stretch: starts with a Bangla letter, runs on over digits (Bangla or English: "সন্ধ্যা 7 টায়" stays in one
+// voice), spaces, joiners and punctuation (। is U+0964), ends on a Bangla char, digit or sentence mark.
+// A Latin word in between starts a new (English) part.
+private val BANGLA_RUN = Regex("[$BN](?:[\\u0980-\\u09FF\\u0964\\u0965\\u200C\\u200D0-9%/\\s,.!?;:'\"()-]*[\\u0980-\\u09FF\\u0964\\u09650-9%.!?])?")
+// Sentence ends in Bangla text (। ॥ or . ! ?) and line breaks: Bangla is made one sentence at a time.
+private val BANGLA_SENTENCE_END = Regex("(?<=[\\u0964\\u0965.!?])\\s+|\\s*\\n\\s*")
 private val NORMALIZE_RE_7 = Regex("[\\u0980-\\u09F1\\u09F4-\\u09FF]+")
 private val NORMALIZE_RE_8 = Regex("\\b([0-9]{4})-([0-9]{2})-([0-9]{2})\\b")
 private val NORMALIZE_RE_9 = Regex("\\b([0-9]{1,2})[/-]([0-9]{1,2})[/-]([0-9]{4})\\b")
@@ -61,6 +64,17 @@ object SpeechText {
         }
         text.substring(at).takeIf { it.any(Char::isLetterOrDigit) }?.let { out += Part(it.trim(), false) }
         return out
+    }
+
+    /**
+     * Text with Bangla, cut into sentences (long ones every [maxWords] words) so the first is heard while the next
+     * is made. Each piece keeps its Bangla; [parts] then splits it by voice. Bits with no letters (emoji) are dropped.
+     */
+    fun banglaChunks(text: String, maxWords: Int = 25): List<String> {
+        require(maxWords > 0) { "maxWords must be positive" }
+        return text.split(BANGLA_SENTENCE_END).flatMap { sentence ->
+            sentence.trim().split(TextNorm.SPACES).chunked(maxWords) { it.joinToString(" ") }
+        }.filter { it.any(Char::isLetterOrDigit) }
     }
 
     private val small = listOf("zero", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine",
@@ -214,7 +228,7 @@ object SpeechText {
      * (see [PcmShape]), so this is the only gap between pieces.
      */
     fun pauseAfterMs(text: String): Int = when (text.trimEnd().lastOrNull()) {
-        '.', '!', '?' -> SENTENCE_PAUSE_MS
+        '.', '!', '?', '\u0964', '\u0965' -> SENTENCE_PAUSE_MS
         ',', ';', ':' -> CLAUSE_PAUSE_MS
         else -> WORD_PAUSE_MS
     }
