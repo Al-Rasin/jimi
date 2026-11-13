@@ -95,12 +95,14 @@ class AndroidTts(context: Context, private val voiceName: String?) : AutoCloseab
         }
     }
 
-    /** Best installed offline voice for [language]; Bangladesh first. */
+    /** Best installed offline voice for [language]: the preferred one, else Bangladesh first. */
     private fun findVoice(language: String): SystemVoice? {
-        val voice = tts.voices.orEmpty()
+        val all = tts.voices.orEmpty()
             .filter { it.locale.language == language && !it.isNetworkConnectionRequired &&
                 SystemTts.Engine.KEY_FEATURE_NOT_INSTALLED !in it.features.orEmpty() }
-            .minByOrNull { if (it.locale.country == "BD") 0 else 1 }
+        JarvisLog.i("phone $language voices: ${all.joinToString { it.name }}")
+        val voice = all
+            .minByOrNull { if (it.name == PREFERRED[language]) 0 else if (it.locale.country == "BD") 1 else 2 }
         JarvisLog.i("phone $language voice: ${voice?.name ?: "none installed"}")
         return voice
     }
@@ -150,6 +152,8 @@ class AndroidTts(context: Context, private val voiceName: String?) : AutoCloseab
 
     companion object {
         const val GOOGLE = "com.google.android.tts"
+        /** Preferred voices by language: the user picked this female Bangla voice on the phone (2026-11-13). */
+        private val PREFERRED = mapOf("bn" to "bn-in-x-bnc-local")
         private const val INIT_S = 20L   // cold start of Google TTS took ~8 s on the phone
         private const val SYNTH_S = 15L
         private const val NET_S = 4L                 // slower than this = worse than the offline voice
