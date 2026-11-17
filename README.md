@@ -1,5 +1,14 @@
 # Jimi
 
+**An offline voice assistant for a rooted Android phone.** Wake word, speech to text,
+local LLMs and full phone control, all on the device.
+
+<p>
+  <img src="screenshots/chat.jpg" width="220" alt="Chat">
+  <img src="screenshots/wake-word.jpg" width="220" alt="Wake word">
+  <img src="screenshots/settings.jpg" width="220" alt="Settings">
+</p>
+
 A voice assistant for my own Android phone. It runs offline, works when the
 phone is locked, and can control almost anything on the phone because the phone
 is rooted.
@@ -61,6 +70,10 @@ adb install -r app/build/outputs/apk/debug/app-debug.apk
 The wake word model goes in `models/wakeword/app-assets/wakeword/` (see
 `training/wakeword/README.md`). The GGUF models are pushed to the phone
 separately.
+
+## Download
+
+There is no prebuilt APK. Build it from source as shown above.
 
 Needs Android 11+ and root. This is a personal project, so it asks for a lot of
 permissions. It is not meant for the Play Store.
