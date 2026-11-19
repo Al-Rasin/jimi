@@ -174,7 +174,7 @@ internal fun SettingsTab(vm: AppViewModel, home: HomeViewModel, onSetup: () -> U
                 }
                 if (message.isNotEmpty()) Hint(message)
             }
-            Hint("Tried in order: Groq, Gemini/Claude, OpenRouter, Cloudflare. Phone actions stay on the phone.")
+            Hint("Tried in order: Groq, Gemini, Claude, OpenRouter, Cloudflare. Phone actions stay on the phone.")
         }
         "local" -> SubPage("Local AI", close) {
             RowsCard {
@@ -365,7 +365,8 @@ private data class KeyRowSpec(val secret: String, val label: String, val hint: S
 
 private val CLOUD_KEY_ROWS = listOf(
     KeyRowSpec(Secrets.GROQ_KEY, "Groq key", "starts with gsk_"),
-    KeyRowSpec(Secrets.CLOUD_KEY, "Gemini / Claude key", "AIza… or sk-ant-…"),
+    KeyRowSpec(Secrets.GEMINI_KEY, "Gemini key", "from Google AI Studio"),
+    KeyRowSpec(Secrets.CLAUDE_KEY, "Claude key", "starts with sk-ant-"),
     KeyRowSpec(Secrets.OPENROUTER_KEY, "OpenRouter key", "starts with sk-or-"),
     KeyRowSpec(Secrets.CLOUDFLARE_ACCOUNT, "Cloudflare account ID", "from the Cloudflare dashboard", hidden = false, testable = false),
     KeyRowSpec(Secrets.CLOUDFLARE_KEY, "Cloudflare token", "Workers AI token"),

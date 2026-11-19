@@ -57,6 +57,7 @@ interface CloudProvider {
 data class CloudKeys(
     val main: String? = null, val groq: String? = null, val openRouter: String? = null,
     val cloudflare: String? = null, val cloudflareAccount: String? = null, val openAi: String? = null,
+    val gemini: String? = null, val claude: String? = null,
 ) {
     override fun toString() = "CloudKeys(hidden)"
 }
@@ -278,7 +279,7 @@ class CloudBrain @Inject constructor(
     }
 
     private fun savedKeys() = CloudKeys(
-        main = secrets.get(Secrets.CLOUD_KEY), groq = secrets.get(Secrets.GROQ_KEY),
+        gemini = secrets.get(Secrets.GEMINI_KEY), claude = secrets.get(Secrets.CLAUDE_KEY), groq = secrets.get(Secrets.GROQ_KEY),
         openRouter = secrets.get(Secrets.OPENROUTER_KEY), cloudflare = secrets.get(Secrets.CLOUDFLARE_KEY),
         cloudflareAccount = secrets.get(Secrets.CLOUDFLARE_ACCOUNT), openAi = secrets.get(Secrets.OPENAI_KEY),
     )
@@ -290,7 +291,8 @@ class CloudBrain @Inject constructor(
     suspend fun test(secretName: String): String {
         val keys = savedKeys()
         val only = when (secretName) {
-            Secrets.CLOUD_KEY -> CloudKeys(main = keys.main)
+            Secrets.GEMINI_KEY -> CloudKeys(gemini = keys.gemini)
+            Secrets.CLAUDE_KEY -> CloudKeys(claude = keys.claude)
             Secrets.GROQ_KEY -> CloudKeys(groq = keys.groq)
             Secrets.OPENROUTER_KEY -> CloudKeys(openRouter = keys.openRouter)
             Secrets.OPENAI_KEY -> CloudKeys(openAi = keys.openAi)
@@ -338,10 +340,12 @@ class CloudBrain @Inject constructor(
         /** Google keys start with "AIza"; anything else is treated as an Anthropic key. */
         fun providerFor(key: String): CloudProvider = if (key.startsWith("AIza")) GeminiProvider(key) else ClaudeProvider(key)
 
-        /** Saved keys in try order (D-064, D-065, D-078): Groq → main (Gemini/Claude) → OpenRouter → Cloudflare → OpenAI (paid, last). */
+        /** Saved keys in try order (D-064, D-065, D-078): Groq → Gemini → Claude → old main key → OpenRouter → Cloudflare → OpenAI (paid, last). */
         fun chain(k: CloudKeys): CloudProvider? {
             val list = listOfNotNull(
                 k.groq?.let { OpenAiProvider(Preset.GROQ, it) },
+                k.gemini?.let { GeminiProvider(it) },
+                k.claude?.let { ClaudeProvider(it) },
                 k.main?.let(::providerFor),
                 k.openRouter?.let { OpenAiProvider(Preset.OPENROUTER, it) },
                 if (k.cloudflare != null && k.cloudflareAccount != null) OpenAiProvider(Preset.cloudflare(k.cloudflareAccount), k.cloudflare) else null,

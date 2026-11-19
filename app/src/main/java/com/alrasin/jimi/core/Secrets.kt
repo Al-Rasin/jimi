@@ -18,6 +18,16 @@ import javax.inject.Singleton
 class Secrets @Inject constructor(@ApplicationContext context: Context) {
     private val prefs = context.getSharedPreferences("secrets", Context.MODE_PRIVATE)
 
+    init { runCatching { splitOldCloudKey() } }
+
+    /** Old single "Gemini / Claude" box → its own box: sk-ant-… is Claude, anything else Gemini. */
+    private fun splitOldCloudKey() {
+        val old = get(CLOUD_KEY) ?: return
+        val target = if (old.startsWith("sk-ant")) CLAUDE_KEY else GEMINI_KEY
+        if (!has(target)) put(target, old)
+        put(CLOUD_KEY, null)
+    }
+
     private fun key(): SecretKey {
         val ks = KeyStore.getInstance("AndroidKeyStore").apply { load(null) }
         (ks.getKey(ALIAS, null) as? SecretKey)?.let { return it }
@@ -53,7 +63,10 @@ class Secrets @Inject constructor(@ApplicationContext context: Context) {
         /** Find my phone (#30): secret word and trusted numbers. */
         const val FIND_WORD = "find_word"
         const val FIND_NUMBERS = "find_numbers"
+        /** Old shared Gemini/Claude key; split into [GEMINI_KEY] / [CLAUDE_KEY] on start. */
         const val CLOUD_KEY = "cloud_api_key"
+        const val GEMINI_KEY = "gemini_api_key"
+        const val CLAUDE_KEY = "claude_api_key"
         /** Kimi was removed (D-065); only used to delete an old saved key. */
         const val OLD_KIMI_KEY = "kimi_api_key"
         const val GROQ_KEY = "groq_api_key"
@@ -63,6 +76,6 @@ class Secrets @Inject constructor(@ApplicationContext context: Context) {
         const val OPENAI_KEY = "openai_api_key"
 
         /** Any of these saved = cloud can run (Cloudflare needs its account ID too). */
-        val CLOUD_KEYS = listOf(CLOUD_KEY, GROQ_KEY, OPENROUTER_KEY, CLOUDFLARE_KEY, OPENAI_KEY)
+        val CLOUD_KEYS = listOf(GEMINI_KEY, CLAUDE_KEY, GROQ_KEY, OPENROUTER_KEY, CLOUDFLARE_KEY, OPENAI_KEY)
     }
 }

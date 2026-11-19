@@ -68,6 +68,9 @@ class OpenAiCloudTest {
             CloudBrain.chain(CloudKeys("AIzaTest", "gsk_x", "sk-or-x", "cf", "acc"))?.name)
         assertEquals("Gemini+OpenRouter", CloudBrain.chain(CloudKeys(main = "AIzaTest", openRouter = "sk-or-x"))?.name)
         assertEquals("Gemini", CloudBrain.chain(CloudKeys(main = "AIzaTest"))?.name)
+        // Own boxes: any Gemini key format is Gemini, never Claude
+        assertEquals("Gemini", CloudBrain.chain(CloudKeys(gemini = "AQ.newformat"))?.name)
+        assertEquals("Gemini+Claude", CloudBrain.chain(CloudKeys(gemini = "AQ.x", claude = "sk-ant-x"))?.name)
         assertNull(CloudBrain.chain(CloudKeys(cloudflare = "cf")))   // no account ID → Cloudflare skipped
         assertNull(CloudBrain.chain(CloudKeys()))
     }
