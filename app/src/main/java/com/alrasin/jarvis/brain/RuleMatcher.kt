@@ -15,10 +15,12 @@ object RuleMatcher {
 
     // Debugging first: "wireless debugging" must not become Wi-Fi.
     private val TOGGLE_TARGETS = linkedMapOf(
-        "wireless_debugging" to listOf("wireless debugging", "wireless debug", "wifi debugging", "wi fi debugging", "wireless adb", "adb wifi", "adb over wifi", "wifi adb"),
+        "wireless_debugging" to listOf("wireless debugging", "wireless debug", "wifi debugging", "wi fi debugging", "wireless adb", "adb wifi", "adb over wifi", "wifi adb",
+            // User says "wireless" for debugging and "wifi" for Wi-Fi (history 2026-11: 6 fixes).
+            "wireless(?! network)"),
         "usb_debugging" to listOf("usb debugging", "usb debug", "adb debugging", "developer debugging"),
         "flashlight" to listOf("flashlight", "flash light", "torch", "flash"),
-        "wifi" to listOf("wifi", "wi fi", "wireless"),
+        "wifi" to listOf("wifi", "wi fi", "wireless network"),
         "bluetooth" to listOf("bluetooth", "blue tooth"),
         "data" to listOf("mobile data", "data", "internet", "cellular"),
         "dnd" to listOf("do not disturb", "dnd", "silent mode", "focus mode"),
@@ -77,8 +79,10 @@ object RuleMatcher {
 
     private fun re(p: String) = Regex("^(?:$p)$")
 
+    private val PHONE_STATUS_RE = Regex("^(?:whats |what is |check |show )?(?:my |the )?(?:phone|phones|device) (?:current )?status$|^status of (?:my |the )?phone$")
+
     /** Panic word (PLAN 12.4): stop everything, lock, refuse risky things until unlocked by hand. */
-    private const val PANIC = "panic|panic mode|code red|lock ?down|emergency lock|stop everything(?: and lock)?"
+    private const val PANIC = "panic|panic mode|code (?:red|rate|read|rad|rid)|(?:coat|cold|cord) red|lock ?down|emergency lock|stop everything(?: and lock)?"
 
     private fun talk(t: String): ToolCall? = when {
         t.matches(re(PANIC)) -> call("panic")
@@ -292,6 +296,7 @@ object RuleMatcher {
         WeatherRequest.match(t)?.let { return it }
         money(t)?.let { return it }
         prayer(t)?.let { return it }
+        if (t.matches(PHONE_STATUS_RE)) return call("device_status", "what" to "all")
         if (t.matches(KNOWLEDGE_WHOLE_RE)) return call("phone_profile", "scan" to "true")
         if (t.matches(KNOWLEDGE_WHOLE_RE_2)) return call("phone_profile")
         if (t.matches(KNOWLEDGE_WHOLE_RE_3)) return call("phone_profile", "ask" to "apps")

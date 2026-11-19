@@ -10,6 +10,8 @@ internal object CommsRules {
     private fun normalize(text: String) = RuleMatcher.normalize(text)
 
     fun comms(t: String): ToolCall? {
+        // "phone status" is a status question, not "phone (call) status".
+        if (t.matches(Regex("^(?:my |the )?phones? (?:current )?status$"))) return null
         val calling = t.trimEnd('.', '!', '?').replace(COMMS_RE, "")
         callControl(calling)?.let { return it }
         COMMS_RE_2.find(calling)?.let {

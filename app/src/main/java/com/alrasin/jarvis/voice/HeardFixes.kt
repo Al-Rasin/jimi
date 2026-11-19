@@ -12,7 +12,13 @@ object HeardFixes {
     private val alarmAtStart = Regex("^a?lum\\b(?=\\s+(?:at|for|to|in|tomorrow|\\d))", ic)
     /** Typed text, message bodies, notes and searches are kept word for word. */
     private val dictation = Regex("^(?:type|note|text|message|sms|send|write|search|google|reply)\\b|\\b(?:saying|that says)\\b", ic)
-    private val debugging = Regex("\\b(?:wireless\\s+)?(?:divagging|diwangi|dewagging)\\b", ic)
+    private val debugging = Regex("\\b(?:wireless\\s+)?(?:divagging|diwangi|dewagging|dibgging|debuging)\\b", ic)
+    /** "wireless diva game", "earless department", "oil is debugging" (history, 2026-11). */
+    private val debuggingNoise = Regex(
+        "\\b(?:wireless|wire less|earless|oil is)\\s+(?:diva game|department|device|devices|debugging)(?:\\s+in)?\\b", ic,
+    )
+    /** "darn on X": STT turned "turn" into another word. */
+    private val turnLead = Regex("^(?:darn|tarn)\\s+(?=(?:on|off)\\s)", ic)
     private val search = Regex("^shark(?=\\s+(?:for|on)\\s|\\s+.+\\s+(?:in|on)\\s+(?:youtube|google|chrome|play store)$)", ic)
     private val unlock = Regex("^unbox(?=$|\\s+(?:the\\s+|my\\s+)?(?:phone|screen|device)$)", ic)
 
@@ -20,6 +26,8 @@ object HeardFixes {
         if (dictation.containsMatchIn(text)) return text
         var t = joinSpelledLetters(text)
         t = debugging.replace(t, "wireless debugging")
+        t = debuggingNoise.replace(t, "wireless debugging")
+        t = turnLead.replace(t, "turn ")
         t = alarmAfterSet.replace(t) { "${it.groupValues[1]}alarm" }
         t = alarmAtStart.replace(t, "alarm")
         if (alarmContext.containsMatchIn(t)) t = twoMore.replace(t, "tomorrow")
