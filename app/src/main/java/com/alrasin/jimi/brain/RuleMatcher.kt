@@ -91,6 +91,12 @@ object RuleMatcher {
         }
         if (SHOPPING_READ_RE.matches(t)) return call("read_notes", "about" to "shopping list")
         if (MY_NUMBER_RE.matches(t)) return call("device_status", "what" to "number")
+        if (WHO_CALLING_RE.matches(t)) return call("missed_calls", "now" to "yes")
+        if (CALL_LAST_CALLER_RE.matches(t)) return call("call_back")
+        REMINDER_NAMED_DELETE_RE.matchEntire(t)?.let { if (it.groupValues[1] != "all") return call("delete_reminder", "text" to it.groupValues[1]) }
+        if (FORGET_WIFI_RE.matches(t)) return call("setting", "name" to "wifi", "state" to "open")
+        NOTES_ABOUT_RE.matchEntire(t)?.let { return call("read_notes", "about" to it.groupValues[1].trim()) }
+        if (t.matches(SYSTEM_NETWORK_RE)) return call("device_status", "what" to "network")
         if (CHARGE_ETA_RE.containsMatchIn(t)) return call("device_status", "what" to "battery")
         timedToggle(t, now)?.let { return it }
         if (t.matches(OTHER_VOLUME_RE)) return call("setting", "name" to "sound", "state" to "open")

@@ -81,14 +81,15 @@ class PhoneAlerts(
     /** Says who is calling (ROADMAP B §I.1). The number only comes with READ_CALL_LOG; Android sends the broadcast twice, so say it once per ring. */
     private val ringing = object : BroadcastReceiver() {
         override fun onReceive(context: Context, intent: Intent) {
-            if (intent.getStringExtra(TelephonyManager.EXTRA_STATE) != TelephonyManager.EXTRA_STATE_RINGING) { ringAnnounced = false; return }
+            if (intent.getStringExtra(TelephonyManager.EXTRA_STATE) != TelephonyManager.EXTRA_STATE_RINGING) { ringAnnounced = false; CallText.ringingNow = null; return }
             @Suppress("DEPRECATION")
             val number = intent.getStringExtra(TelephonyManager.EXTRA_INCOMING_NUMBER) ?: return
             if (ringAnnounced) return
             ringAnnounced = true
             scope.launch {
-                if (!listeningEnabled()) return@launch   // Jimi is off: stay quiet
                 val name = withContext(Dispatchers.IO) { if (number.isBlank()) "" else contactName(number) }
+                CallText.ringingNow = CallText.ringing(name)
+                if (!listeningEnabled()) return@launch   // Jimi is off: stay quiet
                 announce(CallText.ringing(name))
             }
         }

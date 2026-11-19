@@ -24,6 +24,9 @@ object CallText {
     private val ANSWER = Regex("(?i)\\b(answer|accept|pick up)\\b")
     private val DECLINE = Regex("(?i)\\b(decline|reject|dismiss|hang up|end call|end)\\b")
 
+    /** What is ringing right now ("Rahim is calling."), set by PhoneAlerts; null when no call rings. */
+    @Volatile var ringingNow: String? = null
+
     fun ringing(name: String, app: String? = null): String {
         val who = name.trim().ifEmpty { "Unknown number" }
         return if (app == null) "$who is calling." else "$who is calling on $app."
@@ -132,7 +135,11 @@ fun callTools(context: Context, contacts: Contacts): List<Tool> {
                 else -> ToolResult.fail("No call is ringing.")
             }
         },
-        SimpleTool("missed_calls", "Say who called and was missed in the last day", emptyList(), Risk.SAFE) { _, _ ->
+        SimpleTool("missed_calls", "Say who called and was missed in the last day; now = say who is calling right now",
+            listOf(arg("now", "yes to say who is ringing now", required = false)), Risk.SAFE) { c, _ ->
+            if (!c.arg("now").isNullOrBlank()) {
+                return@SimpleTool CallText.ringingNow?.let { ToolResult.ok(it) } ?: ToolResult.ok("No call is ringing right now.")
+            }
             val names = missedCallers(context, contacts, System.currentTimeMillis() - MISSED_WINDOW_MS)
                 ?: return@SimpleTool ToolResult.fail("I need the call log permission. Open Jimi setup.")
             ToolResult.ok(CallText.missedSummary(names))

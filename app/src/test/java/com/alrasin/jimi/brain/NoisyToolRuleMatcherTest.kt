@@ -150,7 +150,7 @@ class StatusAndSelfTalkTest {
     @Test fun askingIfAToggleIsOnOnlyReadsIt() {
         for ((q, target) in listOf(
             "is wifi on" to "wifi", "is bluetooth turned off" to "bluetooth", "is the flashlight on" to "flashlight",
-            "what wifi am i connected to" to "wifi", "am i connected to wifi" to "wifi",
+            "is wifi connected" to "wifi",
         )) {
             assertEquals(q, ToolCall("toggle", mapOf("target" to target, "state" to "status")), RuleMatcher.match(q))
         }
@@ -401,6 +401,17 @@ class ComplaintPhrasesTest {
         assertEquals(ToolCall("read_notes", mapOf("about" to "shopping list")), m("what do i need to buy"))
         assertEquals(ToolCall("set_timer", mapOf("seconds" to "600", "label" to "pasta")), m("set a timer for 10 minutes called pasta"))
         assertEquals(ToolCall("set_timer", mapOf("seconds" to "600")), m("set a timer for the next 10 minutes"))
+    }
+
+    @Test fun callerWifiRemindersAndNotesAbout() {
+        assertEquals(ToolCall("call_back", emptyMap()), m("call the last person who called me"))
+        assertEquals(ToolCall("missed_calls", mapOf("now" to "yes")), m("who is calling"))
+        assertEquals(ToolCall("delete_reminder", mapOf("text" to "medicine")), m("cancel the medicine reminder"))
+        assertEquals(ToolCall("delete_reminder", mapOf("text" to "all")), m("cancel all reminders"))
+        assertEquals(ToolCall("device_status", mapOf("what" to "network")), m("what wifi am i connected to"))
+        assertEquals(ToolCall("setting", mapOf("name" to "wifi", "state" to "open")), m("forget this wifi"))
+        assertEquals(ToolCall("read_notes", mapOf("about" to "car")), m("what did i note about the car"))
+        assertEquals(ToolCall("forget_fact", mapOf("text" to "my birthday")), m("forget my birthday"))
     }
 
     @Test fun callOnSpeaker() {
