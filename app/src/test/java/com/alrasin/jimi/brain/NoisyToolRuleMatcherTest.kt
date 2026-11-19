@@ -386,6 +386,16 @@ class ComplaintPhrasesTest {
         assertEquals(ToolCall("device_status", mapOf("what" to "battery")), m("when will my phone be fully charged"))
     }
 
+    @Test fun volumeAllTheWayBrightnessALittleAndMyNumber() {
+        assertEquals(ToolCall("set_volume", mapOf("level" to "100")), m("turn the volume all the way up"))
+        assertEquals(ToolCall("set_volume", mapOf("level" to "0")), m("turn volume all the way down"))
+        assertEquals(ToolCall("set_brightness", mapOf("level" to "up")), m("increase brightness a little"))
+        assertEquals(ToolCall("set_brightness", mapOf("level" to "down")), m("lower the brightness a bit"))
+        assertEquals(ToolCall("device_status", mapOf("what" to "number")), m("what's my phone number"))
+        assertEquals(ToolCall("device_status", mapOf("what" to "number")), m("tell me my mobile number"))
+        assertEquals(null, m("call my number"))
+    }
+
     @Test fun callOnSpeaker() {
         assertEquals(ToolCall("call", mapOf("contact" to "mom", "speaker" to "true")), m("call mom on speaker"))
         assertEquals(ToolCall("call", mapOf("contact" to "dad", "speaker" to "true")), m("call dad on the speakerphone"))

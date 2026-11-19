@@ -71,6 +71,7 @@ internal val STORE_SEARCH_RE = Regex(" (?:app|apps|game|games)$")
 internal val NOISY_TOOL_RE = Regex("^(?:search|google|find|look up|wiki|wikipedia|tell me about|explain|define|why|how|what does|what do|what are|i |im |remember|forget|say|repeat)\\b")
 internal val NOISY_TOOL_RE_2 = Regex("\\b(?:news|headlines|online|internet|technology|buy|price|prices)\\b")
 /** "how long until my battery is full", "when will my phone be fully charged". */
+internal val MY_NUMBER_RE = Regex("^(?:what(?:s| is) |tell me |show me |say )?my (?:own )?(?:phone |mobile |sim |cell )?number(?: is)?$|^what(?:s| is) (?:the )?number (?:of )?(?:this|my) (?:phone|sim)$")
 internal val CHARGE_ETA_RE = Regex("^(?!.*\\b(?:remind|notify|alert|let me know|tell me when)\\b).*\\b(?:how long|how much time|when)\\b.*\\b(?:fully? charged?|(?:battery|phone) (?:be |is )?full|full charge|charged fully|charge (?:fully|completely|to 100))")
 internal val NOISY_TOOL_RE_3 = Regex("\\b(?:dont|do not|never|not|cancel|stop|delete|remove|dismiss|check|list|show)\\b")
 internal val NOISY_TOOL_RE_4 = Regex("\\bbattery\\b")
@@ -83,6 +84,8 @@ internal val NOISY_TOOL_RE_10 = Regex("\\b(?:volume|sound) (up|down|off|max|maxi
 internal val NOISY_TOOL_RE_11 = Regex("\\b(?:on|off)\\b")
 internal val SETTING_RE = Regex("^(?:open |show |go to |take me to )(?:the |my )?(.+?) settings?$")
 /** "turn it up a bit": the amount words change nothing. */
+/** "turn the volume all the way up/down". */
+internal val VOLUME_ALL_WAY_RE = Regex("^(?:turn |put |set )?(?:the )?(?:volume|sound|it) all the way (?:up|down)$|^turn (?:the )?(?:volume|sound) all the way (?:up|down)$")
 internal val A_BIT_RE = Regex(" (?:a (?:little )?bit|a little|slightly|some more|more)$")
 internal val SETTING_AFTER_RE = Regex("^(?:the |my )?([a-z ]+?) (on|off)$")
 internal val SETTING_RE_2 = Regex("^(turn on|switch on|enable|turn off|switch off|disable) (?:the |my )?(.+)$")

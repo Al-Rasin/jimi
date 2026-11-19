@@ -280,7 +280,7 @@ fun systemTools(context: Context, torch: Torch): List<Tool> {
             else if (actual == target && manual) Reply.done("brightness is ${actual * 100 / maxBrightness} percent.")
             else Reply.failed("brightness reads ${actual * 100 / maxBrightness} percent. The change isn't confirmed.")
         },
-        SimpleTool("device_status", "Time, date, battery, phone temperature, storage, memory, Wi-Fi/network or all", listOf(arg("what", "what to tell", choices = listOf("time", "date", "tomorrow", "battery", "temperature", "storage", "memory", "network", "all")))) { c, _ ->
+        SimpleTool("device_status", "Time, date, battery, phone temperature, storage, memory, Wi-Fi/network, own phone number or all", listOf(arg("what", "what to tell", choices = listOf("time", "date", "tomorrow", "battery", "temperature", "storage", "memory", "network", "number", "all")))) { c, _ ->
             val now = Date()
             val time = SimpleDateFormat("h:mm a", Locale.US).format(now)
             val date = SimpleDateFormat("EEEE, d MMMM", Locale.US).format(now)
@@ -310,6 +310,7 @@ fun systemTools(context: Context, torch: Torch): List<Tool> {
                     "tomorrow" -> "Tomorrow is ${SimpleDateFormat("EEEE, d MMMM", Locale.US).format(Date(now.time + 86_400_000L))}."
                     "memory" -> memory(context)
                     "network" -> network(context)
+                    "number" -> ownNumber(context)
                     else -> "It's $time, $date. $battery $storage"
                 },
             )
@@ -407,6 +408,22 @@ internal fun temperature(tenths: Int): String {
         else -> "That's normal."
     }
     return "The phone is $c degrees. $feel"
+}
+
+/** The SIM's own number. Many SIMs don't store it, so this can be empty. */
+@SuppressLint("MissingPermission", "HardwareIds")
+private fun ownNumber(context: Context): String {
+    val subs = runCatching {
+        context.getSystemService(android.telephony.SubscriptionManager::class.java)
+            .activeSubscriptionInfoList.orEmpty().mapNotNull { it.number?.takeIf(String::isNotBlank) }
+    }.getOrDefault(emptyList())
+    val line1 = runCatching { context.getSystemService(android.telephony.TelephonyManager::class.java).line1Number }.getOrNull()
+    val numbers = (subs + listOfNotNull(line1?.takeIf(String::isNotBlank))).distinct()
+    return when (numbers.size) {
+        0 -> "I can't read your number from the SIM, ${Persona.ADDRESS}. Many SIMs don't store it."
+        1 -> "Your number is ${numbers[0]}."
+        else -> "Your numbers are ${numbers.joinToString(" and ")}."
+    }
 }
 
 /** Wi-Fi name (or mobile data) and the phone's IP address. */

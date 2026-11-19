@@ -89,6 +89,7 @@ object RuleMatcher {
             // A rewrite that maps to itself would recurse forever.
             if (out != t) return match(out, now)
         }
+        if (MY_NUMBER_RE.matches(t)) return call("device_status", "what" to "number")
         if (CHARGE_ETA_RE.containsMatchIn(t)) return call("device_status", "what" to "battery")
         timedToggle(t, now)?.let { return it }
         if (t.matches(OTHER_VOLUME_RE)) return call("setting", "name" to "sound", "state" to "open")
@@ -262,6 +263,7 @@ object RuleMatcher {
             t.matches(MEDIA_WHOLE_RE_7) -> return call("set_volume", "level" to "0")
             t.matches(UNMUTE_RE) -> return call("set_volume", "level" to "50")
             t.matches(MEDIA_WHOLE_RE_8) -> return call("set_volume", "level" to "100")
+            t.matches(VOLUME_ALL_WAY_RE) -> return call("set_volume", "level" to if (t.endsWith("up")) "100" else "0")
         }
         return null
     }
@@ -346,8 +348,8 @@ object RuleMatcher {
         SYSTEM_RE.find(t)
             ?.let { return call("set_brightness", "level" to it.groupValues[1]) }
         when {
-            t.matches(SYSTEM_WHOLE_RE) -> return call("set_brightness", "level" to "up")
-            t.matches(SYSTEM_WHOLE_RE_2) -> return call("set_brightness", "level" to "down")
+            t.replace(A_BIT_RE, "").matches(SYSTEM_WHOLE_RE) -> return call("set_brightness", "level" to "up")
+            t.replace(A_BIT_RE, "").matches(SYSTEM_WHOLE_RE_2) -> return call("set_brightness", "level" to "down")
             t.matches(SYSTEM_WHOLE_RE_3) -> return call("set_brightness", "level" to "100")
             t.matches(SYSTEM_WHOLE_RE_4) -> return call("set_brightness", "level" to "0")
             t.matches(SYSTEM_WHOLE_RE_5) -> return call("set_brightness", "level" to "auto")
