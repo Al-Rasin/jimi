@@ -87,4 +87,10 @@ class QuickFactsTest {
         assertEquals("1 January 2000 was a Saturday.", a("what day was 1 january 2000"))
         assertNull(a("what day is 31 february"))
     }
+
+    @Test fun ageFromBirthYear() {
+        val now = java.time.ZonedDateTime.of(2026, 11, 20, 10, 0, 0, 0, java.time.ZoneId.of("Asia/Dhaka"))
+        assertEquals("About 31, or 30 if your birthday hasn't come yet this year.", QuickFacts.answer("How old am I if I was born in 1995?", now))
+        assertEquals(null, QuickFacts.answer("how old am i if i was born in 2050", now))
+    }
 }

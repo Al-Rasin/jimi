@@ -312,7 +312,15 @@ object QuickFacts {
     )
     private val YESTERDAY = Regex("^(?:what|which) day (?:was|is) (?:it )?yesterday$|^(?:whats|what is|what was) (?:the )?(?:date )?yesterdays? ?(?:date)?$")
 
+    private val AGE = Regex("^how old (?:am i|is (?:he|she|someone|a person)|would i be|will i be)(?: now| today| this year)? if (?:i|he|she|they) (?:was|were|am) born in (\\d{4})$|^(?:i was born in|born in) (\\d{4}) how old am i(?: now)?$")
+
     private fun dates(t: String, today: LocalDate): String? {
+        AGE.matchEntire(t)?.let { m ->
+            val year = m.groupValues[1].ifEmpty { m.groupValues[2] }.toInt()
+            val n = today.year - year
+            if (n < 0) return null
+            return "About $n, or ${n - 1} if your birthday hasn't come yet this year."
+        }
         HOLIDAY.matchEntire(t)?.let { m ->
             val (month, day) = HOLIDAYS.getValue(m.groupValues[1])
             var d = LocalDate.of(today.year, month, day)

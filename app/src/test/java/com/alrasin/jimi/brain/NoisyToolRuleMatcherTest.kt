@@ -327,6 +327,7 @@ class ComplaintPhrasesTest {
 
     @Test fun anyoneMessagedNormalMode() {
         assertEquals(ToolCall("read_messages", emptyMap()), m("Did anyone message me?"))
+        assertEquals(ToolCall("call", mapOf("contact" to "rahim", "app" to "whatsapp")), m("Open WhatsApp and call Rahim."))
         assertEquals(ToolCall("toggle", mapOf("target" to "vibrate", "state" to "off")), m("Normal mode."))
         assertEquals(ToolCall("toggle", mapOf("target" to "vibrate", "state" to "off")), m("Put phone in normal mode."))
     }
