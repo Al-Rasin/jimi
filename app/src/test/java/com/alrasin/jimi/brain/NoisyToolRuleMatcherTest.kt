@@ -208,3 +208,13 @@ class UnmuteRecorderPhotosTest {
         assertEquals(ToolCall("open_app", mapOf("app" to "gallery")), RuleMatcher.match("show me my photos"))
     }
 }
+
+class AlarmCountdownTipTest {
+    @Test fun howLongUntilAlarmListsAlarms() {
+        assertEquals(ToolCall("list_alarms", emptyMap()), RuleMatcher.match("how long until my alarm"))
+    }
+
+    @Test fun tipIsAPercent() {
+        assertEquals("20 percent of 50 is 10.", QuickMath.answer("what's 20 percent tip on 50"))
+    }
+}

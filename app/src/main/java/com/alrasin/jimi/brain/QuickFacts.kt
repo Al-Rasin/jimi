@@ -4,12 +4,17 @@ import java.math.BigDecimal
 import java.math.MathContext
 import java.math.RoundingMode
 import java.time.DateTimeException
+import java.time.DayOfWeek
 import java.time.LocalDate
+import java.time.Month
+import java.time.Year
+import java.time.YearMonth
 import java.time.ZoneId
 import java.time.ZonedDateTime
 import java.time.format.DateTimeFormatter
 import java.time.format.TextStyle
 import java.time.temporal.ChronoUnit
+import java.time.temporal.TemporalAdjusters
 import java.util.Locale
 
 /**
@@ -208,6 +213,11 @@ object QuickFacts {
         add("volume", 0.001, "milliliter", "milliliters", "ml", "milliliter", "milliliters", "millilitre", "millilitres")
         add("volume", 1.0, "liter", "liters", "l", "liter", "liters", "litre", "litres")
         add("volume", 3.785411784, "gallon", "gallons", "gallon", "gallons")
+        add("time", 1.0, "second", "seconds", "sec", "secs", "second", "seconds")
+        add("time", 60.0, "minute", "minutes", "min", "mins", "minute", "minutes")
+        add("time", 3600.0, "hour", "hours", "hr", "hrs", "hour", "hours")
+        add("time", 86_400.0, "day", "days", "day", "days")
+        add("time", 604_800.0, "week", "weeks", "week", "weeks")
         add("temp", 1.0, "degree Celsius", "degrees Celsius", "c", "celsius", "centigrade")
         add("temp", 1.0, "degree Fahrenheit", "degrees Fahrenheit", "f", "fahrenheit")
         add("temp", 1.0, "kelvin", "kelvin", "k", "kelvin", "kelvins")
@@ -269,7 +279,41 @@ object QuickFacts {
     private val DAYS_UNTIL = Regex("^how many days (?:are )?(?:left )?(?:until|till|til|to|before|for|left for|left until|left till) $DATE$")
     private val WHAT_DAY = Regex("^(?:what|which) day (?:of the week )?(?:is|was|will be|falls on|is it on) $DATE$")
 
+    private val DAYS_IN_MONTH = Regex("^how many days (?:are there )?(?:in|does) ($MONTH)(?: (\\d{4}))?(?: have)?$")
+    private val LEAP = Regex("^is (\\d{4}) a leap year$|^is (?:this|it) (?:a )?leap year(?: this year)?$")
+    private val WHAT_YEAR = Regex("^(?:whats|what is|which|what) (?:the )?(?:current )?year(?: is it)?(?: now)?$")
+    private val WHAT_MONTH = Regex("^(?:whats|what is|which|what) (?:the )?(?:current )?month(?: is it)?(?: now)?$")
+    private val DAYS_LEFT = Regex("^how many days (?:are )?(?:left|remaining) (?:in|of|this) (?:the |this )?year$")
+    private val WEEKDAYS = DayOfWeek.entries.map { it.getDisplayName(TextStyle.FULL, Locale.US).lowercase() }
+    private val NEXT_DAY = Regex(
+        "^(?:whats|what is|which) (?:the )?date (?:is it )?(?:on )?(next|this|coming|this coming) (${WEEKDAYS.joinToString("|")})$" +
+            "|^(?:when is|what date is) (next|this|coming|this coming) (${WEEKDAYS.joinToString("|")})$",
+    )
+
     private fun dates(t: String, today: LocalDate): String? {
+        DAYS_IN_MONTH.matchEntire(t)?.let { m ->
+            val month = MONTHS.indexOf(m.groupValues[1]).takeIf { it >= 0 }?.plus(1) ?: SHORT[m.groupValues[1]] ?: return null
+            val year = m.groupValues[2].toIntOrNull() ?: today.year
+            val name = Month.of(month).getDisplayName(TextStyle.FULL, Locale.US)
+            val n = YearMonth.of(year, month).lengthOfMonth()
+            return if (month == 2) "$name $year has $n days." else "$name has $n days."
+        }
+        LEAP.matchEntire(t)?.let { m ->
+            val year = m.groupValues[1].toIntOrNull() ?: today.year
+            return if (Year.isLeap(year.toLong())) "Yes, $year is a leap year." else "No, $year is not a leap year."
+        }
+        if (WHAT_YEAR.matches(t)) return "It's ${today.year}."
+        if (WHAT_MONTH.matches(t)) return "It's ${today.month.getDisplayName(TextStyle.FULL, Locale.US)}."
+        if (DAYS_LEFT.matches(t)) {
+            val n = ChronoUnit.DAYS.between(today, LocalDate.of(today.year, 12, 31))
+            return "$n days are left in ${today.year}."
+        }
+        NEXT_DAY.matchEntire(t)?.let { m ->
+            val word = m.groupValues[2].ifEmpty { m.groupValues[4] }
+            val dow = DayOfWeek.entries[WEEKDAYS.indexOf(word)]
+            val d = today.with(TemporalAdjusters.next(dow))
+            return "${dow.getDisplayName(TextStyle.FULL, Locale.US)} is ${spoken(d, today)}."
+        }
         DAYS_UNTIL.matchEntire(t)?.let { m ->
             val d = date(m, today, futureOnly = true) ?: return null
             val n = ChronoUnit.DAYS.between(today, d)

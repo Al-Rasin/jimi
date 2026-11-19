@@ -44,6 +44,16 @@ class QuickFactsTest {
         assertEquals(null, QuickFacts.answer("light"))
     }
 
+    @Test fun calendarQuestions() {
+        val now = ZonedDateTime.of(2026, 11, 20, 9, 0, 0, 0, ZoneId.of("Asia/Dhaka"))
+        assertEquals("February 2028 has 29 days.", QuickFacts.answer("how many days in february 2028", now))
+        assertEquals("No, 2026 is not a leap year.", QuickFacts.answer("is this a leap year", now))
+        assertEquals("It's 2026.", QuickFacts.answer("what year is it", now))
+        assertEquals("41 days are left in 2026.", QuickFacts.answer("how many days left in the year", now))
+        assertEquals("Friday is 27 November.", QuickFacts.answer("what is the date next friday", now))
+        assertEquals("90 minutes is 1.5 hours.", QuickFacts.answer("convert 90 minutes to hours", now))
+    }
+
     @Test fun units() {
         assertEquals("1 kilogram is 1000 grams.", a("how many grams in a kilo"))
         assertEquals("5 kilometers is 3.11 miles.", a("convert 5 km to miles"))

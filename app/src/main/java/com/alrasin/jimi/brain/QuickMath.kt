@@ -17,7 +17,7 @@ object QuickMath {
         "divided by" to "/", "over" to "/", "plus" to "+",
         "minus" to "-", "less" to "-", "take away" to "-",
     )
-    private val PERCENT_OF = Regex("^(\\d+(?:\\.\\d+)?) ?(?:percent|%) of (\\d+(?:\\.\\d+)?)$")
+    private val PERCENT_OF = Regex("^(?:a )?(\\d+(?:\\.\\d+)?) ?(?:percent|%) (?:tip )?(?:of|on) (\\d+(?:\\.\\d+)?)$")
     private val ROOT = Regex("^(?:the )?square root of (\\d+(?:\\.\\d+)?)$")
     private val SQUARED = Regex("^(\\d+(?:\\.\\d+)?) (squared|cubed)$")
     private val POWER = Regex("^(\\d+(?:\\.\\d+)?) (?:to the power(?: of)?|raised to(?: the power(?: of)?)?|power) (\\d{1,3})$")
