@@ -15,6 +15,8 @@ class AppNameMatchTest {
             assertEquals(name, "YouTube", AppList.matchName(name, apps)?.label)
         }
         assertEquals("Chrome", AppList.matchName("browser", apps)?.label)
+        val miui = listOf(AppList.App("Recorder", "com.android.soundrecorder"))
+        assertEquals("Recorder", AppList.matchName("voice recording", miui)?.label)
     }
 
     @Test fun nonsenseAndPackageFragmentsDoNotMatch() {

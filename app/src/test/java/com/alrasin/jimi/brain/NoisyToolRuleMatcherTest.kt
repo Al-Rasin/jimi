@@ -292,5 +292,6 @@ class ComplaintPhrasesTest {
         assertEquals(ToolCall("lock_phone", emptyMap()), m("lock my phone"))
         assertEquals(ToolCall("unlock_phone", emptyMap()), m("unlock my phone"))
         assertNull(m("wifi"))
+        assertEquals("weather", m("is it cold today")?.tool)
     }
 }

@@ -63,6 +63,8 @@ class AppList(private val context: Context) {
             "maps" to "Maps", "google maps" to "Maps", "fb" to "Facebook", "insta" to "Instagram",
             "clock" to "Clock", "alarm" to "Clock", "files" to "File Manager", "file manager" to "File Manager",
             "music" to "Music", "you tube" to "YouTube", "whats app" to "WhatsApp", "calculator" to "Calculator",
+            "voice recorder" to "Recorder", "voice recording" to "Recorder", "sound recorder" to "Recorder",
+            "audio recorder" to "Recorder", "recording" to "Recorder",
         )
     }
 }
