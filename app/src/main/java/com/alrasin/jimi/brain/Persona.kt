@@ -13,6 +13,9 @@ private val SMALL_TALK_RE_5 = Regex("(thank you|thanks|thank u|thx|great|good jo
 private val SMALL_TALK_RE_6 = Regex("(are you there|you there|can you hear me|are you listening)")
 private val SMALL_TALK_RE_7 = Regex("(bye|goodbye|see you|later|see ya)")
 private val SMALL_TALK_RE_8 = Regex("tell me a joke|say something funny|joke")
+// Banglish small talk; without these the model shortlist sends "bangla" to the translate tool.
+private val BANGLISH_HOW_RE = Regex("(tumi |apni )?(kemon (acho|achen|aco|asen|achis)|ki (khobor|obostha|koro|korcho|korchen|koren))( jimi)?")
+private val BANGLISH_LANG_RE = Regex("(tumi |apni )?(ki )?bangla (bojho|bujho|bojhen|bujhen|bolte paro|paro|jano)( ki)?( jimi)?")
 
 /** Name, tone and fixed replies (PLAN 5.3 / 10.3). Short replies; calls the user "Boss". */
 object Persona {
@@ -87,6 +90,8 @@ object Persona {
             t.matches(SMALL_TALK_RE_6) -> "I'm here, $ADDRESS."
             t.matches(SMALL_TALK_RE_7) -> "Bye, $ADDRESS."
             t.matches(SMALL_TALK_RE_8) -> JOKES.random()
+            t.matches(BANGLISH_HOW_RE) -> "Bhalo achi, $ADDRESS. Ready when you are."
+            t.matches(BANGLISH_LANG_RE) -> "A little, $ADDRESS. I can translate Bangla, but commands work best in English."
             else -> null
         }
     }

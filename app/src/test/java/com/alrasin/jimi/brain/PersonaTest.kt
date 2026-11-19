@@ -58,3 +58,13 @@ class PersonaTest {
         assertEquals(Persona.SYSTEM_PROMPT, Persona.chatPrompt("tell me a story"))
     }
 }
+
+class BanglishSmallTalkTest {
+    @Test fun banglishSmallTalkNeedsNoModel() {
+        for (t in listOf("tumi ki bangla bojho", "bangla bujho", "kemon acho", "apni kemon achen", "ki koro jimi")) {
+            assertNotNull(t, Persona.smallTalk(t, 10))
+            assertNull(t, RuleMatcher.match(t))
+        }
+        assertNull(Persona.smallTalk("translate good morning to bangla", 10))
+    }
+}
