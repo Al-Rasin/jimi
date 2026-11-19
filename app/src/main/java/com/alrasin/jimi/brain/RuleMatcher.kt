@@ -122,6 +122,7 @@ object RuleMatcher {
         Regex("^(?:what did i (?:note|write)(?: down)?|(?:read|show|open)(?: me)? (?:my |the )?(?:last|latest|recent) notes?)$") to "show my notes",
         Regex("^open (whatsapp|messenger|telegram|imo|viber|signal) and (call|video call) (.+)$") to "$2 $3 on $1",
         Regex("^(?:did|has) (?:anyone|anybody|someone|somebody) (?:message|messaged|text|texted|sms) me(?: today)?$") to "read messages",
+        Regex("^what notifications (?:do i have|are there)$|^(?:do i have|are there) any (?:new )?notifications$") to "read my notifications",
         Regex("^(?:normal|ring|ringing|general|sound) mode(?: on)?$|^(?:put|set|switch|change|make) (?:my |the )?(?:phone )?(?:to |on |in(?:to)? )?(?:normal|ringing|general|sound) mode$") to "put my phone on ring mode",
         Regex("^(?:what|which) day is it (today|tomorrow)$") to "what day is $1",
         Regex("^(?:open|show)(?: me)? (?:the |my )?(?:last|latest|recent|newest) (?:photos?|pictures?|pics?|images?)$") to "open gallery",
@@ -329,6 +330,7 @@ object RuleMatcher {
             t.matches(SYSTEM_WHOLE_RE_9) -> return call("device_status", "what" to "storage")
             t.matches(SYSTEM_TOMORROW_RE) -> return call("device_status", "what" to "tomorrow")
             t.matches(SYSTEM_MEMORY_RE) -> return call("device_status", "what" to "memory")
+            t.matches(SYSTEM_NETWORK_RE) -> return call("device_status", "what" to "network")
             t.matches(SYSTEM_WHOLE_RE_10) -> return call("device_status", "what" to "all")
             t.matches(SYSTEM_WHOLE_RE_11) -> return call("take_screenshot")
             t.matches(SYSTEM_WHOLE_RE_12) -> return call("lock_phone")
@@ -385,7 +387,7 @@ object RuleMatcher {
         t.matches(DAILY_SUMMARY_WHOLE_RE) -> call("daily_summary")
         t.matches(NOTIFICATIONS_WHOLE_RE_2) -> call("notification_summary")
         t.matches(NOTIFICATIONS_WHOLE_RE_3) -> call("read_notifications")
-        else -> null
+        else -> CHAT_APP_MESSAGES_RE.matchEntire(t)?.let { m -> call("read_notifications", "app" to (m.groupValues[1].ifEmpty { m.groupValues[2] })) }
     }
 
     private fun knowledge(t: String): ToolCall? {

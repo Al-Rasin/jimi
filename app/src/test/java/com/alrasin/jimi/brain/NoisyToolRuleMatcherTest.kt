@@ -334,6 +334,22 @@ class ComplaintPhrasesTest {
         assertEquals(ToolCall("toggle", mapOf("target" to "vibrate", "state" to "off")), m("Put phone in normal mode."))
     }
 
+    @Test fun wifiNameAndIp() {
+        val net = ToolCall("device_status", mapOf("what" to "network"))
+        assertEquals(net, m("What is my WiFi name?"))
+        assertEquals(net, m("Which wifi am I connected to?"))
+        assertEquals(net, m("What's my IP address?"))
+        assertEquals(net, m("Am I online?"))
+    }
+
+    @Test fun chatAppMessages() {
+        val wa = ToolCall("read_notifications", mapOf("app" to "whatsapp"))
+        assertEquals(wa, m("Read my WhatsApp messages."))
+        assertEquals(wa, m("Any new WhatsApp messages?"))
+        assertEquals(wa, m("Read WhatsApp."))
+        assertEquals(ToolCall("read_notifications", emptyMap()), m("What notifications do I have?"))
+    }
+
     @Test fun spokenCorrection() {
         assertEquals(ToolCall("open_app", mapOf("app" to "youtube")), m("I said open YouTube."))
         assertEquals(ToolCall("open_app", mapOf("app" to "whatsapp")), m("No, I mean open WhatsApp."))

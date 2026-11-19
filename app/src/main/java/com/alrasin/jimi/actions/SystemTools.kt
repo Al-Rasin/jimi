@@ -15,6 +15,8 @@ import android.hardware.camera2.CameraManager
 import android.location.LocationManager
 import android.media.AudioManager
 import android.media.MediaScannerConnection
+import android.net.ConnectivityManager
+import android.net.NetworkCapabilities
 import android.net.wifi.WifiManager
 import android.os.BatteryManager
 import android.os.Environment
@@ -31,6 +33,7 @@ import com.alrasin.jimi.core.launch
 import com.alrasin.jimi.core.pollUntil
 import kotlinx.coroutines.delay
 import java.io.File
+import java.net.Inet4Address
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -271,7 +274,7 @@ fun systemTools(context: Context, torch: Torch): List<Tool> {
             else if (actual == target && manual) Reply.done("brightness is ${actual * 100 / maxBrightness} percent.")
             else Reply.failed("brightness reads ${actual * 100 / maxBrightness} percent. The change isn't confirmed.")
         },
-        SimpleTool("device_status", "Time, date, battery, phone temperature, storage, memory or all", listOf(arg("what", "what to tell", choices = listOf("time", "date", "tomorrow", "battery", "temperature", "storage", "memory", "all")))) { c, _ ->
+        SimpleTool("device_status", "Time, date, battery, phone temperature, storage, memory, Wi-Fi/network or all", listOf(arg("what", "what to tell", choices = listOf("time", "date", "tomorrow", "battery", "temperature", "storage", "memory", "network", "all")))) { c, _ ->
             val now = Date()
             val time = SimpleDateFormat("h:mm a", Locale.US).format(now)
             val date = SimpleDateFormat("EEEE, d MMMM", Locale.US).format(now)
@@ -294,6 +297,7 @@ fun systemTools(context: Context, torch: Torch): List<Tool> {
                     "temperature" -> temperature(tenths)
                     "tomorrow" -> "Tomorrow is ${SimpleDateFormat("EEEE, d MMMM", Locale.US).format(Date(now.time + 86_400_000L))}."
                     "memory" -> memory(context)
+                    "network" -> network(context)
                     else -> "It's $time, $date. $battery $storage"
                 },
             )
@@ -373,6 +377,46 @@ internal fun temperature(tenths: Int): String {
         else -> "That's normal."
     }
     return "The phone is $c degrees. $feel"
+}
+
+/** Wi-Fi name (or mobile data) and the phone's IP address. */
+@SuppressLint("MissingPermission")
+private suspend fun network(context: Context): String {
+    val cm = context.getSystemService(ConnectivityManager::class.java)
+    val active = cm.activeNetwork
+    val caps = active?.let { cm.getNetworkCapabilities(it) }
+    val kind = when {
+        caps == null -> null
+        caps.hasTransport(NetworkCapabilities.TRANSPORT_WIFI) -> "wifi"
+        caps.hasTransport(NetworkCapabilities.TRANSPORT_CELLULAR) -> "mobile"
+        else -> "other"
+    }
+    val ip = active?.let { cm.getLinkProperties(it) }?.linkAddresses
+        ?.map { it.address }?.firstOrNull { it is Inet4Address && !it.isLoopbackAddress }?.hostAddress
+    val ssid = if (kind == "wifi") wifiName(context) else null
+    return networkReply(kind, ssid, ip)
+}
+
+@Suppress("DEPRECATION")
+private suspend fun wifiName(context: Context): String? {
+    val raw = context.applicationContext.getSystemService(WifiManager::class.java)?.connectionInfo?.ssid
+    cleanSsid(raw)?.let { return it }
+    // Without location on, Android hides the name; root can still read it.
+    val line = RootShell.run("dumpsys wifi | grep -m1 'mWifiInfo SSID'").out.lineSequence().firstOrNull { it.isNotBlank() } ?: return null
+    return cleanSsid(Regex("SSID: (.+?), BSSID").find(line)?.groupValues?.get(1))
+}
+
+internal fun cleanSsid(raw: String?): String? =
+    raw?.trim()?.removeSurrounding("\"")?.takeIf { it.isNotBlank() && it != "<unknown ssid>" && it != "0x" }
+
+internal fun networkReply(kind: String?, ssid: String?, ip: String?): String {
+    val at = ip?.let { " Your IP address is $it." } ?: ""
+    return when (kind) {
+        null -> "You're not connected to the internet."
+        "wifi" -> (ssid?.let { "You're on Wi-Fi $it." } ?: "You're on Wi-Fi.") + at
+        "mobile" -> "You're on mobile data.$at"
+        else -> "You're connected.$at"
+    }
 }
 
 private fun memory(context: Context): String {

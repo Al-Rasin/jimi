@@ -11,9 +11,13 @@ fun notificationTools(dao: NotificationDao): List<Tool> {
     fun l() = JimiNotificationListener.instance
     val off = ToolResult.fail("Notification access is off. Open Jimi setup to turn it on.")
     return listOf(
-        SimpleTool("read_notifications", "Read current notifications", risk = Risk.VOICE_ID) { _, _ ->
-            val items = l()?.current() ?: return@SimpleTool off
-            if (items.isEmpty()) return@SimpleTool ToolResult.ok("No notifications.")
+        SimpleTool(
+            "read_notifications", "Read current notifications, optionally from one app",
+            listOf(arg("app", "only this app, e.g. WhatsApp", required = false)), risk = Risk.VOICE_ID,
+        ) { c, _ ->
+            val app = c.arg("app")?.trim()?.takeIf { it.isNotEmpty() }
+            val items = (l()?.current() ?: return@SimpleTool off).filter { app == null || it.app.contains(app, ignoreCase = true) }
+            if (items.isEmpty()) return@SimpleTool ToolResult.ok(if (app == null) "No notifications." else "No new ${app.replaceFirstChar(Char::uppercase)} messages.")
             ToolResult.ok(
                 "${items.size} notification${if (items.size > 1) "s" else ""}. " +
                     items.take(4).joinToString(". ") { "${it.app}: ${it.title}${if (it.text.isNotBlank()) ", ${it.text.take(80)}" else ""}" } + ".",

@@ -109,3 +109,8 @@ internal val PLACE_REM_RE = Regex("^(?:remind me|set a reminder)(?: to| about| t
 internal val PLACE_REM_RE_2 = Regex("^remind me (?:when|once|as soon as) i $PLACE_VERB (?:to |at )?$PLACE_NAME (?:to|about|that) (.+)$")
 internal val PLACE_REM_RE_3 = Regex("^(?:when|once|as soon as) i $PLACE_VERB (?:to |at )?$PLACE_NAME remind me (?:to |about |that )?(.+)$")
 internal val SAVE_PLACE_RE = Regex("^(?:this is (?:my |the )?(home|office|work|house|gym|school|college|university|mosque|masjid|workplace|hospital|market)|(?:save|remember|mark|set) (?:this|my current|the current|current) (?:place|location|spot)(?: as| is)? (?:my |the )?([a-z0-9]+(?: [a-z0-9]+)?))$")
+
+internal val SYSTEM_NETWORK_RE = Regex("^(?:what(?:s| is) (?:my |the )?(?:wifi|wi fi|network)(?: name)?|(?:which|what) (?:wifi|wi fi|network) (?:am i|is (?:my )?(?:the )?phone) (?:connected to|on|using)|what(?:s| is) my (?:ip|ip address)|(?:tell me |show )?my ip(?: address)?|am i (?:connected to (?:the )?(?:wifi|wi fi|internet)|online)|is (?:my |the )?internet (?:working|connected|on))$")
+
+/** "read my whatsapp messages", "any new telegram messages": the chat app's notifications (no SMS inbox for those). */
+internal val CHAT_APP_MESSAGES_RE = Regex("^(?:(?:read|check|show)(?: me)? (?:my |the )?(?:new |latest |last |unread )?|(?:do i have |did i get |are there )?any (?:new |unread )?)(whatsapp|messenger|telegram|imo|viber|signal|instagram) (?:messages?|texts?|chats?|notifications?)$|^read (whatsapp|messenger|telegram|imo|viber|signal)$")
