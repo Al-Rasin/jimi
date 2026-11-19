@@ -200,3 +200,11 @@ class AlarmNoteRotateHeatTest {
         assertEquals(ToolCall("device_status", mapOf("what" to "temperature")), RuleMatcher.match("phone temperature"))
     }
 }
+
+class UnmuteRecorderPhotosTest {
+    @Test fun phrasesMapToTheRightTool() {
+        assertEquals(ToolCall("set_volume", mapOf("level" to "50")), RuleMatcher.match("unmute the phone"))
+        assertEquals(ToolCall("open_app", mapOf("app" to "recorder")), RuleMatcher.match("record my voice"))
+        assertEquals(ToolCall("open_app", mapOf("app" to "gallery")), RuleMatcher.match("show me my photos"))
+    }
+}

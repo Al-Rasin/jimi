@@ -160,6 +160,7 @@ object RuleMatcher {
             v.matches(MEDIA_WHOLE_RE_5) -> return call("set_volume", "level" to "up")
             v.matches(MEDIA_WHOLE_RE_6) -> return call("set_volume", "level" to "down")
             t.matches(MEDIA_WHOLE_RE_7) -> return call("set_volume", "level" to "0")
+            t.matches(UNMUTE_RE) -> return call("set_volume", "level" to "50")
             t.matches(MEDIA_WHOLE_RE_8) -> return call("set_volume", "level" to "100")
         }
         return null
@@ -448,6 +449,8 @@ object RuleMatcher {
     private fun apps(t: String): ToolCall? {
         // No stopwatch tool; the Clock app has one, so open it rather than search for an app named "a stopwatch".
         if (t.matches(STOPWATCH_RE)) return call("open_app", "app" to "clock")
+        if (t.matches(RECORD_VOICE_RE)) return call("open_app", "app" to "recorder")
+        if (t.matches(SHOW_PHOTOS_RE)) return call("open_app", "app" to "gallery")
         APPS_RE.find(t)
             ?.let { return call("close_app", "app" to it.groupValues[1]) }
         APPS_RE_2.find(t)

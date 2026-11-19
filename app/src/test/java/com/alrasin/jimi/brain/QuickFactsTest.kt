@@ -29,6 +29,14 @@ class QuickFactsTest {
         assertNull(a("what is the capital of narnia"))
     }
 
+    @Test fun moonPhase() {
+        // 24 Nov 2026 is a full moon; 9 Nov 2026 a new moon.
+        val full = ZonedDateTime.of(2026, 11, 24, 20, 0, 0, 0, ZoneId.of("Asia/Dhaka"))
+        assertEquals("Yes, tonight is a full moon, Boss.", QuickFacts.answer("is it full moon tonight", full))
+        val newMoon = ZonedDateTime.of(2026, 11, 9, 20, 0, 0, 0, ZoneId.of("Asia/Dhaka"))
+        assertEquals("Tonight it's a new moon, Boss.", QuickFacts.answer("what's the moon phase", newMoon))
+    }
+
     @Test fun units() {
         assertEquals("1 kilogram is 1000 grams.", a("how many grams in a kilo"))
         assertEquals("5 kilometers is 3.11 miles.", a("convert 5 km to miles"))

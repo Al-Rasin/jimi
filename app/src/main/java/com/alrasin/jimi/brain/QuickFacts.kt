@@ -20,7 +20,32 @@ object QuickFacts {
     fun answer(input: String, now: ZonedDateTime = ZonedDateTime.now()): String? {
         val t = prepare(input)
         if (t.isEmpty()) return null
-        return worldTime(t, now) ?: units(t) ?: dates(t, now.toLocalDate()) ?: spell(t) ?: capital(t)
+        return worldTime(t, now) ?: units(t) ?: dates(t, now.toLocalDate()) ?: spell(t) ?: capital(t) ?: moon(t, now)
+    }
+
+    // ---- moon phase (simple synodic month from a known new moon) ----
+
+    private val MOON = Regex("^(?:whats |what is |tell me |show me )?(?:the |todays |tonights )?(?:moon phase|phase of the moon|moon)(?: today| tonight| now)?$|^is (?:it|there) (?:a )?full moon(?: today| tonight)?$")
+
+    private fun moon(t: String, now: ZonedDateTime): String? {
+        if (!MOON.matches(t)) return null
+        val days = (now.toInstant().epochSecond - 947_182_440L) / 86_400.0 // new moon 6 Jan 2000 18:14 UTC
+        val age = ((days % 29.530588853) + 29.530588853) % 29.530588853
+        val phase = when {
+            age < 1.85 -> "a new moon"
+            age < 5.54 -> "a waxing crescent"
+            age < 9.23 -> "the first quarter"
+            age < 12.92 -> "a waxing gibbous"
+            age < 16.61 -> "a full moon"
+            age < 20.30 -> "a waning gibbous"
+            age < 23.99 -> "the last quarter"
+            age < 27.68 -> "a waning crescent"
+            else -> "a new moon"
+        }
+        if (t.contains("full moon")) {
+            return if (phase == "a full moon") "Yes, tonight is a full moon, ${Persona.ADDRESS}." else "No, tonight it's $phase, ${Persona.ADDRESS}."
+        }
+        return "Tonight it's $phase, ${Persona.ADDRESS}."
     }
 
     // ---- spelling ----

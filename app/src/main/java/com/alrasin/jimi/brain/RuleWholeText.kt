@@ -20,6 +20,11 @@ internal val MEDIA_WHOLE_RE_3 = Regex("^(?:(?:next|skip)(?: the)?(?: song| track
 internal val MEDIA_WHOLE_RE_4 = Regex("^(?:(?:previous|last|go back)(?: song| track)|play (?:the )?previous(?: song| track)?|previous)$")
 internal val MEDIA_WHOLE_RE_5 = Regex("^(?:(?:turn |increase |raise |volume )(?:the |it )?(?:volume )?up|turn up(?: the)? volume|(?:increase|raise|louder)(?: the)?(?: volume)?|make it louder|volume up|louder)$")
 internal val MEDIA_WHOLE_RE_6 = Regex("^(?:(?:turn |decrease |lower |reduce )(?:the |it )?(?:volume )?down|turn down(?: the)? volume|(?:decrease|lower|reduce|quieter)(?: the)?(?: volume)?|make it quieter|volume down|quieter)$")
+// "unmute" brings sound back to half, a safe level
+internal val SHOW_PHOTOS_RE = Regex("^(?:show|open|see)(?: me)? (?:my |the )?(?:photos|pictures|pics|images)$")
+internal val UNMUTE_RE = Regex("^(?:unmute(?: the)?(?: phone| volume| sound)?|(?:volume|sound) (?:back )?on|turn (?:the )?sound (?:back )?on)$")
+// No recorder tool: open the phone's voice recorder app
+internal val RECORD_VOICE_RE = Regex("^(?:record|start recording) (?:my voice|a voice (?:note|memo)|audio|sound|a recording)$|^(?:open )?(?:the )?(?:voice |sound )?recorder(?: app)?$")
 internal val MEDIA_WHOLE_RE_7 = Regex("^(?:mute(?: the)?(?: phone| volume| sound)?|(?:volume|sound) off)$")
 internal val MEDIA_WHOLE_RE_8 = Regex("^(?:(?:(?:set |turn |put )?(?:the )?(?:max|maximum|full) volume)|(?:(?:set|turn|put) )?(?:the )?volume (?:(?:up )?to )?(?:the )?(?:max|maximum|full|highest)|max (?:out )?(?:the )?volume)$")
 internal val SYSTEM_WHOLE_RE = Regex("^(?:(?:increase|raise|turn up)(?: the)? brightness|brightness up|brighter|make (?:it|the screen) brighter)$")
