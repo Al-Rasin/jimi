@@ -108,7 +108,7 @@ class GeminiProvider(private val apiKey: String, private val model: String = MOD
     companion object {
         const val MODEL = "gemini-3.5-flash-lite"
         private const val BASE = "https://generativelanguage.googleapis.com/v1beta/models/"
-        private val client by lazy { CloudHttp.client(4, 10) }
+        private val client by lazy { CloudHttp.client(6, 25) }
 
         /** Text of one SSE line, or null for blank / non-data / no-text lines. */
         fun sseText(line: String): String? {
@@ -311,7 +311,7 @@ class CloudBrain @Inject constructor(
                         401, 403 -> "${p.name}: key not accepted. Check the key."
                         404 -> "${p.name}: model or account not found. Check the account ID."
                         429 -> "${p.name}: free limit reached for now. Try later."
-                        null -> "${p.name} failed: ${e.message ?: "no answer"}."
+                        null -> if (e is java.io.InterruptedIOException) "${p.name}: too slow to answer. Try again." else "${p.name} failed: ${e.message ?: "no answer"}."
                         else -> "${p.name} failed: HTTP ${(e as CloudHttpException).code}."
                     }
                 },
