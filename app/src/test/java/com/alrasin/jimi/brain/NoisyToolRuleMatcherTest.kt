@@ -369,6 +369,16 @@ class ComplaintPhrasesTest {
         assertEquals(ToolCall("cancel_alarm", mapOf("only" to "timer")), m("stop the timer"))
     }
 
+    @Test fun seekRepeatShuffle() {
+        assertEquals(ToolCall("media_control", mapOf("action" to "rewind", "seconds" to "10")), m("go back 10 seconds"))
+        assertEquals(ToolCall("media_control", mapOf("action" to "forward", "seconds" to "60")), m("fast forward 1 minute"))
+        assertEquals(ToolCall("go_back", emptyMap()), m("go back"))
+        assertEquals(ToolCall("media_control", mapOf("action" to "repeat", "state" to "one")), m("repeat this song"))
+        assertEquals(ToolCall("media_control", mapOf("action" to "repeat", "state" to "off")), m("turn off repeat"))
+        assertEquals(ToolCall("media_control", mapOf("action" to "shuffle", "state" to "on")), m("shuffle my music"))
+        assertEquals("repeat_last", m("repeat that")?.tool)
+    }
+
     @Test fun addTimeToTimer() {
         assertEquals(ToolCall("add_timer", mapOf("seconds" to "300")), m("add 5 minutes to the timer"))
         assertEquals(ToolCall("add_timer", mapOf("seconds" to "120")), m("extend the timer by 2 minutes"))

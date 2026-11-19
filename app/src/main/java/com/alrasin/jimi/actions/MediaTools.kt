@@ -28,9 +28,33 @@ fun mediaTools(context: Context): List<Tool> {
             val query = c.require("query", "What should I play?")
             playSearch(context, query, c.arg("app"))
         },
-        SimpleTool("media_control", "Pause, play, next or previous for music/video", listOf(arg("action", "what to do", choices = listOf("play", "pause", "next", "previous")))) { c, _ ->
+        SimpleTool("media_control", "Pause, play, next, previous, jump forward/back, repeat or shuffle for music/video", listOf(
+            arg("action", "what to do", choices = listOf("play", "pause", "next", "previous", "forward", "rewind", "repeat", "shuffle")),
+            arg("seconds", "how far to jump for forward/rewind", required = false),
+            arg("state", "for repeat: one, all or off; for shuffle: on or off", required = false),
+        )) { c, _ ->
             val action = c.arg("action")
             when (action) {
+                "forward", "rewind" -> {
+                    val secs = c.arg("seconds")?.toDoubleOrNull()?.toInt()?.coerceIn(1, 3600) ?: 10
+                    if (MediaSessions.seekBy(context, if (action == "forward") secs else -secs)) {
+                        return@SimpleTool ToolResult.ok("${if (action == "forward") "Forward" else "Back"} ${speakDuration(secs)}, ${Persona.ADDRESS}.")
+                    }
+                    key(if (action == "forward") KeyEvent.KEYCODE_MEDIA_FAST_FORWARD else KeyEvent.KEYCODE_MEDIA_REWIND)
+                    return@SimpleTool ToolResult.ok("I asked the player to ${if (action == "forward") "skip ahead" else "go back"}. I couldn't jump an exact time.")
+                }
+                "repeat" -> {
+                    val state = c.arg("state") ?: "one"
+                    val mode = when (state) { "off" -> 0; "all" -> 2; else -> 1 }
+                    if (!MediaSessions.repeat(context, mode)) return@SimpleTool ToolResult.fail("No music player is open.")
+                    return@SimpleTool ToolResult.ok(when (mode) { 0 -> "Repeat off."; 2 -> "Repeating the whole list."; else -> "Repeating this song." } +
+                        " Some players ignore this, ${Persona.ADDRESS}.")
+                }
+                "shuffle" -> {
+                    val on = c.arg("state") != "off"
+                    if (!MediaSessions.shuffle(context, on)) return@SimpleTool ToolResult.fail("No music player is open.")
+                    return@SimpleTool ToolResult.ok("Shuffle ${if (on) "on" else "off"}. Some players ignore this, ${Persona.ADDRESS}.")
+                }
                 "pause" -> key(KeyEvent.KEYCODE_MEDIA_PAUSE)
                 "play" -> key(KeyEvent.KEYCODE_MEDIA_PLAY)
                 "next" -> key(KeyEvent.KEYCODE_MEDIA_NEXT)

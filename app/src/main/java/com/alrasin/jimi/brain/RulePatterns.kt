@@ -131,3 +131,12 @@ internal val SELF_TEST_WHOLE_RE = Regex("^(?:(?:run |do |start )?(?:a |an |your 
 
 /** "<switch something on> for 30 minutes": the head is matched again as a plain toggle. */
 internal val TIMED_TOGGLE_RE = Regex("^(.+?) for (?:the next |another )?((?:an?|half an|\\d+(?:\\.\\d+)?|one|two|three|four|five|ten|fifteen|twenty|thirty|forty|forty five|sixty|ninety) (?:and a half )?(?:minutes?|mins?|hours?|hrs?)(?: and \\d+ minutes?)?)$")
+
+/** "go back 10 seconds", "skip ahead 30 seconds", "fast forward 1 minute", "rewind". */
+internal val SEEK_RE = Regex("^(fast forward|forward|skip ahead|skip forward|jump ahead|jump forward|go forward|rewind|go back|back|jump back|skip back)(?: by)? ?((?:\\d+|a|an|one|two|five|ten|fifteen|twenty|thirty) (?:seconds?|secs?|minutes?|mins?))?$")
+/** "repeat this song", "put it on repeat", "repeat all", "turn off repeat". */
+internal val REPEAT_RE = Regex("^(?:(stop|turn off|disable|no) repeat(?:ing)?|repeat (?:this|the|current) (?:song|track)|(?:put )?(?:it |this |the song )?on repeat|loop (?:this|the) (?:song|track)|repeat (?:one|once)|(repeat|loop) (?:all|the playlist|the whole (?:list|playlist|album))|(?:turn |set )?repeat (on|off))$")
+/** "shuffle my music", "shuffle on", "turn off shuffle". */
+internal val SHUFFLE_RE = Regex("^(?:(stop|turn off|disable|no) shuffl(?:e|ing)|(?:turn on |enable )?shuffle(?: (?:my |the )?(?:music|songs|playlist|it))?|(?:turn |set )?shuffle (on|off)|play (?:in )?shuffle|shuffle play)$")
+/** Seek words that mean seek even with no time; "go back" / "back" alone are navigation. */
+internal val SEEK_ALONE = setOf("fast forward", "rewind", "skip ahead", "skip forward", "jump ahead", "jump back", "skip back")

@@ -40,7 +40,7 @@ object ToolShortlist {
         "song" to listOf("play_media", "media_control", "identify_song"), "shazam" to listOf("identify_song"), "translate" to listOf("translate"), "bangla" to listOf("translate"), "bengali" to listOf("translate"), "english" to listOf("translate"), "meaning" to listOf("translate"), "tv" to listOf("ir_remote"), "television" to listOf("ir_remote"), "ac" to listOf("ir_remote"), "channel" to listOf("ir_remote"), "identify" to listOf("identify_song"), "music" to listOf("play_media", "media_control"),
         "play" to listOf("play_media", "media_control"), "listen" to listOf("play_media"), "watch" to listOf("play_media"),
         "youtube" to listOf("play_media", "open_app"), "spotify" to listOf("play_media", "open_app"),
-        "pause" to listOf("media_control"), "skip" to listOf("media_control"), "stop" to listOf("media_control", "cancel_alarm"),
+        "pause" to listOf("media_control"), "shuffle" to listOf("media_control"), "rewind" to listOf("media_control"), "forward" to listOf("media_control"), "skip" to listOf("media_control"), "stop" to listOf("media_control", "cancel_alarm"),
         "light" to listOf("toggle"), "torch" to listOf("toggle"), "flashlight" to listOf("toggle"), "wifi" to listOf("toggle"),
         "bluetooth" to listOf("toggle"), "internet" to listOf("toggle"), "data" to listOf("toggle"), "hotspot" to listOf("toggle"),
         "silent" to listOf("toggle", "set_volume"), "disturb" to listOf("toggle"), "airplane" to listOf("toggle"),

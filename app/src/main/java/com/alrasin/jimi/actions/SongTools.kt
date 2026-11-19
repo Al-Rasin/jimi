@@ -30,7 +30,8 @@ object SongId {
 }
 
 fun songTools(context: Context): List<Tool> = listOf(
-    SimpleTool("identify_song", "Find the name of the song that is playing near the phone (needs internet)") { _, _ ->
+    SimpleTool("identify_song", "Name the song playing on the phone, or find a song playing nearby (needs internet)") { _, _ ->
+        MediaSessions.nowPlaying(context)?.let { return@SimpleTool ToolResult.ok("Playing: $it.") }
         val cm = context.getSystemService(ConnectivityManager::class.java)
         val online = cm?.getNetworkCapabilities(cm.activeNetwork)?.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED) == true
         if (!online) return@SimpleTool ToolResult.fail("Song search needs the internet, and the phone is offline.")

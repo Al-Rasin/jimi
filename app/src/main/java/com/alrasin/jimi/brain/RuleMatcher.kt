@@ -212,6 +212,23 @@ object RuleMatcher {
         return null
     }
 
+    /** Jump forward/back, repeat, shuffle. */
+    private fun mediaMore(t: String): ToolCall? {
+        SEEK_RE.matchEntire(t)?.takeIf { it.groupValues[2].isNotEmpty() || it.groupValues[1] in SEEK_ALONE }?.let { m ->
+            val back = m.groupValues[1].let { it.startsWith("back") || it.startsWith("rewind") || it.startsWith("go back") }
+            val secs = m.groupValues[2].takeIf { it.isNotEmpty() }?.let { TimeParser.duration(it) }
+            return call("media_control", "action" to if (back) "rewind" else "forward", "seconds" to secs?.toString())
+        }
+        REPEAT_RE.matchEntire(t)?.let { m ->
+            val state = when { m.groupValues[1].isNotEmpty() || m.groupValues[3] == "off" -> "off"; m.groupValues[2].isNotEmpty() -> "all"; else -> "one" }
+            return call("media_control", "action" to "repeat", "state" to state)
+        }
+        SHUFFLE_RE.matchEntire(t)?.let { m ->
+            return call("media_control", "action" to "shuffle", "state" to if (m.groupValues[1].isNotEmpty() || m.groupValues[2] == "off") "off" else "on")
+        }
+        return null
+    }
+
     private fun media(t: String): ToolCall? {
         when {
             t.matches(MEDIA_WHOLE_RE) -> return call("media_control", "action" to "pause")
@@ -219,6 +236,7 @@ object RuleMatcher {
             t.matches(MEDIA_WHOLE_RE_3) -> return call("media_control", "action" to "next")
             t.matches(MEDIA_WHOLE_RE_4) -> return call("media_control", "action" to "previous")
         }
+        mediaMore(t)?.let { return it }
         storeSearch(t)?.let { return it }
         val mediaApps = "youtube music|you tube music|youtube|you tube|spotify"
         Regex("^(?:open|launch) ($mediaApps)(?: app)? and (?:play|search(?: for)?) (.+)$").find(t)?.let {
