@@ -32,7 +32,7 @@ internal object TimeRules {
         }
         val timer = TIME_RE.find(t)
             ?: TIME_RE_2.find(t)
-        timer?.let { m -> TimeParser.duration(m.groupValues[1])?.let { return call("set_timer", "seconds" to it.toString()) } }
+        timer?.let { m -> TimeParser.duration(m.groupValues[1])?.let { return call("set_timer", "seconds" to it.toString(), "label" to TIMER_LABEL_RE.find(t)?.groupValues?.get(1)) } }
         if (t.matches(TIME_WHOLE_RE)) return call("set_timer")
         // "7 minutes" alone is a timer.
         TIME_RE_3.find(t)?.let { m ->
@@ -242,4 +242,6 @@ private val TIMER_LEFT_RE = Regex(
 )
 private val TIMER_ADD_RE = Regex("^(?:add|put) (?:another |an extra )?(.+?)(?: more)? (?:to|on) (?:the |my )?timer$|^(?:extend|increase) (?:the |my )?timer by (.+)$")
 private val TIMER_PAUSE_RE = Regex("^(?:pause|hold|freeze) (?:the |my )?timer$")
+// "set a timer for 10 minutes called pasta" / "a pasta timer for 10 minutes"
+private val TIMER_LABEL_RE = Regex("\\b(?:called|named|labell?ed|for the|for my) ([a-z][a-z ]{1,30}?)$")
 private val TIMER_RESUME_RE = Regex("^(?:resume|continue|unpause|restart) (?:the |my )?timer$")

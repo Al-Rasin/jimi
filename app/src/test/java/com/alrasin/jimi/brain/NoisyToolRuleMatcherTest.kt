@@ -396,6 +396,13 @@ class ComplaintPhrasesTest {
         assertEquals(null, m("call my number"))
     }
 
+    @Test fun shoppingListReadAndTimerLabel() {
+        assertEquals(ToolCall("read_notes", mapOf("about" to "shopping list")), m("what's on my shopping list"))
+        assertEquals(ToolCall("read_notes", mapOf("about" to "shopping list")), m("what do i need to buy"))
+        assertEquals(ToolCall("set_timer", mapOf("seconds" to "600", "label" to "pasta")), m("set a timer for 10 minutes called pasta"))
+        assertEquals(ToolCall("set_timer", mapOf("seconds" to "600")), m("set a timer for the next 10 minutes"))
+    }
+
     @Test fun callOnSpeaker() {
         assertEquals(ToolCall("call", mapOf("contact" to "mom", "speaker" to "true")), m("call mom on speaker"))
         assertEquals(ToolCall("call", mapOf("contact" to "dad", "speaker" to "true")), m("call dad on the speakerphone"))

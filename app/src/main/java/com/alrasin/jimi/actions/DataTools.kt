@@ -43,7 +43,8 @@ fun dataTools(
                 else -> ToolResult.ok("I couldn't open your notes app, so I saved it in Jimi.")
             }
         },
-        SimpleTool("read_notes", "Read the last notes") { _, _ ->
+        SimpleTool("read_notes", "Read the last notes; about = only notes with this word", listOf(arg("about", "topic, like shopping list", required = false))) { c, _ ->
+            c.arg("about")?.takeIf { it.isNotBlank() }?.let { about -> return@SimpleTool readNotesAbout(notes.last(200), about) }
             val list = notes.last(5)
             if (list.isEmpty()) return@SimpleTool ToolResult.ok("You have no notes.")
             ToolResult.ok("Your last notes: " + list.joinToString(". ") { it.text } + ".", list.joinToString("\n") { "• ${it.text}" })
@@ -142,4 +143,14 @@ private suspend fun tidyFacts(memory: MemoryDao): List<MemoryFact> {
         }
     }
     return out
+}
+
+/** "what's on my shopping list": the items saved as "shopping list milk", or notes that mention [about]. */
+internal fun readNotesAbout(all: List<Note>, about: String): ToolResult {
+    val key = about.lowercase().trim()
+    val hits = all.filter { key in it.text.lowercase() }
+    if (hits.isEmpty()) return ToolResult.ok("I have no notes about $about.")
+    val items = hits.map { it.text.replace(Regex("^${Regex.escape(key)}\\s*[:,-]?\\s*", RegexOption.IGNORE_CASE), "").ifBlank { it.text } }.distinct()
+    val spoken = if (items.size == 1) items[0] else items.dropLast(1).joinToString(", ") + " and " + items.last()
+    return ToolResult.ok("Your $about: $spoken.", items.joinToString("\n") { "• $it" })
 }

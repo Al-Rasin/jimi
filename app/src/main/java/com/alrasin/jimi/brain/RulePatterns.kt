@@ -71,6 +71,7 @@ internal val STORE_SEARCH_RE = Regex(" (?:app|apps|game|games)$")
 internal val NOISY_TOOL_RE = Regex("^(?:search|google|find|look up|wiki|wikipedia|tell me about|explain|define|why|how|what does|what do|what are|i |im |remember|forget|say|repeat)\\b")
 internal val NOISY_TOOL_RE_2 = Regex("\\b(?:news|headlines|online|internet|technology|buy|price|prices)\\b")
 /** "how long until my battery is full", "when will my phone be fully charged". */
+internal val SHOPPING_READ_RE = Regex("^(?:what(?:s| is) (?:on|in) |read(?: me)? |show(?: me)? |tell me |open )?(?:my |the )?(?:shopping|grocery|groceries) list$|^what (?:do i|should i) (?:need to )?(?:buy|get)(?: from the (?:shop|store|market))?$")
 internal val MY_NUMBER_RE = Regex("^(?:what(?:s| is) |tell me |show me |say )?my (?:own )?(?:phone |mobile |sim |cell )?number(?: is)?$|^what(?:s| is) (?:the )?number (?:of )?(?:this|my) (?:phone|sim)$")
 internal val CHARGE_ETA_RE = Regex("^(?!.*\\b(?:remind|notify|alert|let me know|tell me when)\\b).*\\b(?:how long|how much time|when)\\b.*\\b(?:fully? charged?|(?:battery|phone) (?:be |is )?full|full charge|charged fully|charge (?:fully|completely|to 100))")
 internal val NOISY_TOOL_RE_3 = Regex("\\b(?:dont|do not|never|not|cancel|stop|delete|remove|dismiss|check|list|show)\\b")

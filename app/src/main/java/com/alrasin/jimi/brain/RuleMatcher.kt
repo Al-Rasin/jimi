@@ -89,6 +89,7 @@ object RuleMatcher {
             // A rewrite that maps to itself would recurse forever.
             if (out != t) return match(out, now)
         }
+        if (SHOPPING_READ_RE.matches(t)) return call("read_notes", "about" to "shopping list")
         if (MY_NUMBER_RE.matches(t)) return call("device_status", "what" to "number")
         if (CHARGE_ETA_RE.containsMatchIn(t)) return call("device_status", "what" to "battery")
         timedToggle(t, now)?.let { return it }
