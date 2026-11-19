@@ -1,0 +1,194 @@
+package com.alrasin.jimi.brain
+
+import java.math.BigDecimal
+import java.math.MathContext
+import java.math.RoundingMode
+import java.time.DateTimeException
+import java.time.LocalDate
+import java.time.ZoneId
+import java.time.ZonedDateTime
+import java.time.format.DateTimeFormatter
+import java.time.format.TextStyle
+import java.time.temporal.ChronoUnit
+import java.util.Locale
+
+/**
+ * Offline facts that need no tool and no model: "what time is it in london", "5 km in miles",
+ * "how many grams in a kilo", "how many days until december 25", "what day was 1 january 2000".
+ */
+object QuickFacts {
+    fun answer(input: String, now: ZonedDateTime = ZonedDateTime.now()): String? {
+        val t = prepare(input)
+        if (t.isEmpty()) return null
+        return worldTime(t, now) ?: units(t) ?: dates(t, now.toLocalDate())
+    }
+
+    private fun prepare(input: String): String {
+        val t = input.lowercase().replace("'", "").replace("’", "")
+            .replace(Regex("[^a-z0-9. ]"), " ").replace(Regex("\\s+"), " ").trim().trimEnd('.')
+        return NumberWords.normalize(t).replace(Regex("^(?:(?:hey |ok |okay )?(?:jimi |jimmy )?)"), "")
+            .replace(Regex("(?:please|jimi)$"), "").trim()
+    }
+
+    // ---- world time ----
+
+    private val CITIES = mapOf(
+        "london" to "Europe/London", "uk" to "Europe/London", "england" to "Europe/London",
+        "paris" to "Europe/Paris", "france" to "Europe/Paris", "berlin" to "Europe/Berlin", "germany" to "Europe/Berlin",
+        "rome" to "Europe/Rome", "italy" to "Europe/Rome", "madrid" to "Europe/Madrid", "spain" to "Europe/Madrid",
+        "moscow" to "Europe/Moscow", "russia" to "Europe/Moscow", "istanbul" to "Europe/Istanbul", "turkey" to "Europe/Istanbul",
+        "new york" to "America/New_York", "washington" to "America/New_York", "toronto" to "America/Toronto",
+        "chicago" to "America/Chicago", "los angeles" to "America/Los_Angeles", "california" to "America/Los_Angeles",
+        "san francisco" to "America/Los_Angeles", "america" to "America/New_York", "usa" to "America/New_York",
+        "canada" to "America/Toronto", "dubai" to "Asia/Dubai", "uae" to "Asia/Dubai", "abu dhabi" to "Asia/Dubai",
+        "saudi" to "Asia/Riyadh", "saudi arabia" to "Asia/Riyadh", "riyadh" to "Asia/Riyadh", "mecca" to "Asia/Riyadh",
+        "makkah" to "Asia/Riyadh", "medina" to "Asia/Riyadh", "madina" to "Asia/Riyadh", "jeddah" to "Asia/Riyadh",
+        "qatar" to "Asia/Qatar", "doha" to "Asia/Qatar", "kuwait" to "Asia/Kuwait", "oman" to "Asia/Muscat",
+        "india" to "Asia/Kolkata", "delhi" to "Asia/Kolkata", "new delhi" to "Asia/Kolkata", "kolkata" to "Asia/Kolkata",
+        "mumbai" to "Asia/Kolkata", "pakistan" to "Asia/Karachi", "karachi" to "Asia/Karachi", "nepal" to "Asia/Kathmandu",
+        "kathmandu" to "Asia/Kathmandu", "dhaka" to "Asia/Dhaka", "bangladesh" to "Asia/Dhaka",
+        "malaysia" to "Asia/Kuala_Lumpur", "kuala lumpur" to "Asia/Kuala_Lumpur", "singapore" to "Asia/Singapore",
+        "thailand" to "Asia/Bangkok", "bangkok" to "Asia/Bangkok", "china" to "Asia/Shanghai", "beijing" to "Asia/Shanghai",
+        "hong kong" to "Asia/Hong_Kong", "japan" to "Asia/Tokyo", "tokyo" to "Asia/Tokyo", "korea" to "Asia/Seoul",
+        "seoul" to "Asia/Seoul", "australia" to "Australia/Sydney", "sydney" to "Australia/Sydney",
+        "melbourne" to "Australia/Melbourne", "egypt" to "Africa/Cairo", "cairo" to "Africa/Cairo",
+    )
+    private val CITY = CITIES.keys.sortedByDescending { it.length }.joinToString("|")
+    private val WORLD_TIME = Regex(
+        "^(?:(?:whats|what is|tell me|check)(?: the)? )?(?:current |local )?time (?:is it )?(?:now |right now )?(?:in|at) ($CITY)(?: now| right now)?" +
+            "|what time is it (?:now |right now )?in ($CITY)(?: now| right now)?" +
+            "|(?:whats|what is) ($CITY) time(?: now)?$",
+    )
+
+    private fun worldTime(t: String, now: ZonedDateTime): String? {
+        val m = WORLD_TIME.matchEntire(t) ?: return null
+        val city = m.groupValues.drop(1).first { it.isNotEmpty() }
+        val there = now.withZoneSameInstant(ZoneId.of(CITIES.getValue(city)))
+        val day = if (there.toLocalDate() == now.toLocalDate()) "" else ", ${there.dayOfWeek.getDisplayName(TextStyle.FULL, Locale.US)}"
+        val name = city.split(' ').joinToString(" ") { w -> if (w in setOf("uk", "usa", "uae")) w.uppercase() else w.replaceFirstChar(Char::uppercase) }
+        return "It's ${there.format(DateTimeFormatter.ofPattern("h:mm a", Locale.US))} in $name$day."
+    }
+
+    // ---- units ----
+
+    private class Unit(val kind: String, val toBase: Double, val one: String, val many: String)
+
+    private val UNITS: Map<String, Unit> = buildMap {
+        fun add(kind: String, f: Double, one: String, many: String, vararg names: String) {
+            val u = Unit(kind, f, one, many)
+            for (n in names) put(n, u)
+        }
+        add("mass", 0.001, "milligram", "milligrams", "mg", "milligram", "milligrams")
+        add("mass", 1.0, "gram", "grams", "g", "gram", "grams", "gm", "gms")
+        add("mass", 1000.0, "kilogram", "kilograms", "kg", "kgs", "kilo", "kilos", "kilogram", "kilograms")
+        add("mass", 453.59237, "pound", "pounds", "lb", "lbs", "pound", "pounds")
+        add("mass", 28.349523125, "ounce", "ounces", "oz", "ounce", "ounces")
+        add("mass", 1_000_000.0, "ton", "tons", "ton", "tons", "tonne", "tonnes")
+        add("length", 0.001, "millimeter", "millimeters", "mm", "millimeter", "millimeters", "millimetre", "millimetres")
+        add("length", 0.01, "centimeter", "centimeters", "cm", "centimeter", "centimeters", "centimetre", "centimetres")
+        add("length", 1.0, "meter", "meters", "m", "meter", "meters", "metre", "metres")
+        add("length", 1000.0, "kilometer", "kilometers", "km", "kms", "kilometer", "kilometers", "kilometre", "kilometres")
+        add("length", 0.0254, "inch", "inches", "inch", "inches")
+        add("length", 0.3048, "foot", "feet", "ft", "foot", "feet")
+        add("length", 0.9144, "yard", "yards", "yard", "yards")
+        add("length", 1609.344, "mile", "miles", "mile", "miles")
+        add("volume", 0.001, "milliliter", "milliliters", "ml", "milliliter", "milliliters", "millilitre", "millilitres")
+        add("volume", 1.0, "liter", "liters", "l", "liter", "liters", "litre", "litres")
+        add("volume", 3.785411784, "gallon", "gallons", "gallon", "gallons")
+        add("temp", 1.0, "degree Celsius", "degrees Celsius", "c", "celsius", "centigrade")
+        add("temp", 1.0, "degree Fahrenheit", "degrees Fahrenheit", "f", "fahrenheit")
+        add("temp", 1.0, "kelvin", "kelvin", "k", "kelvin", "kelvins")
+    }
+    private val UNIT = UNITS.keys.sortedByDescending { it.length }.joinToString("|")
+    private const val NUM = "(\\d+(?:\\.\\d+)?|a|an|one)"
+    private val CONVERT = Regex(
+        "^(?:(?:convert|change|whats|what is|how much is|how many is)(?: the)? )?$NUM ?(?:degrees? )?($UNIT) (?:to|in|into|in to|is how many|equals how many) (?:degrees? )?($UNIT)$",
+    )
+    private val HOW_MANY = Regex(
+        "^how many ($UNIT) (?:are |is )?(?:there )?(?:in|make|makes|is) (?:a |an |one |(\\d+(?:\\.\\d+)?) )?($UNIT)$",
+    )
+
+    private fun units(t: String): String? {
+        CONVERT.matchEntire(t)?.let { m -> return convert(m.groupValues[1], m.groupValues[2], m.groupValues[3]) }
+        HOW_MANY.matchEntire(t)?.let { m -> return convert(m.groupValues[2].ifEmpty { "1" }, m.groupValues[3], m.groupValues[1]) }
+        return null
+    }
+
+    private fun convert(amount: String, fromName: String, toName: String): String? {
+        val n = when (amount) { "a", "an", "one" -> 1.0; else -> amount.toDoubleOrNull() } ?: return null
+        val from = UNITS.getValue(fromName)
+        val to = UNITS.getValue(toName)
+        if (from.kind != to.kind || from === to) return null
+        val v = if (from.kind == "temp") temperature(n, from.one, to.one) else n * from.toBase / to.toBase
+        return "${show(n)} ${if (n == 1.0) from.one else from.many} is ${show(v)} ${if (v == 1.0) to.one else to.many}."
+    }
+
+    private fun temperature(n: Double, from: String, to: String): Double {
+        val c = when {
+            "Fahrenheit" in from -> (n - 32) * 5 / 9
+            from == "kelvin" -> n - 273.15
+            else -> n
+        }
+        return when {
+            "Fahrenheit" in to -> c * 9 / 5 + 32
+            to == "kelvin" -> c + 273.15
+            else -> c
+        }
+    }
+
+    private fun show(v: Double): String {
+        val r = BigDecimal(v).round(MathContext(6)).let {
+            if (it.abs() >= BigDecimal.ONE) it.setScale(2, RoundingMode.HALF_UP) else it
+        }.stripTrailingZeros()
+        return if (r.signum() == 0) "0" else r.toPlainString()
+    }
+
+    // ---- dates ----
+
+    private val MONTHS = listOf(
+        "january", "february", "march", "april", "may", "june",
+        "july", "august", "september", "october", "november", "december",
+    )
+    private val SHORT = mapOf("jan" to 1, "feb" to 2, "mar" to 3, "apr" to 4, "jun" to 6, "jul" to 7, "aug" to 8, "sep" to 9, "sept" to 9, "oct" to 10, "nov" to 11, "dec" to 12)
+    private val MONTH = (MONTHS + SHORT.keys).sortedByDescending { it.length }.joinToString("|")
+    private const val DAY = "(\\d{1,2})(?:st|nd|rd|th)?"
+    private val DATE = "(?:(?:the )?$DAY (?:of )?($MONTH)|($MONTH) (?:the )?$DAY)(?: (\\d{4}))?"
+    private val DAYS_UNTIL = Regex("^how many days (?:are )?(?:left )?(?:until|till|til|to|before|for|left for|left until|left till) $DATE$")
+    private val WHAT_DAY = Regex("^(?:what|which) day (?:of the week )?(?:is|was|will be|falls on|is it on) $DATE$")
+
+    private fun dates(t: String, today: LocalDate): String? {
+        DAYS_UNTIL.matchEntire(t)?.let { m ->
+            val d = date(m, today, futureOnly = true) ?: return null
+            val n = ChronoUnit.DAYS.between(today, d)
+            val when_ = when (n) { 0L -> "today"; 1L -> "tomorrow"; else -> if (n > 0) "in $n days" else "${-n} days ago" }
+            return "${spoken(d, today)} is $when_, a ${weekday(d)}."
+        }
+        WHAT_DAY.matchEntire(t)?.let { m ->
+            val d = date(m, today, futureOnly = false) ?: return null
+            val verb = when { d.isBefore(today) -> "was"; d == today -> "is"; else -> "is" }
+            return "${spoken(d, today)} $verb a ${weekday(d)}."
+        }
+        return null
+    }
+
+    private fun date(m: MatchResult, today: LocalDate, futureOnly: Boolean): LocalDate? {
+        val g = m.groupValues
+        val day = (g[1].ifEmpty { g[4] }).toInt()
+        val monthWord = g[2].ifEmpty { g[3] }
+        val month = MONTHS.indexOf(monthWord).takeIf { it >= 0 }?.plus(1) ?: SHORT[monthWord] ?: return null
+        return try {
+            if (g[5].isNotEmpty()) return LocalDate.of(g[5].toInt(), month, day)
+            val d = LocalDate.of(today.year, month, day)
+            if (futureOnly && d.isBefore(today)) d.plusYears(1) else d
+        } catch (_: DateTimeException) {
+            null
+        }
+    }
+
+    private fun weekday(d: LocalDate) = d.dayOfWeek.getDisplayName(TextStyle.FULL, Locale.US)
+
+    private fun spoken(d: LocalDate, today: LocalDate): String {
+        val base = "${d.dayOfMonth} ${d.month.getDisplayName(TextStyle.FULL, Locale.US)}"
+        return if (d.year == today.year) base else "$base ${d.year}"
+    }
+}

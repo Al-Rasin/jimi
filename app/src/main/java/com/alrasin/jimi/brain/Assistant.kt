@@ -202,7 +202,7 @@ class Assistant @Inject constructor(
             }
         }
         trace("smalltalk")
-        val smallTalk = Persona.smallTalk(text, LocalDateTime.now().hour) ?: QuickMath.answer(text)
+        val smallTalk = Persona.smallTalk(text, LocalDateTime.now().hour) ?: QuickMath.answer(text) ?: QuickFacts.answer(text)
         if (smallTalk?.startsWith("Bye") == true) return Reply(smallTalk, endConversation = true)
         val followUp = state.conversation.resolve(text)
         trace("contact_choice")
