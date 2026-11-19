@@ -69,6 +69,11 @@ object RuleMatcher {
     fun match(input: String, now: LocalDateTime = LocalDateTime.now()): ToolCall? {
         val t = normalize(input)
         if (t.isEmpty()) return null
+        // "switch to dark mode" / "switch to silent" means turn that mode on, not open an app
+        SWITCH_MODE_RE.matchEntire(t)?.let {
+            val mode = it.groupValues[1]
+            return match(if (mode.startsWith("vibrat") || mode == "silent") "put phone on $mode" else "turn on $mode", now)
+        }
         val actionText = TextNorm.squash(input)
             .replace(POLITE_LEAD_RE, "")
         return talk(t) ?: (if (t.matches(SONG_ID_WHOLE_RE)) call("identify_song") else null) ?: IrRules.ir(t) ?: TranslateRules.translate(actionText.trimEnd('.', '!', '?', ' ')) ?: FileRules.files(t) ?: askScreen(t) ?: ContactRules.contacts(actionText) ?: TimeRules.calendar(t, now) ?: CommsRules.comms(actionText) ?: media(actionText.trimEnd('.', '!', '?')) ?: MapRules.maps(t) ?: MapRules.appMap(t) ?: skills(t)
@@ -82,6 +87,7 @@ object RuleMatcher {
 
     private fun re(p: String) = Regex("^(?:$p)$")
 
+    private val SWITCH_MODE_RE = Regex("^(?:switch|change|go|set it|put it)(?: it| the phone| my phone)? (?:to|into) ((?:the )?(?:\\w+ )?(?:mode|silent|vibrate|vibration))$")
     private val BROWSER_SEARCH_RE = Regex("^(?:open|go to|use) (?:chrome|google|the browser|browser|google chrome) and (?:search|look up|google)(?: for)? (.+)$")
 
     private val PHONE_STATUS_RE = Regex("^(?:whats |what is |check |show )?(?:my |the )?(?:phone|phones|device) (?:current )?status$|^status of (?:my |the )?phone$")

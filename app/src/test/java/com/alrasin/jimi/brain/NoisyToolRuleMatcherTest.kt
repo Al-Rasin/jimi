@@ -264,4 +264,14 @@ class ComplaintPhrasesTest {
         assertEquals(dnd, m("silence my phone"))
         assertNull(m("do not turn on wifi"))
     }
+
+    @Test fun switchToModeOrApp() {
+        assertEquals(ToolCall("open_app", mapOf("app" to "whatsapp")), m("switch to whatsapp"))
+        assertEquals(ToolCall("toggle", mapOf("target" to "dnd", "state" to "on")), m("switch to silent"))
+        assertEquals(ToolCall("toggle", mapOf("target" to "vibrate", "state" to "on")), m("switch to vibrate"))
+        assertEquals(ToolCall("toggle", mapOf("target" to "airplane", "state" to "on")), m("switch to airplane mode"))
+        assertNotEquals("open_app", m("switch to english")?.tool)
+        assertEquals(ToolCall("media_control", mapOf("action" to "previous")), m("go back to the last song"))
+        assertEquals("go_back", m("go back")?.tool)
+    }
 }

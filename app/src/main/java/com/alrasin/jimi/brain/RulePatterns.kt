@@ -8,8 +8,8 @@ internal val TOGGLE_RE = Regex("^(?:explain|define|why|how|what does|what do|tel
 internal val TOGGLE_RE_2 = Regex("\\b(turn on|switch on|enable|activate|start|open|connect)\\b")
 internal val TOGGLE_RE_3 = Regex("\\b(turn off|switch off|disable|deactivate|stop|close|shut off|disconnect)\\b")
 /** "put my phone on silent", "silent mode": the user means do not disturb. */
-internal val SILENT_PHONE_RE = Regex("^(?:(?:put|set|switch|turn|make|keep) (?:my |the )?phone (?:on |to |in(?:to)? )?(?:silent|silence|mute)(?: mode)?|silent mode|(?:mute|silence) (?:my |the )?phone|silence (?:my |the )?(?:ringer|ringtone))$")
-internal val VIBRATE_PHONE_RE = Regex("^(?:(?:put|set|switch|turn|make|keep) (?:my |the )?phone (?:on |to |in(?:to)? )?vibrat(?:e|ion)(?: only)?(?: mode)?|vibrate mode|phone on vibrate)$")
+internal val SILENT_PHONE_RE = Regex("^(?:(?:put|set|switch|turn|make|keep) (?:my |the )?phone (?:on |to |in(?:to)? )?(?:silent|silence|mute)(?: mode)?|(?:turn on |enable )?silent(?: mode)?|(?:mute|silence) (?:my |the )?phone|silence (?:my |the )?(?:ringer|ringtone))$")
+internal val VIBRATE_PHONE_RE = Regex("^(?:(?:put|set|switch|turn|make|keep) (?:my |the )?phone (?:on |to |in(?:to)? )?vibrat(?:e|ion)(?: only)?(?: mode)?|(?:turn on |enable )?vibrate mode|phone on vibrate)$")
 /** "put my phone on ring", "unmute my phone": ringer back to normal. */
 internal val RING_PHONE_RE = Regex("^(?:(?:put|set|switch|turn|make) (?:my |the )?phone (?:back )?(?:on |to |in(?:to)? )?(?:ring|ringing|normal|sound|general)(?: mode)?|unmute (?:my |the )?phone|turn (?:on )?(?:the )?ringer(?: on)?|ringer on)$")
 internal val TIME_RE = Regex("^(?:set |start |put )?(?:a |an )?(?:timer|countdown)(?: for| of)? (.+)$")
@@ -126,5 +126,5 @@ internal val SKILLS_RE_6 = Regex("^(?:turn|switch) (on|off) (?:the )?(.+?) (?:sw
 internal val SKILLS_RE_7 = Regex("^(?:turn|switch) (?:the )?(.+?) (?:switch|toggle|option|checkbox) (on|off)$")
 internal val SKILLS_RE_8 = Regex("^(?:flip|toggle) (?:the )?(.+?)(?: switch| toggle| option| checkbox)?$")
 internal val APPS_RE = Regex("^(?:close|kill|exit|quit|force stop|stop) (?:the )?(.+?)(?: app| application)?$")
-internal val APPS_RE_2 = Regex("^(?:open|launch|start|run|show)(?: the| my)? (.+?)(?: app| application)?$")
+internal val APPS_RE_2 = Regex("^(?:open|launch|start|run|show|switch to(?! .*\\b(?:mode|silent|vibrate|vibration|english|bangla|bengali)$)|switch over to)(?: the| my)? (.+?)(?: app| application)?$")
 internal val SELF_TEST_WHOLE_RE = Regex("^(?:(?:run |do |start )?(?:a |an |your )?(?:self ?test|self check|health check|diagnostics?|full test)|test (?:yourself|your ?self|your skills|your tools|all tools)|check yourself)$")
