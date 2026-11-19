@@ -247,7 +247,7 @@ fun systemTools(context: Context, torch: Torch): List<Tool> {
             if (actual != want && settingsPage(target)) Reply.done("the change isn't confirmed. I opened ${nice(target)} settings; set it ${if (want) "on" else "off"} there.")
             else toggleTruth(nice(target), want, actual)
         },
-        SimpleTool("set_brightness", "Screen brightness", listOf(arg("level", "0-100, up, down or auto"))) { c, _ ->
+        SimpleTool("set_brightness", "Screen brightness", listOf(arg("level", "0-100, up, down, auto or manual"))) { c, _ ->
             val cur = Settings.System.getInt(context.contentResolver, Settings.System.SCREEN_BRIGHTNESS, maxBrightness / 2)
             val target = when (val l = c.arg("level")) {
                 "auto" -> {
@@ -257,6 +257,7 @@ fun systemTools(context: Context, torch: Torch): List<Tool> {
                     val actual = runCatching { Settings.System.getInt(context.contentResolver, Settings.System.SCREEN_BRIGHTNESS_MODE) == 1 }.getOrNull()
                     return@SimpleTool toggleTruth("Auto brightness", true, actual)
                 }
+                "manual" -> cur // keeps today's level, only stops auto brightness
                 "up" -> cur + maxBrightness / 5
                 "down" -> cur - maxBrightness / 5
                 else -> (l?.toDoubleOrNull()?.toInt() ?: return@SimpleTool ToolResult.fail("What brightness?")) * maxBrightness / 100

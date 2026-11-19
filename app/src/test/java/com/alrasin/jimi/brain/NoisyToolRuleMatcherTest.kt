@@ -274,4 +274,16 @@ class ComplaintPhrasesTest {
         assertEquals(ToolCall("media_control", mapOf("action" to "previous")), m("go back to the last song"))
         assertEquals("go_back", m("go back")?.tool)
     }
+    @Test fun leadWordRewrites() {
+        assertEquals(ToolCall("set_timer", mapOf("seconds" to "600")), m("i need a timer for 10 minutes"))
+        assertEquals("take_photo", m("let me take a photo")?.tool)
+        assertEquals(ToolCall("setting", mapOf("name" to "font size", "state" to "open")), m("make the text bigger"))
+        assertEquals(ToolCall("set_brightness", mapOf("level" to "manual")), m("turn off auto brightness"))
+        assertNotEquals("set_alarm", m("alarm volume 50")?.tool)
+        assertEquals("remember_fact", m("i want you to remember my wife is sara")?.tool)
+        assertEquals(ToolCall("set_alarm", mapOf("time" to "06:00")), m("i need to wake up at 6"))
+        assertEquals(ToolCall("set_volume", mapOf("level" to "down")), m("media volume low"))
+        assertNull(m("lets play a game"))
+        assertEquals("play_media", m("listen to quran")?.tool)
+    }
 }

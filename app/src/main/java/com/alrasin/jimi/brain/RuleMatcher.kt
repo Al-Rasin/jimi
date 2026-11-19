@@ -74,6 +74,13 @@ object RuleMatcher {
             val mode = it.groupValues[1]
             return match(if (mode.startsWith("vibrat") || mode == "silent") "put phone on $mode" else "turn on $mode", now)
         }
+        // "let's play a game" is chat, not a video search
+        if (t.matches(PLAY_GAME_RE)) return null
+        for ((re, to) in REWRITES) re.matchEntire(t)?.let { return match(re.replace(t, to), now) }
+        if (t.matches(OTHER_VOLUME_RE)) return call("setting", "name" to "sound", "state" to "open")
+        if (t.matches(FONT_SIZE_RE)) return call("setting", "name" to "font size", "state" to "open")
+        if (t.matches(SCREEN_TIMEOUT_RE)) return call("setting", "name" to "screen timeout", "state" to "open")
+        if (t.matches(AUTO_BRIGHTNESS_OFF_RE)) return call("set_brightness", "level" to "manual")
         val actionText = TextNorm.squash(input)
             .replace(POLITE_LEAD_RE, "")
         return talk(t) ?: (if (t.matches(SONG_ID_WHOLE_RE)) call("identify_song") else null) ?: IrRules.ir(t) ?: TranslateRules.translate(actionText.trimEnd('.', '!', '?', ' ')) ?: FileRules.files(t) ?: askScreen(t) ?: ContactRules.contacts(actionText) ?: TimeRules.calendar(t, now) ?: CommsRules.comms(actionText) ?: media(actionText.trimEnd('.', '!', '?')) ?: MapRules.maps(t) ?: MapRules.appMap(t) ?: skills(t)
@@ -88,6 +95,22 @@ object RuleMatcher {
     private fun re(p: String) = Regex("^(?:$p)$")
 
     private val SWITCH_MODE_RE = Regex("^(?:switch|change|go|set it|put it)(?: it| the phone| my phone)? (?:to|into) ((?:the )?(?:\\w+ )?(?:mode|silent|vibrate|vibration))$")
+    /** Other wordings of phrases the rules already know, said again in the known form. */
+    private val REWRITES = listOf(
+        Regex("^(?:i need|i want|i wanna|let me|lets|let s|id like|i would like) (?:to )?(?!you\\b|know\\b|go\\b|see\\b|think\\b|talk\\b)(.+)$") to "$1",
+        Regex("^(?:listen to|hear) (?!you\\b|me\\b)(.+)$") to "play $1",
+        Regex("^(?:a )?timer (?:for|of) (.+)$") to "set a timer for $1",
+        Regex("^(?:have to |want to |need to |must )?wake up (at|in|by) (.+)$") to "wake me up $1 $2",
+        Regex("^(?:the )?(?:media )?volume (?:is )?(?:too )?(?:low|lower|quieter)$") to "volume down",
+        Regex("^(?:the )?(?:media )?volume (?:higher|louder)$") to "volume up",
+        Regex("^open (?:the )?camera and (?:take|click|snap) (?:a |an )?(photo|picture|pic|selfie|video)$") to "take a $1",
+        Regex("^(?:the )?media volume (?:to )?(.+)$") to "volume $1",
+    )
+    private val PLAY_GAME_RE = Regex("^(?:lets |let s |can we |shall we |wanna )?play (?:a |some |any )?(?:game|games|quiz|trivia|riddle)(?: with me)?$")
+    private val OTHER_VOLUME_RE = Regex("^(?:(?:set|change|turn|make|increase|decrease|raise|lower) (?:the |my )?)?(?:ringtone|ringer|ring|alarm|notification|call) volume\\b.*$")
+    private val FONT_SIZE_RE = Regex("^(?:make (?:the )?(?:text|font|letters?) (?:bigger|larger|smaller)|(?:increase|decrease|change|bigger|smaller|larger) (?:the )?(?:font|text)(?: size)?|(?:the )?font size)$")
+    private val SCREEN_TIMEOUT_RE = Regex("^(?:keep (?:the )?screen (?:on|awake)|(?:change |set )?(?:the )?screen (?:timeout|time out|sleep)\\b.*)$")
+    private val AUTO_BRIGHTNESS_OFF_RE = Regex("^(?:(?:turn off|disable|stop) (?:the )?(?:auto|automatic|adaptive) brightness|(?:auto|automatic|adaptive) brightness off|manual brightness)$")
     private val BROWSER_SEARCH_RE = Regex("^(?:open|go to|use) (?:chrome|google|the browser|browser|google chrome) and (?:search|look up|google)(?: for)? (.+)$")
 
     private val PHONE_STATUS_RE = Regex("^(?:whats |what is |check |show )?(?:my |the )?(?:phone|phones|device) (?:current )?status$|^status of (?:my |the )?phone$")
