@@ -325,6 +325,12 @@ class ComplaintPhrasesTest {
         assertEquals("go_home", m("go home")?.tool)
     }
 
+    @Test fun anyoneMessagedNormalMode() {
+        assertEquals(ToolCall("read_messages", emptyMap()), m("Did anyone message me?"))
+        assertEquals(ToolCall("toggle", mapOf("target" to "vibrate", "state" to "off")), m("Normal mode."))
+        assertEquals(ToolCall("toggle", mapOf("target" to "vibrate", "state" to "off")), m("Put phone in normal mode."))
+    }
+
     @Test fun lastPhotoSelfieShoppingDay() {
         assertEquals(ToolCall("open_app", mapOf("app" to "gallery")), m("Open the last photo."))
         assertEquals(ToolCall("open_app", mapOf("app" to "camera")), m("Open camera in selfie mode."))

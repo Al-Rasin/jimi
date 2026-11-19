@@ -42,7 +42,7 @@ object QuickMath {
             return if (a <= b) "${Random.nextLong(a, b + 1)}." else null
         }
         PERCENT_OF.matchEntire(t)?.let { m ->
-            val v = m.groupValues[1].toBigDecimal() * m.groupValues[2].toBigDecimal() / BigDecimal(100)
+            val v = (m.groupValues[1].toBigDecimal() * m.groupValues[2].toBigDecimal()).divide(BigDecimal(100), MathContext.DECIMAL64)
             return "${m.groupValues[1]} percent of ${m.groupValues[2]} is ${show(v)}."
         }
         special(t)?.let { return it }
@@ -83,12 +83,12 @@ object QuickMath {
         }
         TIMES_WORD.matchEntire(t)?.let { m ->
             val n = m.groupValues[2].toBigDecimal()
-            val v = when (m.groupValues[1]) { "double" -> n * BigDecimal(2); "triple" -> n * BigDecimal(3); else -> n.divide(BigDecimal(2)) }
+            val v = when (m.groupValues[1]) { "double" -> n * BigDecimal(2); "triple" -> n * BigDecimal(3); else -> n.divide(BigDecimal(2), MathContext.DECIMAL64) }
             return "${m.groupValues[1].replaceFirstChar(Char::uppercase)} ${m.groupValues[2]} is ${show(v)}."
         }
         PERCENT_OFF.matchEntire(t)?.let { m ->
             val price = m.groupValues[2].toBigDecimal()
-            val v = price - price * m.groupValues[1].toBigDecimal() / BigDecimal(100)
+            val v = price - (price * m.groupValues[1].toBigDecimal()).divide(BigDecimal(100), MathContext.DECIMAL64)
             return "${m.groupValues[2]} with ${m.groupValues[1]} percent off is ${show(v)}."
         }
         ROUND.matchEntire(t)?.let { m ->

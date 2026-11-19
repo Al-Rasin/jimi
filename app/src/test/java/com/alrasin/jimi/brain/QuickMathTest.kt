@@ -16,6 +16,9 @@ class QuickMathTest {
     }
     @Test fun percentRootSquare() {
         assertEquals("15 percent of 200 is 30.", QuickMath.answer("what is 15% of 200"))
+        assertEquals("15 percent of 250 is 37.5.", QuickMath.answer("what is 15 percent of 250"))
+        assertEquals("99 with 15 percent off is 84.15.", QuickMath.answer("15 percent off 99"))
+        assertEquals("Half 7 is 3.5.", QuickMath.answer("half 7"))
         assertEquals("The square root of 81 is 9.", QuickMath.answer("square root of 81"))
         assertEquals("12 squared is 144.", QuickMath.answer("what is 12 squared"))
     }

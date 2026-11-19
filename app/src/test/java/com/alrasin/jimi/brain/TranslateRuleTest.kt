@@ -19,6 +19,12 @@ class TranslateRuleTest {
         assertEquals(said, to, c?.arg("to"))
     }
 
+    @Test fun otherLanguageIsNotBangla() {
+        for (said in listOf("translate thank you to spanish", "how do you say thank you in french", "what is hello in hindi")) {
+            assertNotEquals(said, "translate", m(said)?.tool)
+        }
+    }
+
     @Test fun toBangla() {
         check("translate good morning to bangla", "good morning", "bn")
         check("Translate \"how are you\" into Bengali.", "how are you", "bn")

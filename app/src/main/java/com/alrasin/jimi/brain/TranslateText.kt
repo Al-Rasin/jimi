@@ -42,8 +42,11 @@ internal object TranslateRules {
     private val MEANING_RE = Regex("^what(?: is|'s) the (?:meaning of|($LANGS) (?:for|of)) (.+?)(?: in ($LANGS))?$")
     private val IN_RE = Regex("^what(?: is|'s) (.+?) in ($LANGS)$")
     private val SELF_RE = Regex("^(?:this|that|it|the screen|my screen)$")
+    // Only Bangla ↔ English is offline. Other targets go to chat instead of a wrong Bangla answer.
+    private val OTHER_LANG = Regex(" (?:to|into|in) (?:spanish|french|german|hindi|arabic|urdu|chinese|japanese|korean|russian|italian|portuguese|turkish|tamil|nepali|persian|malay|indonesian)$")
 
     fun translate(t: String): ToolCall? {
+        if (OTHER_LANG.containsMatchIn(t)) return null
         TO_RE.find(t)?.let { return call(it.groupValues[1], it.groupValues[2]) }
         SAY_RE.find(t)?.let { return call(it.groupValues[1], it.groupValues[2]) }
         MEAN_RE.find(t)?.let { return call(it.groupValues[1], it.groupValues[2]) }
