@@ -15,6 +15,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.withFrameNanos
+import kotlinx.coroutines.delay
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
@@ -65,10 +66,13 @@ fun MobiusStrip(
     var flow by remember { mutableFloatStateOf(0f) }
     var clock by remember { mutableFloatStateOf(0f) }
     val speeds by rememberUpdatedState(spinSpeed to flowSpeed)
+    val currentMood by rememberUpdatedState(mood)
     if (motion) {
         LaunchedEffect(Unit) {
             var last = 0L
             while (true) {
+                // Full-rate redraws took ~1.5 CPU cores and halved local chat speed; a band this small looks smooth at 30 fps.
+                delay(MobiusFrames.gapMs(currentMood))
                 withFrameNanos { now ->
                     if (last != 0L) {
                         val dt = ((now - last) / 1e9f).coerceAtMost(0.05f)
@@ -118,6 +122,11 @@ fun MobiusStrip(
             drawLine(rim, Offset(c.x + f.xs[0] * unit, c.y + f.ys[0] * unit), Offset(c.x + f.xs[3] * unit, c.y + f.ys[3] * unit), edge)
         }
     }
+}
+
+/** Pause between band frames: ~30 fps, ~12 fps while the local model is thinking so it gets the CPU. */
+internal object MobiusFrames {
+    fun gapMs(mood: OrbMood): Long = if (mood == OrbMood.THINKING) 80L else 30L
 }
 
 internal fun shade(argb: Int, light: Float, alpha: Float): Color {

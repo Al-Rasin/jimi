@@ -78,3 +78,10 @@ class ShortWayTest {
         assertEquals(0, shortWay(2, 2, 6))
     }
 }
+
+class MobiusFramesTest {
+    @Test fun slowsDownWhileThinking() {
+        assertEquals(80L, MobiusFrames.gapMs(OrbMood.THINKING))
+        for (m in listOf(OrbMood.IDLE, OrbMood.HEARING, OrbMood.SPEAKING)) assertEquals(30L, MobiusFrames.gapMs(m))
+    }
+}
