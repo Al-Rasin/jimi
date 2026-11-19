@@ -49,3 +49,26 @@ class NoisyToolRuleMatcherTest {
         assertEquals(ToolCall("create_note", mapOf("text" to "james battery for centers")), RuleMatcher.match("take a note james battery for centers"))
     }
 }
+
+class MisheardWakeLeadTest {
+    @Test fun misheardHeyJimiLeadIsDropped() {
+        assertEquals(ToolCall("device_status", mapOf("what" to "time")), RuleMatcher.match("as you me what time is it"))
+        assertEquals(ToolCall("phone_profile", mapOf("ask" to "abilities")), RuleMatcher.match("asium me what can you do"))
+    }
+
+    @Test fun wirelessDeviceMeansDebugging() {
+        val on = ToolCall("toggle", mapOf("target" to "wireless_debugging", "state" to "on"))
+        assertEquals(on, RuleMatcher.match("on wireless device"))
+        assertEquals(on, RuleMatcher.match("turn on wireless device"))
+    }
+}
+
+class AlarmIsSetQuestionTest {
+    @Test fun askingWhichAlarmsAreSetLists() {
+        val list = ToolCall("list_alarms", emptyMap())
+        assertEquals(list, RuleMatcher.match("which alarms are set"))
+        assertEquals(list, RuleMatcher.match("any alarm set"))
+        assertEquals(list, RuleMatcher.match("is any alarm set"))
+        assertEquals("set_alarm", RuleMatcher.match("set an alarm for 6")?.tool)
+    }
+}

@@ -17,7 +17,7 @@ object RuleMatcher {
     private val TOGGLE_TARGETS = linkedMapOf(
         "wireless_debugging" to listOf("wireless debugging", "wireless debug", "wifi debugging", "wi fi debugging", "wireless adb", "adb wifi", "adb over wifi", "wifi adb",
             // User says "wireless" for debugging and "wifi" for Wi-Fi (history 2026-11: 6 fixes).
-            "wireless(?! network)"),
+            "wireless device", "wireless(?! network)"),
         "usb_debugging" to listOf("usb debugging", "usb debug", "adb debugging", "developer debugging"),
         "flashlight" to listOf("flashlight", "flash light", "torch", "flash"),
         "wifi" to listOf("wifi", "wi fi", "wireless network"),
@@ -54,7 +54,7 @@ object RuleMatcher {
         var s = " $t "
         listOf(
             " please ", " pls ", " can you ", " could you ", " would you ", " will you ", " i want you to ",
-            " i want to ", " i would like to ", " i'd like to ", " for me ", " jarvis ", " jimi ", " jimmy ",
+            " i want to ", " i would like to ", " i'd like to ", " for me ", " jarvis ", " jimi ", " jimmy ", " as you me ", " asium me ",
             " hey ", " ok ", " okay ", " just ", " now ",
         ).forEach { w -> s = s.replace(w, " ") }
         return s.replace(TextNorm.SPACES, " ").trim()

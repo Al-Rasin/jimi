@@ -3,7 +3,7 @@ package com.alrasin.jimi.brain
 // RuleMatcher patterns, built once, not on every call (ROADMAP §L.4).
 internal val NOT_WORD = Regex("[^a-z0-9' ]")
 internal val NOT_WORD_OR_COLON = Regex("[^a-z0-9': ]")
-internal val POLITE_LEAD_RE = Regex("^(?:(?:hey |ok |okay )?(?:jarvis|jimi|jimmy)[, ]+|(?:please|pls|can you|could you|would you|will you|i want you to|i want to|i would like to|just|hey|ok|okay) )+")
+internal val POLITE_LEAD_RE = Regex("^(?:(?:hey |ok |okay )?(?:jarvis|jimi|jimmy)[, ]+|(?:as you me|asium me)[, ]+|(?:please|pls|can you|could you|would you|will you|i want you to|i want to|i would like to|just|hey|ok|okay) )+")
 internal val TOGGLE_RE = Regex("^(?:explain|define|why|how|what does|what do|tell me about|dont|do not|never)\\b")
 internal val TOGGLE_RE_2 = Regex("\\b(turn on|switch on|enable|activate|start|open)\\b")
 internal val TOGGLE_RE_3 = Regex("\\b(turn off|switch off|disable|deactivate|stop|close|shut off)\\b")

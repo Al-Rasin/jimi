@@ -18,7 +18,8 @@ internal object TimeRules {
     private fun re(p: String) = Regex("^(?:$p)$")
 
     /** "how many alarms do i have", "when is my next alarm": a question, never a change. */
-    fun isAlarmQuestion(t: String): Boolean = t.matches(ALARM_QUESTION_RE) && !ALARM_CHANGE_RE.containsMatchIn(t)
+    fun isAlarmQuestion(t: String): Boolean =
+        t.matches(ALARM_QUESTION_RE) && !ALARM_CHANGE_RE.containsMatchIn(t.replace(ALARM_IS_SET_END_RE, ""))
 
     fun time(t: String, now: LocalDateTime): ToolCall? {
         if (isAlarmQuestion(t)) return call("list_alarms")
@@ -212,7 +213,9 @@ internal object TimeRules {
 
 private val ALARM_QUESTION_RE = Regex(
     "^(?:(?:check |see |tell me )?(?:how many|what|which|list|show|tell me|read|check)(?: me)?(?: (?:are|is|all|of|the|my))* alarms?\\b.*" +
-        "|(?:do i have|have i got|have i set|are there|is there|any) (?:any )?alarms?\\b.*" +
+        "|(?:do i have|have i got|have i set|are there|is there|is|are|any) (?:any )?alarms?\\b.*" +
         "|(?:when|what time) (?:is|does) (?:my |the )?next alarm.*|(?:my|all my) alarms(?: please)?)$"
 )
+// "which alarms are set" asks, it does not set: drop a trailing "(are) set (now)" before the change check.
+private val ALARM_IS_SET_END_RE = Regex("\\b(?:alarms?|are|is) set(?: (?:right )?now| for (?:today|tomorrow))?$")
 private val ALARM_CHANGE_RE = Regex("\\b(?:set|cancel|delete|remove|stop|turn|switch|dismiss|clear|snooze|change|add|make|create|wake)\\b")

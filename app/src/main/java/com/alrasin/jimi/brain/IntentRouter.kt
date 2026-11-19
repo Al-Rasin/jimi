@@ -18,7 +18,7 @@ object IntentRouter {
     const val CONFIDENCE_THRESHOLD = 0.75f
 
     private val punctuation = Regex("[^\\p{L}\\p{N}_' ]")
-    private val address = Regex("^(?:(?:hey |ok |okay )?(?:jimi|jimmy|jarvis)[ ,]+|please )+")
+    private val address = Regex("^(?:(?:hey |ok |okay )?(?:jimi|jimmy|jarvis)[ ,]+|(?:as you me|asium me)[ ,]+|please )+")
     private val polite = Regex("^(?:(?:can|could|would|will) you (?:please )?|i (?:want|would like) you to |please )")
     private val negation = Regex("^(?:(?:do not|don't|dont|never|not) (?!forget\\b)|i (?:do not|don't|dont) want (?:you )?to ).+")
     private val spokenQuote = Regex("^(?:say|repeat) (?:the (?:words|phrase) )?[\"“'].+")
