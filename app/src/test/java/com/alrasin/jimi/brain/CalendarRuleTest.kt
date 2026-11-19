@@ -52,4 +52,13 @@ class CalendarRuleTest {
         assertNotEquals("calendar_move", m("move the file to downloads")?.tool)
         assertNotEquals("calendar_delete", m("delete the reminder about my meeting")?.tool)
     }
+
+    @Test fun reminderWithDayButNoClockTime() {
+        val a = m("remind me tomorrow to pay the bill")
+        assertEquals("pay the bill", a?.arg("text"))
+        assertEquals("2026-10-23T09:00", a?.arg("time"))
+        assertEquals("2026-10-22T18:00", m("remind me this evening to buy bread")?.arg("time"))
+        assertEquals("daily", m("remind me every day to drink water")?.arg("repeat"))
+        assertEquals(null, m("remind me to call mom")?.arg("time"))
+    }
 }

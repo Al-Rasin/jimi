@@ -117,6 +117,7 @@ object RuleMatcher {
         Regex("^turn (up|down) (?:the )?(?:sound|audio)$") to "volume $1",
         Regex("^turn on (?:the )?(?:sound|audio)$") to "unmute",
         Regex("^note down (.+)$") to "take a note $1",
+        Regex("^(?:what did i (?:note|write)(?: down)?|(?:read|show|open)(?: me)? (?:my |the )?(?:last|latest|recent) notes?)$") to "show my notes",
         Regex("^open (whatsapp|messenger|telegram|imo|viber|signal) and (call|video call) (.+)$") to "$2 $3 on $1",
         Regex("^(?:did|has) (?:anyone|anybody|someone|somebody) (?:message|messaged|text|texted|sms) me(?: today)?$") to "read messages",
         Regex("^(?:normal|ring|ringing|general|sound) mode(?: on)?$|^(?:put|set|switch|change|make) (?:my |the )?(?:phone )?(?:to |on |in(?:to)? )?(?:normal|ringing|general|sound) mode$") to "put my phone on ring mode",

@@ -86,7 +86,8 @@ internal object TimeRules {
         val rem = NOTES_RE_4.find(t)
         if (rem != null) {
             val spec = rem.groupValues[1].replace(NOTES_RE_5, "in $1")
-            val m = TimeParser.parse(spec, now)?.takeIf { it.hasTime }
+            // "remind me tomorrow to pay the bill": a day with no clock time means that day at 9 (or the evening asked for).
+            val m = TimeParser.parse(spec, now)?.takeIf { it.hasTime || it.at.isAfter(now) }
             val text = (m?.rest ?: spec).trim()
                 .removePrefix("to ").removePrefix("that ").removePrefix("about ").removeSuffix(" at").trim()
             return call("create_reminder", "text" to text.ifEmpty { null }, "time" to m?.at?.format(ISO), "repeat" to m?.repeat?.takeIf { it != "none" })
