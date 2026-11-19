@@ -73,6 +73,8 @@ internal val TOGGLE_STATUS_RE = Regex("^(?:(?:is|are) (?:the |my )?(.+?) (?:turn
 internal val STOPWATCH_RE = Regex("^(?:(?:start|open|show|begin|run) (?:a |the |my )?stop ?watch|stop ?watch)$")
 internal val SELF_TOPIC_RE = Regex("^(?:tell me |talk )?(?:more )?about (?:yourself|you|jimi|jimmy)$|^(?:who|what) (?:is|are) (?:you|jimi|jimmy)$")
 /** "where did i park", "where is my car parked": answered from a remembered fact, not the slow model. */
+/** "what did i tell you about my locker", "do you remember my locker code" → that one fact. */
+internal val RECALL_ABOUT_RE = Regex("^(?:what did i (?:tell|say to) you about|what have i told you about|do you remember) ((?:my|where|what|when) .+)$")
 internal val PARKED_WHOLE_RE = Regex("^(?:where did i (?:park|leave)(?: (?:my|the) (?:car|bike|scooter|motorbike))?|where(?: is|s| s) my (?:car|bike|scooter|motorbike)(?: parked)?|where (?:is|was) (?:my|the) (?:car|bike) parked)$")
 internal val APP_MAP_WHOLE_RE = Regex("^(?:(?:do you have |you have )?any (?:app )?questions(?: for me)?|what (?:do you )?(?:want|need) to ask(?: me)?|(?:show |open )?(?:the )?permission queue|ask (?:me )?your questions?)$")
 internal val APP_MAP_WHOLE_RE_2 = Regex("^(?:(?:yes|yeah|ok|sure),? (?:learn|tap|try) it|yes you (?:can|may)(?: tap it)?|(?:you can|you may) tap it)$")

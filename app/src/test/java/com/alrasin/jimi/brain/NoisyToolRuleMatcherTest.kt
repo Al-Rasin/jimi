@@ -168,3 +168,14 @@ class StatusAndSelfTalkTest {
         assertEquals(ToolCall("open_app", mapOf("app" to "clock")), RuleMatcher.match("start a stopwatch"))
     }
 }
+
+class StateLastAndRecallAboutTest {
+    @Test fun settingWithStateSaidLast() {
+        assertEquals(ToolCall("setting", mapOf("name" to "dark mode", "state" to "on")), RuleMatcher.match("dark mode on"))
+        assertEquals(ToolCall("toggle", mapOf("target" to "wifi", "state" to "on")), RuleMatcher.match("wifi on"))
+    }
+    @Test fun recallOneFact() {
+        assertEquals(mapOf("about" to "my locker"), RuleMatcher.match("what did i tell you about my locker")?.args)
+        assertEquals(ToolCall("recall_facts", mapOf("about" to "where i kept my keys")), RuleMatcher.match("do you remember where i kept my keys"))
+    }
+}

@@ -222,6 +222,11 @@ object RuleMatcher {
         SETTING_RE.find(t)?.let {
             return call("setting", "name" to it.groupValues[1], "state" to "open")
         }
+        // "dark mode on", "battery saver off": the state said last
+        SETTING_AFTER_RE.matchEntire(t)?.let { m ->
+            val name = m.groupValues[1]
+            if (SETTING_RE_3.containsMatchIn(name)) return call("setting", "name" to name.replace(SETTING_RE_4, ""), "state" to m.groupValues[2])
+        }
         val m = SETTING_RE_2.find(t) ?: return null
         val name = m.groupValues[2]
         if (!SETTING_RE_3.containsMatchIn(name)) return null
@@ -390,6 +395,7 @@ object RuleMatcher {
     private fun memory(t: String, raw: String = t): ToolCall? {
         if (t.matches(MEMORY_WHOLE_RE)) return call("recall_facts")
         if (t.matches(PARKED_WHOLE_RE)) return call("recall_facts", "about" to "where parked car")
+        RECALL_ABOUT_RE.matchEntire(t)?.let { return call("recall_facts", "about" to it.groupValues[1]) }
         MEMORY_RE.find(t)?.let {
             if (it.groupValues[1].startsWith("to ")) return null   // "remember to buy milk" = reminder, handled by LLM/chat
             val whole = MEMORY_RE_2.find(raw)
