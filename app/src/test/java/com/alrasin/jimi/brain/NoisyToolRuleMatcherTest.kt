@@ -237,3 +237,24 @@ class MathWordsTest {
         assertEquals(null, QuickMath.answer("21 factorial"))
     }
 }
+
+class ComplaintPhrasesTest {
+    private fun m(s: String) = RuleMatcher.match(s)
+
+    @Test fun loudQuietBrightDark() {
+        assertEquals(ToolCall("set_volume", mapOf("level" to "down")), m("it's too loud"))
+        assertEquals(ToolCall("set_volume", mapOf("level" to "up")), m("i can't hear you"))
+        assertEquals(ToolCall("set_volume", mapOf("level" to "up")), m("too quiet"))
+        assertEquals(ToolCall("set_brightness", mapOf("level" to "down")), m("screen is too bright"))
+        assertEquals(ToolCall("set_brightness", mapOf("level" to "up")), m("its too dark"))
+        assertNull(m("is it too loud"))
+    }
+
+    @Test fun skipUnreadNotificationWeatherBrowser() {
+        assertEquals(ToolCall("media_control", mapOf("action" to "next")), m("skip this song"))
+        assertEquals(ToolCall("read_messages", emptyMap()), m("how many unread messages"))
+        assertEquals(ToolCall("read_notifications", emptyMap()), m("read my last notification"))
+        assertEquals(ToolCall("weather", mapOf("place" to "dhaka")), m("look up the weather in dhaka"))
+        assertEquals(ToolCall("web_search", mapOf("query" to "cats")), m("open chrome and search for cats"))
+    }
+}

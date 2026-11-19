@@ -93,7 +93,7 @@ internal val SYSTEM_RE_3 = Regex("^run (?:the )?routine ([a-z ]+)$")
 internal val SCREEN_RE = Regex("\\b(up|down)\\b")
 internal val SCREEN_RE_2 = Regex("^(?:tap|click|press|touch|select) (?:on )?(?:the )?(.+?)(?: button)?$")
 internal val SCREEN_RE_3 = Regex("^(?:type|write|enter)(?: text)? (.+)$")
-internal val KNOWLEDGE_RE = Regex("^(?:whats |what is |how is |hows )?(?:the )?weather(?: like)?(?: (?:today|now|tomorrow))?(?: in ([a-z ]+?))?(?: (?:today|now|tomorrow))?$")
+internal val KNOWLEDGE_RE = Regex("^(?:(?:look up|check|tell me|show me|get) )?(?:whats |what is |how is |hows )?(?:the )?weather(?: like)?(?: (?:today|now|tomorrow))?(?: in ([a-z ]+?))?(?: (?:today|now|tomorrow))?$")
 internal val KNOWLEDGE_RE_2 = Regex("^(?:(?:whats|what is|what are) (?:in )?|(?:read|tell|give|show)(?: me)? |any |get(?: me)? )?(?:the )?(?:latest |top |todays |breaking )*" +
             "(?:news|headlines)(?: (?:today|now|update|updates|headlines))?(?:(?: about| on| in| from)? ([a-z ]+?))?(?: today)?$")
 internal val KNOWLEDGE_RE_3 = Regex("^(?:search the web for|search (?:on )?google for|search the internet for|google search for|search for|search|google|look up|find)(?: for)? (.+?)(?: on (?:google|the internet|the web|internet))?$")

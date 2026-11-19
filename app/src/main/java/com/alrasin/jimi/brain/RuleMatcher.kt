@@ -82,6 +82,8 @@ object RuleMatcher {
 
     private fun re(p: String) = Regex("^(?:$p)$")
 
+    private val BROWSER_SEARCH_RE = Regex("^(?:open|go to|use) (?:chrome|google|the browser|browser|google chrome) and (?:search|look up|google)(?: for)? (.+)$")
+
     private val PHONE_STATUS_RE = Regex("^(?:whats |what is |check |show )?(?:my |the )?(?:phone|phones|device) (?:current )?status$|^status of (?:my |the )?phone$")
 
     /** Panic word (PLAN 12.4): stop everything, lock, refuse risky things until unlocked by hand. */
@@ -451,6 +453,7 @@ object RuleMatcher {
         if (t.matches(STOPWATCH_RE)) return call("open_app", "app" to "clock")
         if (t.matches(RECORD_VOICE_RE)) return call("open_app", "app" to "recorder")
         if (t.matches(SHOW_PHOTOS_RE)) return call("open_app", "app" to "gallery")
+        BROWSER_SEARCH_RE.find(t)?.let { return call("web_search", "query" to it.groupValues[1]) }
         APPS_RE.find(t)
             ?.let { return call("close_app", "app" to it.groupValues[1]) }
         APPS_RE_2.find(t)
