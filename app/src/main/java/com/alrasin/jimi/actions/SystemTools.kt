@@ -228,7 +228,8 @@ fun systemTools(context: Context, torch: Torch): List<Tool> {
     return listOf(
         SimpleTool(
             "toggle", "Turn a phone feature on or off",
-            listOf(arg("target", "feature", choices = TOGGLE_TARGETS), arg("state", "on, off, toggle, or status to only read it", choices = listOf("on", "off", "toggle", "status"))),
+            listOf(arg("target", "feature", choices = TOGGLE_TARGETS), arg("state", "on, off, toggle, or status to only read it", choices = listOf("on", "off", "toggle", "status")),
+                arg("minutes", "turn it back off after this many minutes", required = false)),
         ) { c, _ ->
             val target = c.require("target", "Turn what on or off?")
             if (target !in TOGGLE_TARGETS) return@SimpleTool ToolResult.fail("I can't switch $target.")
@@ -241,14 +242,16 @@ fun systemTools(context: Context, torch: Torch): List<Tool> {
                 ?: Reply.failed("I can't read ${nice(target)}.")
             val want = requestedToggleState(c.arg("state"), before)
                 ?: return@SimpleTool Reply.failed("I can't read ${nice(target)}. Say on or off.")
-            if (before == want) return@SimpleTool toggleTruth(nice(target), want, before)
+            val minutes = c.arg("minutes")?.toDoubleOrNull()?.toLong()?.takeIf { it in 1..MAX_TIMED_MINUTES && want }
+            if (!want || minutes != null) ToggleOffWorker.cancel(context, target)
+            if (before == want) return@SimpleTool timedOff(context, target, toggleTruth(nice(target), want, before), minutes)
             val requested = set(target, want)
             if (!requested && settingsPage(target)) return@SimpleTool Reply.done("I opened ${nice(target)} settings. Set it ${if (want) "on" else "off"} there.")
             var actual = isOn(target)
             // poll often so a quick switch is reported quickly; same 2 s ceiling as before
             if (actual != want) pollUntil(20, 100, delayFirst = true) { actual = isOn(target); actual == want }
             if (actual != want && settingsPage(target)) Reply.done("the change isn't confirmed. I opened ${nice(target)} settings; set it ${if (want) "on" else "off"} there.")
-            else toggleTruth(nice(target), want, actual)
+            else timedOff(context, target, toggleTruth(nice(target), want, actual), minutes)
         },
         SimpleTool("set_brightness", "Screen brightness", listOf(arg("level", "0-100, up, down, auto or manual"))) { c, _ ->
             val cur = Settings.System.getInt(context.contentResolver, Settings.System.SCREEN_BRIGHTNESS, maxBrightness / 2)
@@ -358,6 +361,17 @@ internal fun requestedToggleState(request: String?, current: Boolean?): Boolean?
     "on" -> true
     "off" -> false
     else -> current?.not()
+}
+
+private const val MAX_TIMED_MINUTES = 24 * 60L
+
+/** After a confirmed switch-on, books the switch-off and says when. */
+private fun timedOff(context: Context, target: String, result: ToolResult, minutes: Long?): ToolResult {
+    if (minutes == null || !result.ok) return result
+    return runCatching {
+        ToggleOffWorker.schedule(context, target, minutes)
+        result.copy(say = result.say.trimEnd() + " I'll turn it off in ${speakDuration((minutes * 60).toInt())}.")
+    }.getOrDefault(result)
 }
 
 internal fun toggleTruth(label: String, wanted: Boolean, actual: Boolean?): ToolResult = when {

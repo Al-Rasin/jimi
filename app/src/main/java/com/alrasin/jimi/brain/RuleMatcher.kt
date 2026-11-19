@@ -66,6 +66,14 @@ object RuleMatcher {
     internal fun interrupt(input: String): ToolCall? = talk(normalize(input))
         ?.takeIf { it.tool == "cancel" || it.tool == "panic" }
 
+    /** "do not disturb for 1 hour", "flashlight on for 2 minutes": switch on now, off again later. */
+    private fun timedToggle(t: String, now: LocalDateTime): ToolCall? {
+        val m = TIMED_TOGGLE_RE.matchEntire(t) ?: return null
+        val secs = TimeParser.duration(m.groupValues[2]) ?: return null
+        val inner = match(m.groupValues[1], now)?.takeIf { it.tool == "toggle" && it.args["state"] == "on" } ?: return null
+        return inner.copy(args = inner.args + ("minutes" to ((secs + 59) / 60).toString()))
+    }
+
     fun match(input: String, now: LocalDateTime = LocalDateTime.now()): ToolCall? {
         val t = normalize(input)
         if (t.isEmpty()) return null
@@ -81,6 +89,7 @@ object RuleMatcher {
             // A rewrite that maps to itself would recurse forever.
             if (out != t) return match(out, now)
         }
+        timedToggle(t, now)?.let { return it }
         if (t.matches(OTHER_VOLUME_RE)) return call("setting", "name" to "sound", "state" to "open")
         if (t.matches(FONT_SIZE_RE)) return call("setting", "name" to "font size", "state" to "open")
         if (t.matches(SCREEN_TIMEOUT_RE)) return call("setting", "name" to "screen timeout", "state" to "open")

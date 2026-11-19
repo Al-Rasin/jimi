@@ -28,7 +28,7 @@ object ToolShortlist {
         "event" to listOf("calendar_add", "calendar_read", "calendar_delete"), "schedule" to listOf("calendar_read", "calendar_add"),
         "reschedule" to listOf("calendar_move"),
         "ring" to listOf("call"), "dial" to listOf("call"), "phone" to listOf("call"), "video" to listOf("call", "take_photo"),
-        "wake" to listOf("set_alarm"), "morning" to listOf("set_alarm"), "alarm" to listOf("set_alarm", "cancel_alarm", "list_alarms", "stop_alarm"), "snooze" to listOf("snooze_alarm"), "timer" to listOf("set_timer", "timer_left", "pause_timer", "cancel_alarm"),
+        "wake" to listOf("set_alarm"), "morning" to listOf("set_alarm"), "alarm" to listOf("set_alarm", "cancel_alarm", "list_alarms", "stop_alarm"), "snooze" to listOf("snooze_alarm"), "timer" to listOf("set_timer", "add_timer", "timer_left", "pause_timer", "cancel_alarm"),
         "remind" to listOf("create_reminder", "list_reminders", "place_reminder"), "reach" to listOf("place_reminder"),
         "place" to listOf("save_place", "place_reminder"), "reminder" to listOf("create_reminder", "list_reminders", "delete_reminder"),
         "minutes" to listOf("set_timer", "create_reminder"), "countdown" to listOf("set_timer"),

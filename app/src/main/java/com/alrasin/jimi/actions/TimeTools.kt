@@ -110,21 +110,7 @@ fun timeTools(context: Context): List<Tool> = listOf(
     clockTool("set_timer", "Start a countdown timer", listOf(arg("seconds", "length in seconds"), arg("label", "name", required = false))) { c, _ ->
         val secs = parseTimerSeconds(c.arg("seconds"))
             ?: return@clockTool ToolResult.fail("For how long? Use a positive whole number of seconds.")
-        val i = Intent(AlarmClock.ACTION_SET_TIMER)
-            .putExtra(AlarmClock.EXTRA_LENGTH, secs)
-            .putExtra(AlarmClock.EXTRA_SKIP_UI, true)
-        c.arg("label")?.let { i.putExtra(AlarmClock.EXTRA_MESSAGE, it) }
-        val end = System.currentTimeMillis() + secs * 1000L
-        if (!context.launchClock(i)) return@clockTool ToolResult.fail("The clock app didn't take the timer.")
-        TimerControl.started(end)
-        // Clock schedules a running timer as an alarm clock, so the next alarm shows it unless an alarm comes first.
-        var seen: Long? = null
-        val verified = awaitAlarmState(context) { next -> seen = next; next != null && abs(next - end) <= TIMER_SLACK_MS }
-        JimiLog.i("set_timer: verified=$verified next=$seen end=$end")
-        if (!verified && seen.let { it == null || it > end + TIMER_SLACK_MS }) {
-            return@clockTool ToolResult.ok("I asked Clock to start a ${speakDuration(secs)} timer, but could not verify it. Please check Clock.")
-        }
-        timerSetResult(secs)
+        startTimer(context, secs, c.arg("label"))
     },
     clockTool(
         "cancel_alarm", "Turn off alarms and timers; time=HH:mm (24h) turns off only that alarm",
@@ -159,6 +145,20 @@ fun timeTools(context: Context): List<Tool> = listOf(
         if (!alarmsSent && !noNextAlarm) return@clockTool ToolResult.fail("The clock didn't accept the turn-off request. Check the Clock app.")
         if (noNextAlarm) TimerControl.cleared()
         cancelAlarmResult(noNextAlarm)
+    },
+    clockTool("add_timer", "Add time to the running timer", listOf(arg("seconds", "seconds to add"))) { c, _ ->
+        val add = parseTimerSeconds(c.arg("seconds"))
+            ?: return@clockTool ToolResult.fail("How much time should I add?")
+        val left = TimerControl.secondsLeft()
+            ?: return@clockTool ToolResult.ok(
+                if (timerRunning()) "A timer is running in Clock, but I didn't start it, so I can't add to it."
+                else "No timer is running. Say: set a timer for ${speakDuration(add)}.",
+            )
+        val stopped = cancelTimers(context)
+        if (!stopped.ok) return@clockTool stopped
+        val total = left + add
+        val r = startTimer(context, total, null)
+        if (r.ok) ToolResult.ok("Added ${speakDuration(add)}. ${speakDuration(total)} left on the timer.") else r
     },
     SimpleTool("timer_left", "How much time is left on the timer") { _, _ ->
         TimerControl.secondsLeft()?.let { return@SimpleTool ToolResult.ok("${speakDuration(it)} left on the timer.") }
@@ -256,6 +256,24 @@ internal fun hasScheduledAlarm(next: Long?): Boolean = next != null
 
 internal fun timerSetResult(seconds: Int): ToolResult =
     ToolResult.ok("Timer set for ${speakDuration(seconds)}.")
+
+private suspend fun startTimer(context: Context, secs: Int, label: String?): ToolResult {
+    val i = Intent(AlarmClock.ACTION_SET_TIMER)
+        .putExtra(AlarmClock.EXTRA_LENGTH, secs)
+        .putExtra(AlarmClock.EXTRA_SKIP_UI, true)
+    label?.let { i.putExtra(AlarmClock.EXTRA_MESSAGE, it) }
+    val end = System.currentTimeMillis() + secs * 1000L
+    if (!context.launchClock(i)) return ToolResult.fail("The clock app didn't take the timer.")
+    TimerControl.started(end)
+    // Clock schedules a running timer as an alarm clock, so the next alarm shows it unless an alarm comes first.
+    var seen: Long? = null
+    val verified = awaitAlarmState(context) { next -> seen = next; next != null && abs(next - end) <= TIMER_SLACK_MS }
+    JimiLog.i("set_timer: verified=$verified next=$seen end=$end")
+    if (!verified && seen.let { it == null || it > end + TIMER_SLACK_MS }) {
+        return ToolResult.ok("I asked Clock to start a ${speakDuration(secs)} timer, but could not verify it. Please check Clock.")
+    }
+    return timerSetResult(secs)
+}
 
 /** Stops running timers only; alarms are left alone. */
 private suspend fun cancelTimers(context: Context): ToolResult {

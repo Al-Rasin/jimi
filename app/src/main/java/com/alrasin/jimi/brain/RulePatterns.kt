@@ -128,3 +128,6 @@ internal val SKILLS_RE_8 = Regex("^(?:flip|toggle) (?:the )?(.+?)(?: switch| tog
 internal val APPS_RE = Regex("^(?:close|kill|exit|quit|force stop|stop) (?:the )?(.+?)(?: app| application)?$")
 internal val APPS_RE_2 = Regex("^(?:open|launch|start|run|show|switch to(?! .*\\b(?:mode|silent|vibrate|vibration|english|bangla|bengali)$)|switch over to)(?: the| my)? (.+?)(?: app| application)?$")
 internal val SELF_TEST_WHOLE_RE = Regex("^(?:(?:run |do |start )?(?:a |an |your )?(?:self ?test|self check|health check|diagnostics?|full test)|test (?:yourself|your ?self|your skills|your tools|all tools)|check yourself)$")
+
+/** "<switch something on> for 30 minutes": the head is matched again as a plain toggle. */
+internal val TIMED_TOGGLE_RE = Regex("^(.+?) for (?:the next |another )?((?:an?|half an|\\d+(?:\\.\\d+)?|one|two|three|four|five|ten|fifteen|twenty|thirty|forty|forty five|sixty|ninety) (?:and a half )?(?:minutes?|mins?|hours?|hrs?)(?: and \\d+ minutes?)?)$")

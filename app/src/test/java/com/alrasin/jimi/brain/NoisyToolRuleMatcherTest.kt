@@ -369,6 +369,19 @@ class ComplaintPhrasesTest {
         assertEquals(ToolCall("cancel_alarm", mapOf("only" to "timer")), m("stop the timer"))
     }
 
+    @Test fun addTimeToTimer() {
+        assertEquals(ToolCall("add_timer", mapOf("seconds" to "300")), m("add 5 minutes to the timer"))
+        assertEquals(ToolCall("add_timer", mapOf("seconds" to "120")), m("extend the timer by 2 minutes"))
+        assertEquals("create_note", m("add milk to the shopping list")?.tool)
+    }
+
+    @Test fun timedToggleTurnsOffLater() {
+        assertEquals(ToolCall("toggle", mapOf("target" to "dnd", "state" to "on", "minutes" to "60")), m("turn on do not disturb for 1 hour"))
+        assertEquals(ToolCall("toggle", mapOf("target" to "dnd", "state" to "on", "minutes" to "30")), m("silence my phone for 30 minutes"))
+        assertEquals(ToolCall("toggle", mapOf("target" to "flashlight", "state" to "on", "minutes" to "2")), m("turn on flashlight for 2 minutes"))
+        assertEquals(ToolCall("set_timer", mapOf("seconds" to "300")), m("set a timer for 5 minutes"))
+    }
+
     @Test fun ringingAlarmStopsOnlyThatOne() {
         assertEquals(ToolCall("stop_alarm", emptyMap()), m("Stop the alarm."))
         assertEquals(ToolCall("snooze_alarm", emptyMap()), m("snooze"))

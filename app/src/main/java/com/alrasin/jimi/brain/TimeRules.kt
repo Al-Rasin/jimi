@@ -27,6 +27,9 @@ internal object TimeRules {
         if (t.matches(TIMER_LEFT_RE)) return call("timer_left")
         if (t.matches(TIMER_PAUSE_RE)) return call("pause_timer", "state" to "pause")
         if (t.matches(TIMER_RESUME_RE)) return call("pause_timer", "state" to "resume")
+        TIMER_ADD_RE.matchEntire(t)?.let { m ->
+            TimeParser.duration(m.groupValues[1].ifEmpty { m.groupValues[2] })?.let { return call("add_timer", "seconds" to it.toString()) }
+        }
         val timer = TIME_RE.find(t)
             ?: TIME_RE_2.find(t)
         timer?.let { m -> TimeParser.duration(m.groupValues[1])?.let { return call("set_timer", "seconds" to it.toString()) } }
@@ -237,5 +240,6 @@ private val TIMER_LEFT_RE = Regex(
         "|^(?:(?:check|whats|what is)(?: on)? (?:the|my) timer|timer status|time left on (?:the|my) timer)$" +
         "|^how long (?:until|till|before) (?:the|my) timer (?:ends|goes off|rings|is done|finishes)$",
 )
+private val TIMER_ADD_RE = Regex("^(?:add|put) (?:another |an extra )?(.+?)(?: more)? (?:to|on) (?:the |my )?timer$|^(?:extend|increase) (?:the |my )?timer by (.+)$")
 private val TIMER_PAUSE_RE = Regex("^(?:pause|hold|freeze) (?:the |my )?timer$")
 private val TIMER_RESUME_RE = Regex("^(?:resume|continue|unpause|restart) (?:the |my )?timer$")
