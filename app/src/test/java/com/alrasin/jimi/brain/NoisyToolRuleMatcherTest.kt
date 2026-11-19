@@ -294,4 +294,15 @@ class ComplaintPhrasesTest {
         assertNull(m("wifi"))
         assertEquals("weather", m("is it cold today")?.tool)
     }
+
+    @Test fun translatedEnglishPhrases() {
+        assertEquals(ToolCall("toggle", mapOf("target" to "flashlight", "state" to "on")), m("Turn on the light."))
+        assertEquals(ToolCall("toggle", mapOf("target" to "flashlight", "state" to "off")), m("Close the light."))
+        assertEquals(ToolCall("call", mapOf("contact" to "father")), m("Give a call to father."))
+        assertEquals(ToolCall("set_volume", mapOf("level" to "down")), m("Decrease the sound."))
+        assertEquals(ToolCall("set_brightness", mapOf("level" to "up")), m("Make the screen bright."))
+        assertEquals(ToolCall("send_sms", mapOf("contact" to "brother")), m("Send a message to brother."))
+        assertEquals("setting", m("turn on light mode")?.tool)
+        assertEquals("I'm Jimi, your phone assistant.", com.alrasin.jimi.brain.Persona.smallTalk("What is your name?", 10))
+    }
 }

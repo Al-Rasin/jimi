@@ -199,8 +199,10 @@ internal object CommsRules {
                 }
             }
         }
-        if (recipient.isBlank() || text in setOf("saying", "that says", "say", "that")) return null
-        return call(if (app == "whatsapp") "send_whatsapp" else "send_sms", "contact" to recipient,
+        // "Send a message to brother." (Bangla mode translation ends with a full stop)
+        val who = recipient.trim().trimEnd('.', '!', '?', ',')
+        if (who.isBlank() || text in setOf("saying", "that says", "say", "that")) return null
+        return call(if (app == "whatsapp") "send_whatsapp" else "send_sms", "contact" to who,
             "text" to text.ifBlank { null }, "app" to app?.takeIf { it == "messenger" })
     }
 }
