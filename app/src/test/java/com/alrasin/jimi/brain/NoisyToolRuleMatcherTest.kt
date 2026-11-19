@@ -72,3 +72,15 @@ class AlarmIsSetQuestionTest {
         assertEquals("set_alarm", RuleMatcher.match("set an alarm for 6")?.tool)
     }
 }
+
+class ScreenAndPrayerPhrasesTest {
+    @Test fun seeScreenAsksScreen() {
+        val what = ToolCall("ask_screen", mapOf("mode" to "what"))
+        assertEquals(what, RuleMatcher.match("can you see the current screen what is opened"))
+        assertEquals(what, RuleMatcher.match("what app is open"))
+        assertEquals(what, RuleMatcher.match("can you see my screen"))
+    }
+    @Test fun tellMeFajrTime() {
+        assertEquals(ToolCall("prayer_times", mapOf("prayer" to "fajr")), RuleMatcher.match("tell me the fajr time"))
+    }
+}

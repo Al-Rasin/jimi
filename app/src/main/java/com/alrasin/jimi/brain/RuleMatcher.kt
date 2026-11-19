@@ -354,7 +354,7 @@ object RuleMatcher {
             "(?: (?:times?|schedule|timings?|time table|timetable))(?: (?:for )?(today|tomorrow))?$",
     )
     private val prayerOne = Regex(
-        "^(?:(?:when is|whens|what time is|at what time is|what time|time (?:of|for))(?: the)? )?(?:(todays|tomorrows) )?($prayerName)" +
+        "^(?:(?:when is|whens|what time is|at what time is|what time|time (?:of|for)|(?:tell|show|give) me|whats|what is|check)(?: the)? )?(?:(todays|tomorrows) )?($prayerName)" +
             "(?: $prayerWord)?(?: (?:time|waqt))?(?: (?:is )?(today|tomorrow))?$",
     )
     private val prayerNext = Regex("^(?:(?:whats|what is|when is|whens|tell me)(?: the)? )?next $prayerWord(?: time)?$")
