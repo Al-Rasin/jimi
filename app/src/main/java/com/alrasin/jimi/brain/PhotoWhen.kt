@@ -7,10 +7,12 @@ import java.time.temporal.ChronoUnit
 /** Spoken time words for photo search ("last week", "march", "the last 3 days") → date range. Pure Kotlin: unit tested. */
 object PhotoWhen {
     private const val MONTHS = "january|february|march|april|may|june|july|august|september|october|november|december"
-    const val WHEN = "today|yesterday|(?:this|last|past) (?:week|month|year)|(?:the )?(?:last|past) \\d+ (?:days?|weeks?|months?)|(?:$MONTHS)(?: \\d{4})?|(?:19|20)\\d{2}"
+    private const val DAYS = "monday|tuesday|wednesday|thursday|friday|saturday|sunday"
+    const val WHEN = "today|(?:the )?day before yesterday|yesterday|(?:last |this |on )?(?:$DAYS)|(?:this|last|past) (?:week|month|year)|(?:the )?(?:last|past) \\d+ (?:days?|weeks?|months?)|(?:$MONTHS)(?: \\d{4})?|(?:19|20)\\d{2}"
     private val WHEN_START = Regex("^(?:the )?($WHEN)\\b(?: (?:in|at|from) )?(.*)$")
     private val WHEN_END = Regex("^(.*?) (?:in |from |during |on )?(?:the )?($WHEN)$")
     private val LAST_N = Regex("^(?:the )?(?:last|past) (\\d+) (day|week|month)s?$")
+    private val WEEKDAY = Regex("^(?:last |this |on )?($DAYS)$")
     private val MONTH_YEAR = Regex("^($MONTHS)(?: (\\d{4}))?$")
 
     /** Tail after "photos from …" → (time words, place). Either may be null. */
@@ -31,12 +33,18 @@ object PhotoWhen {
         return when (w) {
             "today" -> today to today
             "yesterday" -> today.minusDays(1).let { it to it }
+            "day before yesterday" -> today.minusDays(2).let { it to it }
             "this week", "last week", "past week" -> today.minusDays(7) to today
             "this month" -> today.withDayOfMonth(1) to today
             "last month", "past month" -> today.minusMonths(1).withDayOfMonth(1).let { it to it.plusMonths(1).minusDays(1) }
             "this year" -> today.withDayOfYear(1) to today
             "last year", "past year" -> today.minusYears(1).withDayOfYear(1).let { it to it.plusYears(1).minusDays(1) }
-            else -> LAST_N.find(w)?.let {
+            else -> WEEKDAY.find(w)?.let {
+                // The most recent past one: on a Friday, "friday" means a week ago.
+                val day = java.time.DayOfWeek.valueOf(it.groupValues[1].uppercase())
+                val back = ((today.dayOfWeek.value - day.value + 7) % 7).let { d -> if (d == 0) 7 else d }
+                today.minusDays(back.toLong()).let { d -> d to d }
+            } ?: LAST_N.find(w)?.let {
                 val n = it.groupValues[1].toLong()
                 val unit = when (it.groupValues[2]) { "day" -> ChronoUnit.DAYS; "week" -> ChronoUnit.WEEKS; else -> ChronoUnit.MONTHS }
                 today.minus(n, unit) to today

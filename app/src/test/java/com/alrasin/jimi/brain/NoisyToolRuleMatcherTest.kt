@@ -316,4 +316,12 @@ class ComplaintPhrasesTest {
         assertEquals(ToolCall("create_note", mapOf("text" to "buy milk")), m("Note down buy milk."))
         assertEquals("cancel", m("Cancel it.")?.tool)
     }
+
+    @Test fun halfSongOfTakeMeHome() {
+        assertEquals(ToolCall("play_media", mapOf("query" to "arijit singh songs")), m("Play a song of Arijit Singh."))
+        assertEquals(ToolCall("set_volume", mapOf("level" to "50")), m("Set volume to half."))
+        assertEquals(ToolCall("set_brightness", mapOf("level" to "50")), m("Make brightness 50 percent."))
+        assertEquals(ToolCall("open_map", mapOf("place" to "home", "mode" to "navigate")), m("Take me home."))
+        assertEquals("go_home", m("go home")?.tool)
+    }
 }

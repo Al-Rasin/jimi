@@ -55,6 +55,15 @@ class FileSearchRuleTest {
         assertNull(PhotoWhen.range("banana", today))
     }
 
+    @Test fun weekdays() {
+        val fri = LocalDate.of(2026, 11, 20)
+        assertEquals(LocalDate.of(2026, 11, 13).let { it to it }, PhotoWhen.range("last friday", fri))
+        assertEquals(LocalDate.of(2026, 11, 16).let { it to it }, PhotoWhen.range("monday", fri))
+        assertEquals(LocalDate.of(2026, 11, 18).let { it to it }, PhotoWhen.range("day before yesterday", fri))
+        assertEquals("find_photos", m("show me the photos of last friday")?.tool)
+        assertEquals(mapOf("when" to "last friday"), m("show me the photos of last friday")?.args)
+    }
+
     @Test fun score() {
         assertTrue(FileKind.score("taxes", "Tax_Return_2025") > 0)
         assertEquals(0, FileKind.score("taxes", "holiday plan"))
