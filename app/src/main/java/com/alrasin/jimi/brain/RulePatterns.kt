@@ -70,6 +70,8 @@ internal val MEDIA_RE = Regex("^(?:set |change |turn )?(?:the )?(?:volume|sound)
 internal val STORE_SEARCH_RE = Regex(" (?:app|apps|game|games)$")
 internal val NOISY_TOOL_RE = Regex("^(?:search|google|find|look up|wiki|wikipedia|tell me about|explain|define|why|how|what does|what do|what are|i |im |remember|forget|say|repeat)\\b")
 internal val NOISY_TOOL_RE_2 = Regex("\\b(?:news|headlines|online|internet|technology|buy|price|prices)\\b")
+/** "how long until my battery is full", "when will my phone be fully charged". */
+internal val CHARGE_ETA_RE = Regex("^(?!.*\\b(?:remind|notify|alert|let me know|tell me when)\\b).*\\b(?:how long|how much time|when)\\b.*\\b(?:fully? charged?|(?:battery|phone) (?:be |is )?full|full charge|charged fully|charge (?:fully|completely|to 100))")
 internal val NOISY_TOOL_RE_3 = Regex("\\b(?:dont|do not|never|not|cancel|stop|delete|remove|dismiss|check|list|show)\\b")
 internal val NOISY_TOOL_RE_4 = Regex("\\bbattery\\b")
 internal val NOISY_TOOL_RE_5 = Regex("\\b(?:saver|saving|dont|do not|never|not)\\b")

@@ -44,6 +44,7 @@ internal val SYSTEM_WHOLE_RE_9 = Regex("^(?:(?:how much |check )?(?:free )?(?:st
 internal val SYSTEM_TOMORROW_RE = Regex("^(?:what(?:s| is)? (?:the )?(?:day|date) (?:is )?tomorrow|what day will (?:it )?be tomorrow|tomorrow is what day|whats tomorrow(?:s date)?|which day is tomorrow)$")
 internal val SYSTEM_MEMORY_RE = Regex("^(?:(?:how much |check |whats |what is )?(?:the |my |phone )?(?:free )?ram(?: usage| used| free| left| available)?(?: do i have)?|(?:how much |check )?(?:free |phone )?memory (?:is )?(?:free|left|available|used|usage)|how much (?:ram|memory) (?:is )?(?:free|left|available|used)|is (?:my |the )?(?:phone )?(?:ram|memory) (?:full|low))$")
 internal val SYSTEM_WHOLE_RE_10 = Regex("^(?:(?:device|phone|system) (?:status|info)|status(?: report)?|how is (?:my|the) phone)$")
+internal val SCREENSHOT_SHARE_RE = Regex("^(?:(?:take |capture )?(?:a )?screen ?shot|capture (?:the )?screen) (?:and )?(?:then )?(?:share|send) (?:it|that)?$|^share (?:a )?screen ?shot(?: of (?:this|the screen))?$")
 internal val SYSTEM_WHOLE_RE_11 = Regex("^(?:(?:take |capture )?(?:a )?screenshot|screen ?shot|capture (?:the )?screen)$")
 internal val SYSTEM_WHOLE_RE_12 = Regex("^(?:lock(?: the| my)?(?: phone| screen| device| mobile)?(?: now)?|lock it|turn off (?:the )?screen|screen off)$")
 internal val SYSTEM_WHOLE_RE_13 = Regex("^(?:unlock(?: the| my)?(?: phone| screen| device| mobile)?(?: now)?|unlock it|open (?:the )?phone)$")

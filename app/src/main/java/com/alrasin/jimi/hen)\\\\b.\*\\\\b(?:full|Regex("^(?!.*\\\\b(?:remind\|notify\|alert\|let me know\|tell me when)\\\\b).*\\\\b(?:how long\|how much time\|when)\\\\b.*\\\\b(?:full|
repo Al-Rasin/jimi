@@ -1,0 +1,1 @@
+internal val CHARGE_ETA_RE = how much time|how much time|when)\\b.*\\b(?:full(?:y)? charged?|(?:battery|phone) (?:be |is )?full|full charge|fully charge|charged fully|charge (?:fully|completely|to 100))")

@@ -379,6 +379,13 @@ class ComplaintPhrasesTest {
         assertEquals("repeat_last", m("repeat that")?.tool)
     }
 
+    @Test fun screenshotShareAndChargeTime() {
+        assertEquals(ToolCall("take_screenshot", mapOf("share" to "true")), m("take a screenshot and share it"))
+        assertEquals(ToolCall("take_screenshot", emptyMap()), m("take a screenshot"))
+        assertEquals(ToolCall("device_status", mapOf("what" to "battery")), m("how long until my battery is full"))
+        assertEquals(ToolCall("device_status", mapOf("what" to "battery")), m("when will my phone be fully charged"))
+    }
+
     @Test fun callOnSpeaker() {
         assertEquals(ToolCall("call", mapOf("contact" to "mom", "speaker" to "true")), m("call mom on speaker"))
         assertEquals(ToolCall("call", mapOf("contact" to "dad", "speaker" to "true")), m("call dad on the speakerphone"))

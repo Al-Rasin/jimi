@@ -1,5 +1,8 @@
 package com.alrasin.jimi.actions
 
+import kotlin.coroutines.resume
+import kotlinx.coroutines.withTimeoutOrNull
+import kotlinx.coroutines.suspendCancellableCoroutine
 import android.annotation.SuppressLint
 import com.alrasin.jimi.brain.Persona
 import android.accessibilityservice.AccessibilityService
@@ -286,7 +289,13 @@ fun systemTools(context: Context, torch: Torch): List<Tool> {
             val status = context.registerReceiver(null, IntentFilter(Intent.ACTION_BATTERY_CHANGED))
                 ?.getIntExtra(BatteryManager.EXTRA_STATUS, -1)
             val charging = status == BatteryManager.BATTERY_STATUS_CHARGING || status == BatteryManager.BATTERY_STATUS_FULL
-            val battery = "Battery $pct percent${if (charging) ", charging" else ""}."
+            val etaMin = if (status == BatteryManager.BATTERY_STATUS_CHARGING) bm.computeChargeTimeRemaining() / 60_000 else -1
+            val eta = when {
+                status == BatteryManager.BATTERY_STATUS_FULL || pct >= 100 -> " It's full."
+                etaMin > 0 -> " About ${if (etaMin >= 60) "${etaMin / 60} hour${if (etaMin >= 120) "s" else ""} ${etaMin % 60} minutes" else "$etaMin minutes"} until full."
+                else -> ""
+            }
+            val battery = "Battery $pct percent${if (charging) ", charging" else ""}.$eta"
             val tenths = context.registerReceiver(null, IntentFilter(Intent.ACTION_BATTERY_CHANGED))
                 ?.getIntExtra(BatteryManager.EXTRA_TEMPERATURE, Int.MIN_VALUE) ?: Int.MIN_VALUE
             val fs = StatFs(Environment.getDataDirectory().path)
@@ -305,16 +314,23 @@ fun systemTools(context: Context, torch: Torch): List<Tool> {
                 },
             )
         },
-        SimpleTool("take_screenshot", "Take a screenshot") { _, _ ->
-            if (JimiAccessibilityService.instance?.global(AccessibilityService.GLOBAL_ACTION_TAKE_SCREENSHOT) == true) {
+        SimpleTool("take_screenshot", "Take a screenshot; share=true opens the share menu with it", listOf(arg("share", "share the screenshot", required = false, choices = listOf("true", "false")))) { c, _ ->
+            val share = c.arg("share")?.lowercase() == "true"
+            if (!share && JimiAccessibilityService.instance?.global(AccessibilityService.GLOBAL_ACTION_TAKE_SCREENSHOT) == true) {
                 return@SimpleTool ToolResult.ok("Screenshot requested. Android will show it when saved.")
             }
             val dir = File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_PICTURES), "Screenshots")
-            val f = File(dir, "Screenshot_${SimpleDateFormat("yyyyMMdd-HHmmss", Locale.US).format(Date())}_Jarvis.png")
+            val f = File(dir, "Screenshot_${SimpleDateFormat("yyyyMMdd-HHmmss", Locale.US).format(Date())}_Jimi.png")
             val r = RootShell.run("mkdir -p ${RootShell.quote(dir.path)}", "screencap -p ${RootShell.quote(f.path)}")
             if (!r.ok || !f.isFile || f.length() == 0L) return@SimpleTool ToolResult.fail("Screenshot failed. Enable accessibility in Setup or use the phone's screenshot buttons.")
-            MediaScannerConnection.scanFile(context, arrayOf(f.path), null, null)
-            ToolResult.ok("Screenshot saved.")
+            val uri = withTimeoutOrNull(5000) {
+                suspendCancellableCoroutine { cont -> MediaScannerConnection.scanFile(context, arrayOf(f.path), arrayOf("image/png")) { _, u -> cont.resume(u) } }
+            }
+            if (!share) return@SimpleTool ToolResult.ok("Screenshot saved.")
+            if (uri == null) return@SimpleTool ToolResult.fail("Screenshot saved, but I couldn't open the share menu.")
+            val send = Intent(Intent.ACTION_SEND).setType("image/png").putExtra(Intent.EXTRA_STREAM, uri).addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            if (context.launch(Intent.createChooser(send, "Share screenshot"))) ToolResult.ok("Screenshot taken. Pick where to share it.")
+            else ToolResult.fail("Screenshot saved, but I couldn't open the share menu.")
         },
         SimpleTool("lock_phone", "Lock the phone (screen off)") { _, _ ->
             val a = JimiAccessibilityService.instance

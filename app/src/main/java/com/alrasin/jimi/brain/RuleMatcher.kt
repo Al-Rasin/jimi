@@ -89,6 +89,7 @@ object RuleMatcher {
             // A rewrite that maps to itself would recurse forever.
             if (out != t) return match(out, now)
         }
+        if (CHARGE_ETA_RE.containsMatchIn(t)) return call("device_status", "what" to "battery")
         timedToggle(t, now)?.let { return it }
         if (t.matches(OTHER_VOLUME_RE)) return call("setting", "name" to "sound", "state" to "open")
         if (t.matches(FONT_SIZE_RE)) return call("setting", "name" to "font size", "state" to "open")
@@ -361,6 +362,7 @@ object RuleMatcher {
             t.matches(SYSTEM_NETWORK_RE) -> return call("device_status", "what" to "network")
             t.matches(SYSTEM_WHOLE_RE_10) -> return call("device_status", "what" to "all")
             t.matches(SYSTEM_WHOLE_RE_11) -> return call("take_screenshot")
+            t.matches(SCREENSHOT_SHARE_RE) -> return call("take_screenshot", "share" to "true")
             t.matches(SYSTEM_WHOLE_RE_12) -> return call("lock_phone")
             t.matches(SYSTEM_WHOLE_RE_13) -> return call("unlock_phone")
             t.matches(SYSTEM_WHOLE_RE_14) -> return call("run_routine", "name" to "good_night")
