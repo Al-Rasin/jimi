@@ -355,6 +355,11 @@ class ComplaintPhrasesTest {
         assertEquals(ToolCall("open_app", mapOf("app" to "whatsapp")), m("No, I mean open WhatsApp."))
     }
 
+    @Test fun emailSomeoneAbout() {
+        assertEquals(ToolCall("compose_email", mapOf("to" to "boss", "subject" to "the meeting")), m("Email boss about the meeting."))
+        assertEquals(ToolCall("compose_email", mapOf("to" to "karim", "subject" to "the bill")), m("mail Karim about the bill"))
+    }
+
     @Test fun lastPhotoSelfieShoppingDay() {
         assertEquals(ToolCall("open_app", mapOf("app" to "gallery")), m("Open the last photo."))
         assertEquals(ToolCall("open_app", mapOf("app" to "camera")), m("Open camera in selfie mode."))

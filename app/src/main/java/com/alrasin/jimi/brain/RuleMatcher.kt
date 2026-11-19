@@ -117,6 +117,7 @@ object RuleMatcher {
         Regex("^turn (up|down) (?:the )?(?:sound|audio)$") to "volume $1",
         Regex("^turn on (?:the )?(?:sound|audio)$") to "unmute",
         Regex("^note down (.+)$") to "take a note $1",
+        Regex("^(?:e ?mail|mail) ([a-z0-9 ]+?) about (.+)$") to "send an email to $1 about $2",
         // A spoken correction: "i said open youtube", "no i mean open whatsapp".
         Regex("^(?:no |nope |sorry )?(?:i said|i mean|i meant)(?: to)? (.+)$") to "$1",
         Regex("^(?:what did i (?:note|write)(?: down)?|(?:read|show|open)(?: me)? (?:my |the )?(?:last|latest|recent) notes?)$") to "show my notes",
