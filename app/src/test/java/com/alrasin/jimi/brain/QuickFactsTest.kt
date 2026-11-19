@@ -44,6 +44,14 @@ class QuickFactsTest {
         assertEquals(null, QuickFacts.answer("light"))
     }
 
+    @Test fun moreFixedFacts() {
+        assertEquals("A year has 12 months.", QuickFacts.answer("how many months in a year", now))
+        assertEquals("An adult has 32 teeth.", QuickFacts.answer("how many teeth do adults have", now))
+        assertEquals("An octopus has three hearts.", QuickFacts.answer("how many hearts does an octopus have", now))
+        assertEquals("The Earth is about 4.5 billion years old.", QuickFacts.answer("how old is the earth", now))
+        assertEquals(null, QuickFacts.answer("earth", now))
+    }
+
     @Test fun calendarQuestions() {
         val now = ZonedDateTime.of(2026, 11, 20, 9, 0, 0, 0, ZoneId.of("Asia/Dhaka"))
         assertEquals("February 2028 has 29 days.", QuickFacts.answer("how many days in february 2028", now))

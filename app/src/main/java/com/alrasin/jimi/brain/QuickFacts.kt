@@ -66,7 +66,16 @@ object QuickFacts {
         "(?:biggest|largest) animal(?: in the world)?" to "The blue whale is the biggest animal ever known.",
         "(?:fastest) (?:land )?animal(?: in the world)?" to "The cheetah is the fastest land animal, up to about 110 kilometers per hour.",
         "(?:bones are there in|bones in|bones does) (?:the |a )?(?:human body|adult human|body)(?: have)?" to "An adult human has 206 bones.",
-        "(?:teeth does|teeth do|teeth in) (?:an )?(?:adult|human|person|people)(?: have)?" to "An adult has 32 teeth.",
+        "(?:teeth does|teeth do|teeth in) (?:an |a )?(?:adults?|humans?|persons?|people|grown ups?)(?: have)?" to "An adult has 32 teeth.",
+        "months (?:are there )?in a year" to "A year has 12 months.",
+        "(?:countries (?:are there )?in the world|countries are there)" to "There are 195 countries: 193 in the United Nations, plus Vatican City and Palestine.",
+        "(?:population of the world|world population|people (?:are there |live )?(?:in|on) the (?:world|earth|planet))" to
+            "About 8 billion people live on Earth.",
+        "hearts does an? octopus have" to "An octopus has three hearts.",
+        "legs does an? spider have" to "A spider has eight legs.",
+        "legs does an? (?:insect|ant|bee) have" to "An insect has six legs.",
+        "(?:how old is (?:the )?(?:earth|planet earth)|age of (?:the )?earth)" to "The Earth is about 4.5 billion years old.",
+        "(?:how old is (?:the )?universe|age of (?:the )?universe)" to "The universe is about 13.8 billion years old.",
         "(?:chemical formula (?:of|for) water|formula of water)" to "Water is H2O.",
         "(?:value of )?pi" to "Pi is about 3.14159.",
     ).map { (q, a) -> Regex("^$ASK(?:$q)(?: in kilometers| in km| in miles| from here)?$") to a }
