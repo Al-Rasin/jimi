@@ -90,4 +90,11 @@ class TriageTest {
                 Triage.classify("com.instagram.android", "Balance", amount, null, null))
         }
     }
+
+    @Test fun appVersionIsNotACode() {
+        assertFalse(Triage.hasCode("Version 2.24.1015 is ready"))
+        assertTrue(Triage.hasCode("OTP 1234"))
+    }
+
+    @Test fun readRuleKeeps() = assertTrue(keep("com.daraz.android", "Flash sale", "50% off", category = "promo", rule = "read"))
 }

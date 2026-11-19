@@ -162,10 +162,11 @@ class AppViewModel @Inject constructor(
     val headphonesMode = settings.headphonesMode.state(true)
     /** Modes on right now (headphones / car connected), set by the core service. */
     val modeNow = com.alrasin.jarvis.core.ContextNow.flow
-    val readMessages = settings.readMessages.state(true)
+    val readWhen = settings.readWhen.state(com.alrasin.jarvis.notify.ReadOut.When.CAR_HEADPHONES)
+    val readWhat = settings.readWhat.state(com.alrasin.jarvis.notify.ReadOut.What.PEOPLE_IMPORTANT)
+    val readLockedFull = settings.readLockedFull.state(false)
     val bedtimeMode = settings.bedtimeMode.state(false)
     val proactive = settings.proactive.state(true)
-    val readImportant = settings.readImportant.state(false)
     val bedtimeHours = settings.bedtimeHours.state(ContextModes.DEFAULT_HOURS)
     val voiceId = settings.voiceId.state(false)
     val speakerThreshold = settings.speakerThreshold.state(Settings.DEFAULT_SPEAKER_THRESHOLD)
@@ -316,10 +317,11 @@ class AppViewModel @Inject constructor(
     fun setFollowUp(v: Boolean) = viewModelScope.launch { settings.setFollowUp(v) }
     fun setCarMode(v: Boolean) = viewModelScope.launch { settings.setCarMode(v) }
     fun setHeadphonesMode(v: Boolean) = viewModelScope.launch { settings.setHeadphonesMode(v) }
-    fun setReadMessages(v: Boolean) = viewModelScope.launch { settings.setReadMessages(v) }
+    fun setReadWhen(v: com.alrasin.jarvis.notify.ReadOut.When) = viewModelScope.launch { settings.setReadWhen(v) }
+    fun setReadWhat(v: com.alrasin.jarvis.notify.ReadOut.What) = viewModelScope.launch { settings.setReadWhat(v) }
+    fun setReadLockedFull(v: Boolean) = viewModelScope.launch { settings.setReadLockedFull(v) }
     fun setBedtimeMode(v: Boolean) = viewModelScope.launch { settings.setBedtimeMode(v) }
     fun setProactive(v: Boolean) = viewModelScope.launch { settings.setProactive(v) }
-    fun setReadImportant(v: Boolean) = viewModelScope.launch { settings.setReadImportant(v) }
     fun setBedtimeHours(v: String) = viewModelScope.launch { settings.setBedtimeHours(v) }
     fun setShowPanel(v: Boolean) = viewModelScope.launch { settings.setShowPanel(v) }
     fun setAutoClear(v: Boolean) = viewModelScope.launch { settings.setAutoClearNotifications(v) }

@@ -10,6 +10,7 @@ import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import com.alrasin.jarvis.voice.Voices
 import com.alrasin.jarvis.llm.ChatModels
+import com.alrasin.jarvis.notify.ReadOut
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
@@ -50,6 +51,9 @@ class Settings @Inject constructor(@ApplicationContext private val context: Cont
     private val proactiveKey = booleanPreferencesKey("proactive_talk")
     private val readImportantKey = booleanPreferencesKey("read_important_alerts")
     private val readMessagesKey = booleanPreferencesKey("read_messages_aloud")
+    private val readWhenKey = stringPreferencesKey("read_when")
+    private val readWhatKey = stringPreferencesKey("read_what")
+    private val readLockedFullKey = booleanPreferencesKey("read_locked_full")
 
     val assistantMode: Flow<AssistantMode> = context.dataStore.data.map { AssistantMode.fromStored(it[assistantModeKey]) }
     val setupComplete: Flow<Boolean> = read(setupCompleteKey, false)
@@ -128,17 +132,21 @@ class Settings @Inject constructor(@ApplicationContext private val context: Cont
     suspend fun setCarMode(v: Boolean) = write(carModeKey, v)
     suspend fun setHeadphonesMode(v: Boolean) = write(headphonesModeKey, v)
 
-    /** Car / headphones mode reads new chat messages aloud; this switch turns only that part off. */
-    val readMessages: Flow<Boolean> = read(readMessagesKey, true)
-    suspend fun setReadMessages(v: Boolean) = write(readMessagesKey, v)
+    /** Notification read-out (D-080). "When" falls back to the two old switches until the user picks one. */
+    val readWhen: Flow<ReadOut.When> = context.dataStore.data.map {
+        ReadOut.When.of(it[readWhenKey]) ?: ReadOut.migrateWhen(it[readImportantKey] ?: false, it[readMessagesKey] ?: true)
+    }
+    val readWhat: Flow<ReadOut.What> = read(readWhatKey, ReadOut.What.PEOPLE_IMPORTANT.id).map { ReadOut.What.of(it) }
+    val readLockedFull: Flow<Boolean> = read(readLockedFullKey, false)
+    suspend fun setReadWhen(v: ReadOut.When) = write(readWhenKey, v.id)
+    suspend fun setReadWhat(v: ReadOut.What) = write(readWhatKey, v.id)
+    suspend fun setReadLockedFull(v: Boolean) = write(readLockedFullKey, v)
     suspend fun setBedtimeMode(v: Boolean) = write(bedtimeModeKey, v)
     suspend fun setBedtimeHours(v: String) = write(bedtimeHoursKey, v)
 
-    /** Jimi speaks on its own (ROADMAP #44): late-night nudge and "while you were away". Read-out of alerts is opt-in. */
+    /** Jimi speaks on its own (ROADMAP #44): late-night nudge and "while you were away". */
     val proactive: Flow<Boolean> = read(proactiveKey, true)
-    val readImportant: Flow<Boolean> = read(readImportantKey, false)
     suspend fun setProactive(v: Boolean) = write(proactiveKey, v)
-    suspend fun setReadImportant(v: Boolean) = write(readImportantKey, v)
     suspend fun setSttSecondPass(v: Boolean) = write(sttSecondPassKey, v)
     suspend fun setSttBangla(v: Boolean) = write(sttBanglaKey, v)
     suspend fun setSttDenoise(v: Boolean) = write(sttDenoiseKey, v)

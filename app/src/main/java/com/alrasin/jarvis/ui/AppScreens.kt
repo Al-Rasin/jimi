@@ -1,5 +1,6 @@
 package com.alrasin.jarvis.ui
 
+import com.alrasin.jarvis.notify.ReadOut
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -322,7 +323,8 @@ private fun AlertsTab(vm: AppViewModel) {
     }
 }
 
-private fun isImportant(n: NotificationLog) = n.label?.let { it == "important" } ?: n.important
+// "default keep" only means Jimi was unsure, so it is not shown as important.
+private fun isImportant(n: NotificationLog) = n.label?.let { it == "important" } ?: (n.important && n.reason != "default keep")
 
 /** App letter, title, app · time. Tap to see the text and teach Jimi. */
 @Composable
@@ -339,8 +341,10 @@ private fun NotificationRow(same: List<NotificationLog>, rule: String?, vm: AppV
         ChipRow {
             Chip("Important", selected = important) { same.forEach { vm.label(it.id, true) } }
             Chip("Noise", selected = !important) { same.forEach { vm.label(it.id, false) } }
-            Chip("Always keep app", selected = rule == "keep") { vm.setRule(n.pkg, if (rule == "keep") null else "keep") }
-            Chip("Always clear app", selected = rule == "clear") { vm.setRule(n.pkg, if (rule == "clear") null else "clear") }
+            val mode = ReadOut.AppMode.of(rule)
+            ReadOut.AppMode.entries.forEach { m ->
+                Chip("${m.label} app", selected = mode == m) { vm.setRule(n.pkg, if (mode == m) null else m.id) }
+            }
         }
     }
 }

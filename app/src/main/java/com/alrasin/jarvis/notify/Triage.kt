@@ -22,7 +22,8 @@ object Triage {
         "bank|bkash|nagad|rocket|dbbl|upay|paypal|venmo|revolut|wise|chase|capitalone|citytouch|cellfin|surecash",
         RegexOption.IGNORE_CASE,
     )
-    private val POSSIBLE_CODE = Regex("(?<!\\d)\\d{4,8}(?!\\d)")
+    // Skips dotted numbers like app versions (2.24.1015) so they do not look like codes.
+    private val POSSIBLE_CODE = Regex("(?<![\\d.])\\d{4,8}(?!\\d|\\.\\d)")
     private val KEEP_CATEGORIES = setOf("call", "msg", "email", "alarm", "reminder", "event", "alert")
     private val IMPORTANT_WORDS = Regex(
         "\\b(otp|verification[ -]+code|one.time|passcode|pin|authentication|verification|code|bank|balance|account|" +
@@ -40,7 +41,9 @@ object Triage {
     fun isChatApp(pkg: String) = pkg.lowercase(java.util.Locale.ROOT) in CHAT_APPS
 
     /** Bank or payment app (money features are out of scope, D-072). */
-    fun isMoneyApp(pkg: String) = BANK_APP.containsMatchIn(pkg)
+    fun isMoneyApp(pkg: String) = BANK_APP.containsMatchIn(pkg.lowercase(java.util.Locale.ROOT))
+
+    fun hasCode(text: String) = POSSIBLE_CODE.containsMatchIn(text)
 
     /** Clear rules cannot override protected notifications or possible personal messages. */
     fun classify(
@@ -53,7 +56,7 @@ object Triage {
         isMessagingStyle: Boolean = false,
         isConversation: Boolean = false,
     ): Verdict {
-        if (rule == "keep") return Verdict(true, "your rule")
+        if (rule == "keep" || rule == "read") return Verdict(true, "your rule")
         val all = "$title $text"
         if (IMPORTANT_WORDS.containsMatchIn(all)) return Verdict(true, "important words")
         if (POSSIBLE_CODE.containsMatchIn(all)) return Verdict(true, "possible verification code")

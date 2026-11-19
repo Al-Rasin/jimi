@@ -1,6 +1,5 @@
 package com.alrasin.jarvis.notify
 
-import com.alrasin.jarvis.brain.ContextModes
 import com.alrasin.jarvis.brain.Persona
 import com.alrasin.jarvis.data.NotificationLog
 
@@ -17,9 +16,6 @@ object Proactive {
     const val AWAY_MS = 3 * 3_600_000L
     /** At least this many important alerts before a summary is worth saying. */
     const val MIN_UNREAD = 2
-    /** Gap between two read-outs so a burst of alerts is not a speech. */
-    const val READ_GAP_MS = 2 * 60_000L
-    private const val MAX_TEXT = 120
     private const val NOTHING = "Nothing missed."
 
     /** Nudge once per night when the phone is unlocked late. [lastNudgeMs] is the last nudge time, 0 if never. */
@@ -37,26 +33,6 @@ object Proactive {
     /** Chat-like: a chat app, a message-like triage reason, or the listener saw a message-style notification ([chat]). */
     fun isChatLike(row: NotificationLog, chat: Boolean = false): Boolean =
         chat || Triage.isChatApp(row.pkg) || row.reason in CHAT_REASONS
-
-    /**
-     * One line for an important alert, or null. Chat-like alerts from any app are skipped when [skipChats]:
-     * car/headphones mode already reads them, or "Read messages aloud" is off.
-     */
-    fun importantLine(
-        row: NotificationLog, quiet: Boolean, skipChats: Boolean, nowMs: Long, lastReadMs: Long, chat: Boolean = false,
-    ): String? {
-        if (quiet || !row.important || Triage.isMoneyApp(row.pkg)) return null
-        if (skipChats && isChatLike(row, chat)) return null
-        if (nowMs - lastReadMs < READ_GAP_MS) return null
-        if (Triage.isChatApp(row.pkg)) {
-            return ContextModes.messageLine(row.appName, row.title, row.text)?.let { "${Persona.ADDRESS}, $it" }
-        }
-        val title = row.title.trim()
-        val text = row.text.replace(Regex("\\s+"), " ").trim().take(MAX_TEXT)
-        if (title.isEmpty() && text.isEmpty()) return null
-        val body = listOf(title, text).filter { it.isNotEmpty() }.distinct().joinToString(": ")
-        return "${Persona.ADDRESS}, ${row.appName}: $body"
-    }
 
     /** "While you were away: …" after [awayMs] off, from the important alerts logged in that time. */
     fun awaySummary(awayMs: Long, log: List<NotificationLog>, quiet: Boolean): String? {

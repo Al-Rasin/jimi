@@ -1,5 +1,6 @@
 package com.alrasin.jarvis.ui
 
+import com.alrasin.jarvis.notify.ReadOut
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.foundation.text.KeyboardOptions
 import com.alrasin.jarvis.brain.Routines
@@ -61,10 +62,11 @@ internal fun SettingsTab(vm: AppViewModel, onSetup: () -> Unit, onDeviceCheck: (
     val carMode by vm.carMode.collectAsStateWithLifecycle()
     val headphonesMode by vm.headphonesMode.collectAsStateWithLifecycle()
     val modeNow by vm.modeNow.collectAsStateWithLifecycle()
-    val readMessages by vm.readMessages.collectAsStateWithLifecycle()
+    val readWhen by vm.readWhen.collectAsStateWithLifecycle()
+    val readWhat by vm.readWhat.collectAsStateWithLifecycle()
+    val readLockedFull by vm.readLockedFull.collectAsStateWithLifecycle()
     val bedtimeMode by vm.bedtimeMode.collectAsStateWithLifecycle()
     val proactive by vm.proactive.collectAsStateWithLifecycle()
-    val readImportant by vm.readImportant.collectAsStateWithLifecycle()
     val bedtimeHours by vm.bedtimeHours.collectAsStateWithLifecycle()
     val voiceId by vm.voiceId.collectAsStateWithLifecycle()
     val city by vm.homeCity.collectAsStateWithLifecycle()
@@ -221,16 +223,29 @@ internal fun SettingsTab(vm: AppViewModel, onSetup: () -> Unit, onDeviceCheck: (
                 ToggleRow("Panel on wake", panel) { vm.setShowPanel(it) }
                 ToggleRow("Auto-clear noise alerts", autoClear) { vm.setAutoClear(it) }
                 ToggleRow("Speak on its own", proactive, "Late-night nudge, missed alerts") { vm.setProactive(it) }
-                ToggleRow("Read important alerts", readImportant) { vm.setReadImportant(it) }
                 ToggleRow("Learn apps at night", nightExplore) { vm.setNightExplore(it) }
+            }
+            RowsCard("Read notifications") {
+                Hint("When")
+                ChipRow {
+                    ReadOut.When.entries.forEach { w -> Chip(w.label, selected = readWhen == w) { vm.setReadWhen(w) } }
+                }
+                if (readWhen != ReadOut.When.OFF) {
+                    Hint("What", Modifier.padding(top = 12.dp))
+                    ChipRow {
+                        ReadOut.What.entries.forEach { w -> Chip(w.label, selected = readWhat == w) { vm.setReadWhat(w) } }
+                    }
+                    Hint(
+                        if (readWhat == ReadOut.What.PEOPLE) "Chats from people. Codes never read." else "Chats, calls, deliveries, reminders. Codes never read.",
+                        Modifier.padding(top = 8.dp, bottom = 4.dp),
+                    )
+                    ToggleRow("Full text when locked", readLockedFull, "Off: says only who sent it") { vm.setReadLockedFull(it) }
+                }
             }
             RowsCard("Modes") {
                 // These turn on by themselves when a car / headphones connect; the switch only allows it.
                 ToggleRow("Car mode", carMode, if (modeNow.car) "On now: car connected" else "Auto in car Bluetooth. Short answers, no screen tasks") { vm.setCarMode(it) }
                 ToggleRow("Headphones mode", headphonesMode, if (modeNow.headphones) "On now: headphones connected" else "Auto when headphones connect. Short answers") { vm.setHeadphonesMode(it) }
-                if (carMode || headphonesMode) {
-                    ToggleRow("Read messages aloud", readMessages, "New chats, in car or headphones") { vm.setReadMessages(it) }
-                }
                 ToggleRow("Bedtime mode", bedtimeMode, "Quiet voice and Do Not Disturb") { vm.setBedtimeMode(it) }
                 if (bedtimeMode) BedtimeHours(bedtimeHours, vm::setBedtimeHours)
             }

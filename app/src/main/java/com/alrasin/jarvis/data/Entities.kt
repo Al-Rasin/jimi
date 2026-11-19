@@ -55,7 +55,7 @@ data class NotificationLog(
     val label: String? = null,
 )
 
-/** Per-app notification rule. [mode]: keep | clear. */
+/** Per-app notification rule. [mode]: keep (old, = read) | read | silent | clear. */
 @Entity(tableName = "app_rule")
 data class AppRule(
     @PrimaryKey val pkg: String,

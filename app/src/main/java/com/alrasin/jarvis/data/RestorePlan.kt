@@ -32,7 +32,7 @@ class RestorePlan(
     )
 
     companion object {
-        private val RULE_MODES = setOf("keep", "clear")
+        private val RULE_MODES = setOf("keep", "read", "silent", "clear")
         private val REPEATS = setOf("none", "daily", "weekly")
 
         /** Throws [IllegalArgumentException] when the text is not a Jarvis export. */

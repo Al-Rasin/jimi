@@ -23,31 +23,6 @@ class ProactiveTest {
         assertEquals("Boss, it's 2:00 at night. Time to sleep?", Proactive.lateNight(now, 120, now - 20 * hour, quiet = false))
     }
 
-    @Test fun importantLineSkipsNoiseMoneyChatsInCarAndBursts() {
-        val mail = row("com.example.mail", "Mail", "Boss", "Meeting   moved\nto 5")
-        assertEquals("Boss, Mail: Boss: Meeting moved to 5", Proactive.importantLine(mail, false, false, now, 0))
-        assertEquals("Boss, Mail: Same", Proactive.importantLine(row("x", "Mail", "Same", "Same"), false, false, now, 0))
-        assertNull(Proactive.importantLine(mail, quiet = true, skipChats = false, nowMs = now, lastReadMs = 0))
-        assertNull(Proactive.importantLine(mail, false, false, now, now - 60_000))
-        assertNull(Proactive.importantLine(row("x", "X", "t", important = false), false, false, now, 0))
-        assertNull(Proactive.importantLine(row("com.bkash.customerapp", "bKash", "Cash in"), false, false, now, 0))
-        val wa = row("com.whatsapp", "WhatsApp", "Sara", "hi")
-        assertNull(Proactive.importantLine(wa, false, skipChats = true, nowMs = now, lastReadMs = 0))
-        assertEquals("Boss, Sara says: hi", Proactive.importantLine(wa, false, false, now, 0))
-        // "Read messages aloud" off: messages from any app stay silent, not only known chat apps.
-        val li = row("com.linkedin.android", "LinkedIn", "Sam", "hello").copy(reason = "category msg")
-        assertNull(Proactive.importantLine(li, false, skipChats = true, nowMs = now, lastReadMs = 0))
-        val social = row("com.instagram.android", "Instagram", "Sam", "hey").copy(reason = "possible personal message")
-        assertNull(Proactive.importantLine(social, false, skipChats = true, nowMs = now, lastReadMs = 0))
-        val other = row("com.example.app", "App", "Sam", "yo")
-        assertNull(Proactive.importantLine(other, false, true, now, 0, chat = true))
-        assertEquals("Boss, App: Sam: yo", Proactive.importantLine(other, false, true, now, 0))
-        val twice = row("com.whatsapp", "WhatsApp", "Chaity skitto", "Ohh\nChaity skitto: Ohh")
-        assertEquals("Boss, Chaity skitto says: Ohh", Proactive.importantLine(twice, false, false, now, 0))
-        assertNull(Proactive.importantLine(row("x", "X", " ", " "), false, false, now, 0))
-        assertEquals(120, Proactive.importantLine(row("x", "X", "", "a".repeat(300)), false, false, now, 0)!!.removePrefix("Boss, X: ").length)
-    }
-
     @Test fun awaySummaryNeedsLongBreakAndSomeAlerts() {
         val log = listOf(
             row("com.whatsapp", "WhatsApp", "Sara", "hi"),

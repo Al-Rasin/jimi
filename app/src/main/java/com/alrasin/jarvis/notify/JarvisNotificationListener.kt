@@ -1,11 +1,12 @@
 package com.alrasin.jarvis.notify
 
-import com.alrasin.jarvis.brain.ContextModes
 import com.alrasin.jarvis.core.ContextNow
+import android.app.KeyguardManager
 import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.content.pm.PackageManager
+import android.media.AudioManager
 import android.service.notification.NotificationListenerService
 import android.service.notification.StatusBarNotification
 import com.alrasin.jarvis.actions.CallText
@@ -13,6 +14,7 @@ import com.alrasin.jarvis.core.JarvisLog
 import com.alrasin.jarvis.data.NotificationDao
 import com.alrasin.jarvis.data.NotificationLog
 import com.alrasin.jarvis.data.Settings
+import com.alrasin.jarvis.service.CoreState
 import com.alrasin.jarvis.service.JarvisCoreService
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.CoroutineScope
@@ -20,8 +22,11 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.async
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.cancel
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.coroutines.launch
 import java.io.File
 import kotlinx.coroutines.sync.Mutex
@@ -64,8 +69,7 @@ class JarvisNotificationListener : NotificationListenerService() {
                         )
                         if (learned.important) r.copy(important = true, reason = learned.reason) else r
                     }
-                    readAloud(sbn, row)
-                    readImportant(sbn, row)
+                    readOut(sbn, row, rule)
                     val clearable = sbn.isClearable && n.flags and Notification.FLAG_GROUP_SUMMARY == 0
                     if (clearable && !row.important && settings.autoClearNotifications.first()) {
                         val result = history.clear(listOf(row), undoable = false) { cancelUnchanged(sbn, row) }
@@ -95,34 +99,48 @@ class JarvisNotificationListener : NotificationListenerService() {
         }
     }
 
-    /** Car / headphones mode (ROADMAP B §I.11): say new chat messages out loud, once each. */
-    private suspend fun readAloud(sbn: StatusBarNotification, row: NotificationLog) {
+    private val readQueue = ReadQueue()
+    @Volatile private var reader: Job? = null
+
+    /** Read-out (D-080, ROADMAP B §I.11 / #44): [ReadOut] picks what to say; lines wait in [readQueue]. */
+    private suspend fun readOut(sbn: StatusBarNotification, row: NotificationLog, rule: String?) {
         val n = sbn.notification
-        if (!ContextNow.mode.readMessages || sbn.isOngoing || n.flags and Notification.FLAG_GROUP_SUMMARY != 0) return
+        if (sbn.isOngoing || n.flags and Notification.FLAG_GROUP_SUMMARY != 0) return
+        if (n.category == Notification.CATEGORY_CALL && sbn.packageName in CallText.APP_CALLS) return // announceAppCall said it
         val chat = n.category == Notification.CATEGORY_MESSAGE || n.extras.containsKey(Notification.EXTRA_MESSAGES)
-        if (!chat) return
-        val line = ContextModes.messageLine(row.appName, row.title, row.text) ?: return
-        if (line == lastReadLine || !settings.readMessages.first() || !settings.listeningEnabled.first()) return
-        lastReadLine = line
-        JarvisCoreService.say(this, line)
+        val prefs = ReadOut.Prefs(settings.readWhat.first(), settings.readWhen.first(), settings.readLockedFull.first())
+        val kind = ReadOut.kind(row, n.category, chat)
+        val d = ReadOut.decide(row, kind, ReadOut.AppMode.of(rule), prefs, phoneNow())
+        JarvisLog.i("read-out ${row.appName}: ${if (d.line == null) "skip, ${d.why}" else d.why}")
+        val line = d.line ?: return
+        if (!settings.listeningEnabled.first() || !readQueue.add(line, System.currentTimeMillis())) return
+        if (reader?.isActive != true) reader = scope.launch { drainReadQueue() }
     }
 
-    @Volatile private var lastReadLine: String? = null
-    @Volatile private var lastImportantAt = 0L
+    private suspend fun drainReadQueue() {
+        while (!readQueue.isEmpty()) {
+            // Wait for Jimi to finish a reply; give up after a minute rather than talk over it.
+            withTimeoutOrNull(BUSY_WAIT_MS) { while (jimiBusy()) delay(500) } ?: return
+            val line = readQueue.next() ?: return
+            JarvisCoreService.say(this, line)
+            delay(READ_GAP_MS)
+        }
+    }
 
-    /** "Read important alerts" setting (ROADMAP #44): say important alerts out loud, at most one per 2 minutes. */
-    private suspend fun readImportant(sbn: StatusBarNotification, row: NotificationLog) {
-        if (sbn.isOngoing || sbn.notification.flags and Notification.FLAG_GROUP_SUMMARY != 0) return
-        if (!settings.readImportant.first() || !settings.listeningEnabled.first()) return
+    private fun jimiBusy() = CoreState.phase.value.let { it != CoreState.PHASE_WAKE && it != CoreState.PHASE_MIC_BUSY }
+
+    private fun phoneNow(): ReadOut.Phone {
         val mode = ContextNow.mode
-        val now = System.currentTimeMillis()
-        // Setting off = no chat is ever read aloud; mode on = readAloud already read it.
-        val skipChats = mode.readMessages || !settings.readMessages.first()
-        val n = sbn.notification
-        val chat = n.category == Notification.CATEGORY_MESSAGE || n.extras.containsKey(Notification.EXTRA_MESSAGES)
-        val line = Proactive.importantLine(row, mode.quiet, skipChats, now, lastImportantAt, chat) ?: return
-        lastImportantAt = now
-        JarvisCoreService.say(this, line)
+        val audio = getSystemService(AudioManager::class.java)
+        val nm = getSystemService(NotificationManager::class.java)
+        return ReadOut.Phone(
+            car = mode.car, headphones = mode.headphones, bedtime = mode.quiet,
+            locked = getSystemService(KeyguardManager::class.java)?.isKeyguardLocked ?: true,
+            inCall = audio?.mode in setOf(AudioManager.MODE_IN_CALL, AudioManager.MODE_IN_COMMUNICATION, AudioManager.MODE_RINGTONE),
+            doNotDisturb = (nm?.currentInterruptionFilter ?: NotificationManager.INTERRUPTION_FILTER_ALL) > NotificationManager.INTERRUPTION_FILTER_ALL,
+            ringerSilent = audio?.ringerMode?.let { it != AudioManager.RINGER_MODE_NORMAL } ?: false,
+            jimiBusy = false, // the queue waits for Jimi instead of dropping the line
+        )
     }
 
     /** Apps re-post the same notification (progress, re-sort); log each key + content only once. Runs under [operations]. */
@@ -239,6 +257,8 @@ class JarvisNotificationListener : NotificationListenerService() {
         @Volatile var instance: JarvisNotificationListener? = null
             private set
         private const val MAX_LOGGED_KEYS = 200
+        private const val READ_GAP_MS = 6_000L
+        private const val BUSY_WAIT_MS = 60_000L
         const val COMPONENT = "com.alrasin.jarvis/com.alrasin.jarvis.notify.JarvisNotificationListener"
     }
 }
