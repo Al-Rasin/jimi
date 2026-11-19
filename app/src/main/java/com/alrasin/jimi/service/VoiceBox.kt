@@ -46,6 +46,8 @@ class VoiceBox(
     @Volatile private var onlineVoice = false
     /** Optional recorded wake reply pushed by hand to `files/sounds/wake_ack.wav`; used instead of the spoken "Uh-huh." */
     @Volatile private var wakeClip: PhraseCache.Audio? = null
+    /** Last time the voice made audio; the Google engine (online voice most of all) is slow again after a quiet spell. */
+    @Volatile private var lastSynthAt = 0L
 
     /** Google phone voice loaded: it is fast enough to speak whole phrases, which sounds more natural (D-054). */
     @Volatile var phoneEngine = false
@@ -120,6 +122,20 @@ class VoiceBox(
         }
     }
 
+    /**
+     * A command started: the Google voice's first piece after a quiet spell takes 2-3 s, the next ones ~0.6 s.
+     * Pay that while the reply is being worked out, not after it.
+     */
+    fun warmIfCold() {
+        if (!phoneEngine || System.currentTimeMillis() - lastSynthAt < COLD_MS) return
+        lastSynthAt = System.currentTimeMillis()
+        scope.launch(Dispatchers.IO) {
+            val start = System.currentTimeMillis()
+            ttsLock.withLock { runCatching { tts?.await()?.generate(WARM_TEXT) } }
+            JimiLog.i("voice warm-up ${System.currentTimeMillis() - start} ms")
+        }
+    }
+
     /** A command started: warming must not compete with the reply for the CPU. */
     fun stopWarming() {
         phraseWarm?.cancel()
@@ -140,6 +156,7 @@ class VoiceBox(
     /** Common short replies come from [PhraseCache] (made once per voice + speed), the rest is made now. */
     private fun audioFor(v: TextToSpeech, text: String): PhraseCache.Audio {
         // Bangla is cut out by normalize; the voice splits it off itself. Chat lines, never cached.
+        if (SpeechText.hasBangla(text)) lastSynthAt = System.currentTimeMillis()
         if (SpeechText.hasBangla(text)) return SpeechGate.synth { v.generate(text) }.let { PhraseCache.Audio(it.samples, it.sampleRate) }
         val spoken = SpeechText.normalize(text)
         val common = spoken in COMMON_PHRASES
@@ -149,6 +166,7 @@ class VoiceBox(
             cachedAudio = cachedAudio + (spoken to it)
             return it
         }
+        lastSynthAt = System.currentTimeMillis()
         val made = SpeechGate.synth { v.generate(spoken) }
         if (common && cache == null) {
             cache = PhraseCache(File(context.cacheDir, "phrases"), v.voice.id, v.speed, made.sampleRate)
@@ -211,6 +229,8 @@ class VoiceBox(
         /** Short "thinking" phrases spoken while a slow answer is being made. */
         val FILLERS = listOf("Let me check.", "On it.", "Hmm, one sec.")
         private const val WAKE_REPLY = "Uh-huh."
+        private const val COLD_MS = 30_000L
+        private const val WARM_TEXT = "Okay."
         private val FEEDBACK_PHRASES = FILLERS + WAKE_REPLY
         private val COMMON_PHRASES = PhraseCache.COMMON.map(SpeechText::normalize).toSet()
     }

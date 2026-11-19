@@ -43,9 +43,11 @@ class PersonaTest {
         assertFalse(Persona.needsHistory("how far is the moon"))
     }
 
-    @Test fun promptSaysNotSiriAndNotSure() {
+    @Test fun promptSaysNotSiriAndNoPrivateGuess() {
         assertTrue(Persona.SYSTEM_PROMPT.contains("not Siri"))
-        assertTrue(Persona.SYSTEM_PROMPT.contains("I'm not sure"))
+        // A blanket "say I'm not sure" line made the 0.6B model refuse even the Mona Lisa (2026-11-19).
+        assertFalse(Persona.SYSTEM_PROMPT.contains("I'm not sure"))
+        assertTrue(Persona.SYSTEM_PROMPT.contains("say you do not know"))
     }
 
     @Test fun styleNotesJoinChatPrompt() {

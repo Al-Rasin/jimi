@@ -284,6 +284,7 @@ class JimiCoreService : LifecycleService() {
     }
 
     private fun warmUpForCommand() {
+        voice.warmIfCold()
         // While the user talks: open the cloud connection, or load the local tool model when the cloud is not usable.
         lifecycleScope.launch(Dispatchers.IO) { if (cloud.enabled()) cloud.warm() else models.preloadTools() }
         // Memory/wiki ranking model (small, on-device); loads once, no-op when missing.
@@ -372,6 +373,7 @@ class JimiCoreService : LifecycleService() {
     /** Runs one command through the assistant and speaks the answer. Then maybe listens for a follow-up. */
     private fun ask(text: String, raw: String, source: String, wakeId: Long?, audioPath: String?, audio: ShortArray?, refine: (suspend () -> String)? = null) = synchronized(speechState) {
         voice.stopWarming()
+        voice.warmIfCold()
         shutUp()
         var epoch = speechEpoch
         agentInterrupt.set(null)
