@@ -66,7 +66,7 @@ import java.util.Locale
 
 private val TABS = listOf(
     "Chat" to JimiIcons.Chat, "History" to JimiIcons.History, "Alerts" to JimiIcons.Alerts,
-    "Notes" to JimiIcons.Notes, "Settings" to JimiIcons.Settings, "Wake" to JimiIcons.Wake,
+    "Notes" to JimiIcons.Notes, "Settings" to JimiIcons.Settings,
 )
 private val SUGGESTIONS = listOf("What's the weather?", "Set a timer for 5 minutes", "Battery level", "Good night")
 
@@ -125,8 +125,7 @@ fun AppShell(vm: AppViewModel, home: HomeViewModel) {
                     1 -> HistoryTab(vm)
                     2 -> AlertsTab(vm)
                     3 -> NotesTab(vm)
-                    4 -> SettingsTab(vm, { setupOpen = true }, { deviceCheckOpen = true })
-                    else -> HomeScreen(home)
+                    else -> SettingsTab(vm, home, { setupOpen = true }, { deviceCheckOpen = true })
                 }
             }
         }

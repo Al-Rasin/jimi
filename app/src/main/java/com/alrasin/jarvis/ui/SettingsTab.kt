@@ -53,7 +53,9 @@ import com.alrasin.jarvis.voice.Voices
 import java.util.Date
 
 @Composable
-internal fun SettingsTab(vm: AppViewModel, onSetup: () -> Unit, onDeviceCheck: () -> Unit) {
+internal fun SettingsTab(vm: AppViewModel, home: HomeViewModel, onSetup: () -> Unit, onDeviceCheck: () -> Unit) {
+    val context = androidx.compose.ui.platform.LocalContext.current
+    val saved = { android.widget.Toast.makeText(context, "Saved", android.widget.Toast.LENGTH_SHORT).show() }
     val spokenWake by vm.spokenWake.collectAsStateWithLifecycle()
     val followUp by vm.followUp.collectAsStateWithLifecycle()
     val panel by vm.showPanel.collectAsStateWithLifecycle()
@@ -96,7 +98,8 @@ internal fun SettingsTab(vm: AppViewModel, onSetup: () -> Unit, onDeviceCheck: (
 
     val voice by vm.voice.collectAsStateWithLifecycle()
     var page by rememberSaveable { mutableStateOf("") }
-    val close = { page = "" }
+    // pages opened from Advanced go back to Advanced
+    val close = { page = if (page in ADVANCED_PAGES) "advanced" else "" }
     val localLabel = mapOf(ChatModels.DEFAULT to "Qwen3 / Gemma", ChatModels.LFM to "LFM2.5 1.2B", ChatModels.QWEN35 to "Qwen3.5 0.8B (test)")
 
     when (page) {
@@ -109,7 +112,7 @@ internal fun SettingsTab(vm: AppViewModel, onSetup: () -> Unit, onDeviceCheck: (
                 Hint("Used for the weather.")
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     OutlinedTextField(cityText, { cityText = it }, Modifier.weight(1f), label = { Text("City") }, singleLine = true)
-                    FilledTonalButton(onClick = { vm.setHomeCity(cityText); close() }) { Text("Save") }
+                    FilledTonalButton(onClick = { vm.setHomeCity(cityText); saved(); close() }) { Text("Save") }
                 }
             }
         }
@@ -117,7 +120,7 @@ internal fun SettingsTab(vm: AppViewModel, onSetup: () -> Unit, onDeviceCheck: (
             RowsCard {
                 Hint("Tone and reply length, e.g. \"funny, short answers\" or \"calm, more detail\".")
                 OutlinedTextField(notesText, { notesText = it.take(300) }, Modifier.fillMaxWidth(), label = { Text("Style") })
-                FilledTonalButton(onClick = { vm.setPersonaNotes(notesText); close() }) { Text("Save") }
+                FilledTonalButton(onClick = { vm.setPersonaNotes(notesText); saved(); close() }) { Text("Save") }
             }
         }
         "routines" -> SubPage("Routines", close) { RoutinesCard(vm) }
@@ -145,7 +148,7 @@ internal fun SettingsTab(vm: AppViewModel, onSetup: () -> Unit, onDeviceCheck: (
                 Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     OutlinedTextField(pin, { pin = it.filter(Char::isDigit) }, Modifier.weight(1f), label = { Text("PIN (empty = remove)") }, singleLine = true,
                         visualTransformation = PasswordVisualTransformation(), keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.NumberPassword))
-                    FilledTonalButton(onClick = { vm.setPin(pin); pin = "" }) { Text("Save") }
+                    FilledTonalButton(onClick = { vm.setPin(pin); pin = ""; saved() }) { Text("Save") }
                 }
             }
         }
@@ -155,7 +158,7 @@ internal fun SettingsTab(vm: AppViewModel, onSetup: () -> Unit, onDeviceCheck: (
                 OutlinedTextField(findWord, { findWord = it }, Modifier.fillMaxWidth(),
                     label = { Text(if (findWordSet) "Secret word (saved; empty = keep)" else "Secret word (4+ letters)") }, singleLine = true)
                 OutlinedTextField(findList, { findList = it }, Modifier.fillMaxWidth(), label = { Text("Trusted numbers, comma separated") })
-                FilledTonalButton(onClick = { vm.setFindPhone(findWord, findList); findWord = "" }) { Text("Save") }
+                FilledTonalButton(onClick = { vm.setFindPhone(findWord, findList); findWord = ""; saved() }) { Text("Save") }
             }
         }
         "cloud" -> SubPage("Cloud AI", close) {
@@ -204,6 +207,34 @@ internal fun SettingsTab(vm: AppViewModel, onSetup: () -> Unit, onDeviceCheck: (
             if (message.isNotBlank()) Hint(message)
         }
         "apps" -> SubPage("App knowledge", close) { AppKnowledgeCards(vm) }
+        "wake" -> Column(Modifier.fillMaxSize()) {
+            androidx.activity.compose.BackHandler(onBack = close)
+            NavRow("‹ Back to Advanced", onClick = close)
+            HomeScreen(home)
+        }
+        "advanced" -> SubPage("Advanced", close) {
+            RowsCard {
+                ToggleRow("Auto-clear noise alerts", autoClear) { vm.setAutoClear(it) }
+                ToggleRow("Speak on its own", proactive, "Late-night nudge, missed alerts") { vm.setProactive(it) }
+                ToggleRow("Learn apps at night", nightExplore) { vm.setNightExplore(it) }
+            }
+            RowsCard {
+                NavRow("Speech") { page = "speech" }
+                RowDivider()
+                NavRow("Assistant mode") { page = "assistant" }
+                RowDivider()
+                NavRow("App knowledge") { page = "apps" }
+                RowDivider()
+                NavRow("Routines") { page = "routines" }
+            }
+            RowsCard {
+                NavRow("Wake word test") { page = "wake" }
+                RowDivider()
+                NavRow("Setup & data") { page = "setup" }
+                RowDivider()
+                NavRow("Run a tool") { page = "debug" }
+            }
+        }
         "debug" -> SubPage("Run a tool", close) {
             RowsCard {
                 OutlinedTextField(tool, { tool = it.trim() }, Modifier.fillMaxWidth(), label = { Text("Tool") }, singleLine = true)
@@ -217,13 +248,16 @@ internal fun SettingsTab(vm: AppViewModel, onSetup: () -> Unit, onDeviceCheck: (
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
             PageTitle("Settings")
-            RowsCard {
+            RowsCard("Talking") {
                 ToggleRow("Spoken wake reply", spokenWake) { vm.setSpokenWake(it) }
                 ToggleRow("Keep listening after answer", followUp) { vm.setFollowUp(it) }
                 ToggleRow("Panel on wake", panel) { vm.setShowPanel(it) }
-                ToggleRow("Auto-clear noise alerts", autoClear) { vm.setAutoClear(it) }
-                ToggleRow("Speak on its own", proactive, "Late-night nudge, missed alerts") { vm.setProactive(it) }
-                ToggleRow("Learn apps at night", nightExplore) { vm.setNightExplore(it) }
+                RowDivider()
+                NavRow("Voice", Voices.byId(voice).label.substringBefore(" ·")) { page = "voice" }
+                RowDivider()
+                NavRow("How Jimi talks", personaNotes.ifBlank { "Default" }.take(24)) { page = "style" }
+                RowDivider()
+                NavRow("Home city", city.ifBlank { "Not set" }) { page = "city" }
             }
             RowsCard("Read notifications") {
                 Hint("When")
@@ -249,41 +283,26 @@ internal fun SettingsTab(vm: AppViewModel, onSetup: () -> Unit, onDeviceCheck: (
                 ToggleRow("Bedtime mode", bedtimeMode, "Quiet voice and Do Not Disturb") { vm.setBedtimeMode(it) }
                 if (bedtimeMode) BedtimeHours(bedtimeHours, vm::setBedtimeHours)
             }
-            RowsCard {
-                NavRow("Voice", Voices.byId(voice).label.substringBefore(" ·")) { page = "voice" }
-                RowDivider()
-                NavRow("Speech") { page = "speech" }
-                RowDivider()
-                NavRow("Home city", city.ifBlank { "Not set" }) { page = "city" }
-                RowDivider()
-                NavRow("How Jimi talks", personaNotes.ifBlank { "Default" }.take(24)) { page = "style" }
-            }
-            RowsCard {
+            RowsCard("Safety") {
                 NavRow("Voice ID", if (voiceId) "On" else "Off") { page = "voiceid" }
                 RowDivider()
                 NavRow("Phone PIN", if (pinSet) "Saved" else "Not set") { page = "pin" }
                 RowDivider()
                 NavRow("Find my phone", if (findWordSet && findNumbers.isNotBlank()) "On" else "Off") { page = "find" }
             }
-            RowsCard {
+            RowsCard("AI") {
                 NavRow("Cloud AI", if (cloudOn) "On" else "Off") { page = "cloud" }
                 RowDivider()
                 NavRow("Local AI", localLabel[chatModel]) { page = "local" }
-                RowDivider()
-                NavRow("Assistant mode") { page = "assistant" }
             }
             RowsCard {
-                NavRow("App knowledge") { page = "apps" }
-                RowDivider()
-                NavRow("Routines") { page = "routines" }
-                RowDivider()
-                NavRow("Setup & data") { page = "setup" }
-                RowDivider()
-                NavRow("Run a tool") { page = "debug" }
+                NavRow("Advanced", "Tests, routines, data") { page = "advanced" }
             }
         }
     }
 }
+
+private val ADVANCED_PAGES = setOf("speech", "assistant", "apps", "routines", "wake", "setup", "debug")
 
 /** Pick Jimi's voice (D-054): the four best Google voices, plus built-in Alan as backup. Same voice online and offline. */
 @Composable
