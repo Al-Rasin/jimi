@@ -54,7 +54,7 @@ class AppActionsRuleMatcherTest(private val input: String, private val expected:
             "Messenger video call mom" to call("mom", "messenger", "true"),
             "video call Rahim Khan on messenger" to call("rahim khan", "messenger", "true"),
             "call mom on phone" to call("mom", "phone"),
-            "call mom on speaker" to call("mom"),
+            "call mom on speaker" to ToolCall("call", mapOf("contact" to "mom", "speaker" to "true")),
             "can you please call mom on whatsapp" to call("mom", "whatsapp"),
             "Hey Jimi, call mom on WhatsApp please" to call("mom", "whatsapp"),
             "message mom on Messenger saying I am coming" to message("mom", "i am coming", "messenger"),

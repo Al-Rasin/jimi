@@ -70,7 +70,7 @@ class Contacts(private val context: Context) {
 }
 
 fun commsTools(context: Context, contacts: Contacts): List<Tool> = listOf(
-    SimpleTool("call", "Call a contact by phone, WhatsApp or Messenger; set video=true for an app video call", listOf(arg("contact", "name, nickname, relation or number"), arg("app", "calling app", required = false, choices = listOf("phone", "whatsapp", "messenger")), arg("video", "video call instead of voice", required = false, choices = listOf("true", "false"))), Risk.CONFIRM) { c, _ ->
+    SimpleTool("call", "Call a contact by phone, WhatsApp or Messenger; set video=true for an app video call", listOf(arg("contact", "name, nickname, relation or number"), arg("app", "calling app", required = false, choices = listOf("phone", "whatsapp", "messenger")), arg("video", "video call instead of voice", required = false, choices = listOf("true", "false")), arg("speaker", "put the phone call on speaker", required = false, choices = listOf("true", "false"))), Risk.CONFIRM) { c, _ ->
         val who = c.require("contact", "Call who?")
         val app = c.arg("app")?.lowercase() ?: "phone"
         if (app !in listOf("phone", "whatsapp", "messenger")) return@SimpleTool ToolResult.fail("I can call using phone, WhatsApp or Messenger.")
@@ -85,9 +85,11 @@ fun commsTools(context: Context, contacts: Contacts): List<Tool> = listOf(
         if (app != "phone") return@SimpleTool AppCommunications(context, contacts).call(p, app, video == "true")
         if (context.checkSelfPermission(Manifest.permission.CALL_PHONE) != PackageManager.PERMISSION_GRANTED)
             return@SimpleTool ToolResult.fail("I need the phone permission. Open Jimi setup.")
-        if (context.launch(Intent(Intent.ACTION_CALL, Uri.parse("tel:" + Uri.encode(p.number)))))
-            Reply.done("I requested a call to ${c.arg("contact_name")?.takeIf { PhoneNumbers.parse(who) != null } ?: p.name}.")
-        else Reply.failed("I couldn't open the phone app.")
+        val speaker = c.arg("speaker")?.lowercase() == "true"
+        if (context.launch(Intent(Intent.ACTION_CALL, Uri.parse("tel:" + Uri.encode(p.number))))) {
+            if (speaker) CallSpeaker.after(context)
+            Reply.done("I requested a call to ${c.arg("contact_name")?.takeIf { PhoneNumbers.parse(who) != null } ?: p.name}${if (speaker) " on speaker" else ""}.")
+        } else Reply.failed("I couldn't open the phone app.")
     },
     SimpleTool("send_sms", "Send an SMS, or send a Messenger message with app=messenger", listOf(arg("contact", "name, nickname, relation or number"), arg("text", "message"), arg("app", "messaging app", required = false, choices = listOf("sms", "messenger"))), Risk.CONFIRM) { c, _ ->
         val who = c.require("contact", "To who?")

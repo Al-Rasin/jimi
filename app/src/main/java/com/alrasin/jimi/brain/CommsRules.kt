@@ -22,7 +22,8 @@ internal object CommsRules {
         if (calling.matches(COMMS_RE_3)) return call("call")
         // "phone battery", "ring mode", "call log" name a phone thing, not a person: let later rules answer.
         COMMS_RE_4.find(calling)?.takeUnless { it.groupValues[2].matches(NOT_A_CONTACT_RE) }?.let {
-            return call("call", "contact" to it.groupValues[2], "app" to it.groupValues[3].takeUnless { app -> app.isEmpty() || app == "speaker" }?.let(::commsApp),
+            return call("call", "contact" to it.groupValues[2], "app" to it.groupValues[3].takeUnless { app -> app.isEmpty() || app in SPEAKER }?.let(::commsApp),
+                "speaker" to it.groupValues[3].takeIf { app -> app in SPEAKER }?.let { "true" },
                 "video" to it.groupValues[1].takeIf { mode -> mode.isNotEmpty() }?.let { mode -> (mode == "video").toString() })
         }
         COMMS_RE_5.find(t)?.let {

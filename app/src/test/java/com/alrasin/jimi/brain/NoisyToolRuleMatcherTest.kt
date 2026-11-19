@@ -379,6 +379,12 @@ class ComplaintPhrasesTest {
         assertEquals("repeat_last", m("repeat that")?.tool)
     }
 
+    @Test fun callOnSpeaker() {
+        assertEquals(ToolCall("call", mapOf("contact" to "mom", "speaker" to "true")), m("call mom on speaker"))
+        assertEquals(ToolCall("call", mapOf("contact" to "dad", "speaker" to "true")), m("call dad on the speakerphone"))
+        assertEquals(ToolCall("call", mapOf("contact" to "mom", "app" to "whatsapp")), m("call mom on whatsapp"))
+    }
+
     @Test fun addTimeToTimer() {
         assertEquals(ToolCall("add_timer", mapOf("seconds" to "300")), m("add 5 minutes to the timer"))
         assertEquals(ToolCall("add_timer", mapOf("seconds" to "120")), m("extend the timer by 2 minutes"))
