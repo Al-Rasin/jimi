@@ -257,4 +257,11 @@ class ComplaintPhrasesTest {
         assertEquals(ToolCall("weather", mapOf("place" to "dhaka")), m("look up the weather in dhaka"))
         assertEquals(ToolCall("web_search", mapOf("query" to "cats")), m("open chrome and search for cats"))
     }
+
+    @Test fun dndAndSilence() {
+        val dnd = ToolCall("toggle", mapOf("target" to "dnd", "state" to "on"))
+        assertEquals(dnd, m("do not disturb on"))
+        assertEquals(dnd, m("silence my phone"))
+        assertNull(m("do not turn on wifi"))
+    }
 }

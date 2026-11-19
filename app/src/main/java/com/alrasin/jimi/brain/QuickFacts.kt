@@ -299,6 +299,8 @@ object QuickFacts {
             "|^(?:when is|what date is) (next|this|coming|this coming) (${WEEKDAYS.joinToString("|")})$",
     )
 
+    private val DAYS_TO_WEEKDAY = Regex("^how many days (?:are )?(?:left )?(?:until|till|til|to|before) (?:next |this |the next |this coming )?(${WEEKDAYS.joinToString("|")})$")
+
     private val HOLIDAYS = mapOf(
         "christmas" to (12 to 25), "christmas day" to (12 to 25), "xmas" to (12 to 25),
         "new year" to (1 to 1), "new years" to (1 to 1), "new years day" to (1 to 1), "new year day" to (1 to 1),
@@ -319,6 +321,12 @@ object QuickFacts {
             val name = when (month to day) { 12 to 25 -> "Christmas"; 1 to 1 -> "New Year's Day"; 12 to 31 -> "New Year's Eve"; 2 to 14 -> "Valentine's Day"; else -> "Halloween" }
             val when_ = when (n) { 0L -> "today"; 1L -> "tomorrow"; else -> "in $n days" }
             return "$name is ${spoken(d, today)}, a ${weekday(d)}, $when_."
+        }
+        DAYS_TO_WEEKDAY.matchEntire(t)?.let { m ->
+            val target = DayOfWeek.entries[WEEKDAYS.indexOf(m.groupValues[1])]
+            val n = ((target.value - today.dayOfWeek.value + 6) % 7 + 1).toLong()
+            val d = today.plusDays(n)
+            return if (n == 1L) "${weekday(d)} is tomorrow." else "${weekday(d)} is in $n days, ${spoken(d, today)}."
         }
         if (YESTERDAY.matches(t)) {
             val d = today.minusDays(1)

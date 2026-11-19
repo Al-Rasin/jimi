@@ -52,6 +52,12 @@ class QuickFactsTest {
         assertEquals(null, QuickFacts.answer("earth", now))
     }
 
+    @Test fun daysUntilWeekday() {
+        assertEquals("Monday is in 3 days, 23 November.", QuickFacts.answer("how many days till next monday", now))
+        assertEquals("Saturday is tomorrow.", QuickFacts.answer("how many days until saturday", now))
+        assertEquals("Friday is in 7 days, 27 November.", QuickFacts.answer("how many days until friday", now))
+    }
+
     @Test fun calendarQuestions() {
         val now = ZonedDateTime.of(2026, 11, 20, 9, 0, 0, 0, ZoneId.of("Asia/Dhaka"))
         assertEquals("February 2028 has 29 days.", QuickFacts.answer("how many days in february 2028", now))
