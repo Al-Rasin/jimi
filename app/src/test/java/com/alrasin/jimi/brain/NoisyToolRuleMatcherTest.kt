@@ -355,6 +355,20 @@ class ComplaintPhrasesTest {
         assertEquals(ToolCall("open_app", mapOf("app" to "whatsapp")), m("No, I mean open WhatsApp."))
     }
 
+    @Test fun switchToLastApp() {
+        assertEquals(ToolCall("last_app", emptyMap()), m("Switch to the last app."))
+        assertEquals(ToolCall("last_app", emptyMap()), m("go back to the previous app"))
+        assertEquals(ToolCall("go_back", emptyMap()), m("go back"))
+    }
+
+    @Test fun timerLeftPauseResume() {
+        assertEquals(ToolCall("timer_left", emptyMap()), m("How much time is left on the timer?"))
+        assertEquals(ToolCall("pause_timer", mapOf("state" to "pause")), m("pause the timer"))
+        assertEquals(ToolCall("pause_timer", mapOf("state" to "resume")), m("resume the timer"))
+        assertEquals(ToolCall("media_control", mapOf("action" to "pause")), m("pause"))
+        assertEquals(ToolCall("cancel_alarm", mapOf("only" to "timer")), m("stop the timer"))
+    }
+
     @Test fun ringingAlarmStopsOnlyThatOne() {
         assertEquals(ToolCall("stop_alarm", emptyMap()), m("Stop the alarm."))
         assertEquals(ToolCall("snooze_alarm", emptyMap()), m("snooze"))

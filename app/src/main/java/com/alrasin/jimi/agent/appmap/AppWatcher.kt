@@ -36,6 +36,7 @@ class AppWatcher(private val service: AccessibilityService, private val learner:
         when (event.eventType) {
             AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED -> {
                 event.className?.toString()?.takeIf { it.isNotBlank() }?.let { windowClass[pkg] = it }
+                if (isUserApp(pkg)) AppHistory.seen(pkg)
                 schedule()
             }
             AccessibilityEvent.TYPE_VIEW_CLICKED -> {
@@ -45,6 +46,18 @@ class AppWatcher(private val service: AccessibilityService, private val learner:
                 schedule()
             }
         }
+    }
+
+    private val userApp = ConcurrentHashMap<String, Boolean>()
+
+    /** A launchable app that is not the home screen, system UI or Jimi (for "switch to the last app"). */
+    private fun isUserApp(pkg: String): Boolean = userApp.getOrPut(pkg) {
+        val ime = Settings.Secure.getString(service.contentResolver, Settings.Secure.DEFAULT_INPUT_METHOD).orEmpty()
+        if (ime.startsWith("$pkg/")) return@getOrPut false
+        val pm = service.packageManager
+        val home = pm.resolveActivity(android.content.Intent(android.content.Intent.ACTION_MAIN).addCategory(android.content.Intent.CATEGORY_HOME), 0)
+            ?.activityInfo?.packageName
+        pkg != service.packageName && pkg != home && pkg != "com.android.systemui" && pm.getLaunchIntentForPackage(pkg) != null
     }
 
     /** Fingerprint of the screen shown now, built like the learner's (for the map planner, §J.4). */

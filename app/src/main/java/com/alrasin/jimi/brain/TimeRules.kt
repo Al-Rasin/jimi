@@ -24,6 +24,9 @@ internal object TimeRules {
     fun time(t: String, now: LocalDateTime): ToolCall? {
         if (isAlarmQuestion(t)) return call("list_alarms")
         // timer
+        if (t.matches(TIMER_LEFT_RE)) return call("timer_left")
+        if (t.matches(TIMER_PAUSE_RE)) return call("pause_timer", "state" to "pause")
+        if (t.matches(TIMER_RESUME_RE)) return call("pause_timer", "state" to "resume")
         val timer = TIME_RE.find(t)
             ?: TIME_RE_2.find(t)
         timer?.let { m -> TimeParser.duration(m.groupValues[1])?.let { return call("set_timer", "seconds" to it.toString()) } }
@@ -227,3 +230,12 @@ private val ALARM_IS_SET_END_RE = Regex("\\b(?:alarms?|are|is) set(?: (?:right )
 private val ALARM_CHANGE_RE = Regex("\\b(?:set|cancel|delete|remove|stop|turn|switch|dismiss|clear|snooze|change|add|make|create|wake)\\b")
 private val RINGING_STOP_RE = Regex("^(?:stop|dismiss|silence|shut off|shut up|turn off|switch off)(?: (?:the|this|that|my))? alarm(?: now)?$")
 private val RINGING_SNOOZE_RE = Regex("^snooze(?: (?:the|this|that|my))?(?: alarm)?(?: for (?:\\d+|five|ten) minutes?)?$")
+
+private val TIMER_LEFT_RE = Regex(
+    "^(?:how much (?:time|longer)|how long)(?: is)? (?:left|remaining)(?: on (?:the|my) timer)?$" +
+        "|^(?:how much time|how long) (?:do i have|have i got) left$" +
+        "|^(?:(?:check|whats|what is)(?: on)? (?:the|my) timer|timer status|time left on (?:the|my) timer)$" +
+        "|^how long (?:until|till|before) (?:the|my) timer (?:ends|goes off|rings|is done|finishes)$",
+)
+private val TIMER_PAUSE_RE = Regex("^(?:pause|hold|freeze) (?:the |my )?timer$")
+private val TIMER_RESUME_RE = Regex("^(?:resume|continue|unpause|restart) (?:the |my )?timer$")

@@ -362,6 +362,7 @@ object RuleMatcher {
             t.matches(VIDEO_WHOLE_RE) -> return call("take_photo", "mode" to "video")
             t.matches(STOP_VIDEO_WHOLE_RE) -> return call("take_photo", "mode" to "stop")
             t.matches(QR_LINK_WHOLE_RE) -> return call("open_qr_link")
+            t.matches(LAST_APP_WHOLE_RE) -> return call("last_app")
             t.matches(SCREEN_WHOLE_RE_2) -> return call("go_back")
             t.matches(SCREEN_WHOLE_RE_3) -> return call("go_home")
             t.matches(SCREEN_WHOLE_RE_4) -> return call("open_recents")

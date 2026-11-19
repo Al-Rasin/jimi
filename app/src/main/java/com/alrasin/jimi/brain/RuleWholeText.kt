@@ -52,6 +52,7 @@ internal val SYSTEM_WHOLE_RE_15 = Regex("^(?:good ?morning|(?:i am|im) (?:awake|
 internal val SCREEN_WHOLE_RE = Regex("^(?:(?:read|what is on|whats on|describe)(?: the| my)? screen|read (?:this|it)(?: page)?|what does (?:it|the screen) say)$")
 internal val SCREEN_WHOLE_RE_2 = Regex("^(?:(?:go )?back|go to (?:the )?previous (?:screen|page)|press back)$")
 internal val SCREEN_WHOLE_RE_3 = Regex("^(?:(?:go )?home|go to (?:the )?home(?: screen)?|home screen|press home)$")
+internal val LAST_APP_WHOLE_RE = Regex("^(?:(?:switch|go|jump|flip)(?: back)? to|open|back to|return to)(?: the| my)? (?:last|previous|other|prior) app$|^(?:switch apps|switch app|previous app|last app|go back to the app i was (?:in|using))$")
 internal val SCREEN_WHOLE_RE_4 = Regex("^(?:(?:open |show )?(?:the )?(?:recent apps|recents|recent|app switcher|overview))$")
 internal val SCREEN_WHOLE_RE_5 = Regex("^(?:scroll(?: the page| it)? (up|down)|(?:page|swipe) (up|down)|scroll)$")
 internal val NOTIFICATIONS_WHOLE_RE = Regex("^(?:(?:clear|dismiss|remove|delete)(?: all)?(?: my| the)? notifications)$")

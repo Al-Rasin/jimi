@@ -116,6 +116,7 @@ fun timeTools(context: Context): List<Tool> = listOf(
         c.arg("label")?.let { i.putExtra(AlarmClock.EXTRA_MESSAGE, it) }
         val end = System.currentTimeMillis() + secs * 1000L
         if (!context.launchClock(i)) return@clockTool ToolResult.fail("The clock app didn't take the timer.")
+        TimerControl.started(end)
         // Clock schedules a running timer as an alarm clock, so the next alarm shows it unless an alarm comes first.
         var seen: Long? = null
         val verified = awaitAlarmState(context) { next -> seen = next; next != null && abs(next - end) <= TIMER_SLACK_MS }
@@ -156,7 +157,22 @@ fun timeTools(context: Context): List<Tool> = listOf(
         }
         JimiLog.i("cancel_alarm: no next alarm confirmed=$noNextAlarm")
         if (!alarmsSent && !noNextAlarm) return@clockTool ToolResult.fail("The clock didn't accept the turn-off request. Check the Clock app.")
+        if (noNextAlarm) TimerControl.cleared()
         cancelAlarmResult(noNextAlarm)
+    },
+    SimpleTool("timer_left", "How much time is left on the timer") { _, _ ->
+        TimerControl.secondsLeft()?.let { return@SimpleTool ToolResult.ok("${speakDuration(it)} left on the timer.") }
+        TimerControl.pausedSeconds()?.let { return@SimpleTool ToolResult.ok("The timer is paused with ${speakDuration(it)} left.") }
+        if (timerRunning()) ToolResult.ok("A timer is running in Clock, but I didn't start it, so I don't know the time left.")
+        else ToolResult.ok("No timer is running.")
+    },
+    SimpleTool(
+        "pause_timer", "Pause or resume the running timer",
+        listOf(arg("state", "pause or resume", required = false, choices = listOf("pause", "resume"))),
+    ) { c, _ ->
+        val pause = c.arg("state") != "resume"
+        if (TimerControl.press(pause)) return@SimpleTool ToolResult.ok(if (pause) "Timer paused." else "Timer resumed.")
+        ToolResult.ok(if (pause) "I don't see a running timer to pause." else "I don't see a paused timer.")
     },
     SimpleTool("stop_alarm", "Stop the alarm that is ringing now; other alarms stay on") { _, _ ->
         if (RingingAlarm.press(snooze = false)) ToolResult.ok("Alarm stopped. Your other alarms stay on.")
@@ -248,6 +264,7 @@ private suspend fun cancelTimers(context: Context): ToolResult {
     // Clock drops the timer alarm a moment after the tap.
     val stillRunning = !pollUntil(tries = 6, pauseMs = 300) { !timerRunning() }
     JimiLog.i("cancel_alarm: timers only, request=$sent still running=$stillRunning")
+    if (!stillRunning) TimerControl.cleared()
     return if (stillRunning) ToolResult.fail("I couldn't stop the timer. Check the Clock app.")
     else ToolResult.ok("Okay, the timer is off.")
 }

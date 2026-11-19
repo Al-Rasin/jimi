@@ -5,8 +5,11 @@ import android.content.Context
 import com.alrasin.jimi.agent.ScreenOcr
 import com.alrasin.jimi.agent.Skills
 import com.alrasin.jimi.agent.UiQuery
+import com.alrasin.jimi.agent.appmap.AppHistory
 import com.alrasin.jimi.core.Tool
 import com.alrasin.jimi.core.ToolResult
+import com.alrasin.jimi.core.launch
+import kotlinx.coroutines.delay
 
 fun screenTools(context: Context): List<Tool> {
     fun a() = JimiAccessibilityService.instance
@@ -48,6 +51,15 @@ fun screenTools(context: Context): List<Tool> {
         },
         SimpleTool("go_back", "Press back") { _, _ -> keyOr(AccessibilityService.GLOBAL_ACTION_BACK, 4, "Back.") },
         SimpleTool("go_home", "Go to the home screen") { _, _ -> keyOr(AccessibilityService.GLOBAL_ACTION_HOME, 3, "Home.") },
+        SimpleTool("last_app", "Switch back to the app used before this one") { _, _ ->
+            val pkg = AppHistory.lastApp(a()?.appPackage())
+            val intent = pkg?.let { context.packageManager.getLaunchIntentForPackage(it) }
+            if (intent != null && context.launch(intent)) return@SimpleTool ToolResult.ok("Switched.")
+            // Not seen yet (Jimi just started): the double recents press switches apps on most phones.
+            if (a()?.global(AccessibilityService.GLOBAL_ACTION_RECENTS) != true) return@SimpleTool noA
+            delay(400)
+            if (a()?.global(AccessibilityService.GLOBAL_ACTION_RECENTS) == true) ToolResult.ok("Switched.") else noA
+        },
         SimpleTool("open_recents", "Show recent apps") { _, _ -> keyOr(AccessibilityService.GLOBAL_ACTION_RECENTS, 187, "Recent apps.") },
     )
 }
