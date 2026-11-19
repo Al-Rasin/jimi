@@ -66,7 +66,7 @@ def candidates(prefix, held_out=(), source_dir=SOURCE_DIR):
                     "source_file": path.name, "row_index": index,
                     "input_sha256": digest, "mapping_version": "r1-flashlight-v1",
                     "revision_evidence": "Pinned original verified against publisher LFS SHA256",
-                    "attribution": "Google, Mobile Actions; flashlight actions mapped to Jarvis toggle.",
+                    "attribution": "Google, Mobile Actions; flashlight actions mapped to Jimi toggle.",
                 }
                 result = convert_public.convert(row, "mobile-actions", prefix, schemas,
                     convert_public.FLASHLIGHT, provenance, held_out)

@@ -1,7 +1,7 @@
-package com.alrasin.jarvis.eval
+package com.alrasin.jimi.eval
 
-import com.alrasin.jarvis.voice.SttCorrector
-import com.alrasin.jarvis.voice.SttVocabulary
+import com.alrasin.jimi.voice.SttCorrector
+import com.alrasin.jimi.voice.SttVocabulary
 import com.k2fsa.sherpa.onnx.FeatureConfig
 import com.k2fsa.sherpa.onnx.OnlineModelConfig
 import com.k2fsa.sherpa.onnx.OnlineRecognizer

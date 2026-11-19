@@ -63,7 +63,7 @@ def push(a):
     kdir = DATA / f"kaggle-kernel-{run_id}"
     kdir.mkdir(exist_ok=False)
     cfg = json.loads((HERE / "kernel-metadata.json").read_text())
-    cfg.update(id=kernel_id(a.owner, run_id), title=f"Jarvis screen label {run_id}", is_private=True,
+    cfg.update(id=kernel_id(a.owner, run_id), title=f"Jimi screen label {run_id}", is_private=True,
                dataset_sources=[meta["id"]])
     (kdir / "kernel-metadata.json").write_text(json.dumps(cfg, indent=2))
     shutil.copyfile(HERE / "kernel.py", kdir / "kernel.py")

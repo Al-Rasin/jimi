@@ -1,7 +1,7 @@
 # Local LLM (PLAN 9.1, D-019): llama.cpp at the pinned commit (tools/fetch_llama.sh) + a small JNI layer.
 # Flags match the Phase 0 benchmark build (docs/BENCHMARKS.md).
 cmake_minimum_required(VERSION 3.22.1)
-project(jarvis_llm C CXX)
+project(jimi_llm C CXX)
 
 set(CMAKE_C_FLAGS "${CMAKE_C_FLAGS} -march=armv8.2-a+dotprod")
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -march=armv8.2-a+dotprod")
@@ -20,6 +20,6 @@ set(LLAMA_ALL_WARNINGS OFF CACHE BOOL "" FORCE)
 
 add_subdirectory(llama.cpp)
 
-add_library(jarvis_llm SHARED jarvis_llm.cpp)
-target_link_libraries(jarvis_llm llama log android)
-target_link_options(jarvis_llm PRIVATE -Wl,--gc-sections -Wl,-z,max-page-size=16384)
+add_library(jimi_llm SHARED jimi_llm.cpp)
+target_link_libraries(jimi_llm llama log android)
+target_link_options(jimi_llm PRIVATE -Wl,--gc-sections -Wl,-z,max-page-size=16384)

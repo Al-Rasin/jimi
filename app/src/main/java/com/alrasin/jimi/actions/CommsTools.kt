@@ -1,0 +1,226 @@
+package com.alrasin.jimi.actions
+
+import android.Manifest
+import android.app.Activity
+import android.app.PendingIntent
+import android.content.BroadcastReceiver
+import android.content.Context
+import android.content.Intent
+import android.content.IntentFilter
+import android.content.pm.PackageManager
+import android.net.Uri
+import android.os.Build
+import android.provider.ContactsContract
+import android.telephony.SmsManager
+import com.alrasin.jimi.brain.Reply
+import com.alrasin.jimi.core.PhoneNumbers
+import com.alrasin.jimi.core.Risk
+import com.alrasin.jimi.core.Tool
+import com.alrasin.jimi.core.ToolResult
+import com.alrasin.jimi.core.launch
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.withTimeoutOrNull
+import java.util.UUID
+
+/** Contacts lookup by spoken name. */
+class Contacts(private val context: Context) {
+    data class Contact(val name: String, val number: String, val aliases: List<String> = emptyList(), val contactId: Long? = null)
+
+    fun all(): List<Contact> {
+        if (context.checkSelfPermission(Manifest.permission.READ_CONTACTS) != PackageManager.PERMISSION_GRANTED) return emptyList()
+        val out = ArrayList<Contact>()
+        val aliases = mutableMapOf<Long, MutableList<String>>()
+        context.contentResolver.query(
+            ContactsContract.Data.CONTENT_URI,
+            arrayOf(ContactsContract.Data.CONTACT_ID, ContactsContract.Data.DATA1),
+            "${ContactsContract.Data.MIMETYPE} = ?",
+            arrayOf(ContactsContract.CommonDataKinds.Nickname.CONTENT_ITEM_TYPE),
+            null,
+        )?.use { c ->
+            while (c.moveToNext()) {
+                c.getString(1)?.takeIf { it.isNotBlank() }?.let { aliases.getOrPut(c.getLong(0)) { mutableListOf() }.add(it) }
+            }
+        }
+        context.contentResolver.query(
+            ContactsContract.CommonDataKinds.Phone.CONTENT_URI,
+            arrayOf(ContactsContract.CommonDataKinds.Phone.DISPLAY_NAME, ContactsContract.CommonDataKinds.Phone.NUMBER, ContactsContract.CommonDataKinds.Phone.CONTACT_ID),
+            null, null, null,
+        )?.use { c -> while (c.moveToNext()) out.add(Contact(c.getString(0) ?: "", c.getString(1) ?: "", aliases[c.getLong(2)].orEmpty(), c.getLong(2))) }
+        return out.distinctBy { it.name to PhoneNumbers.parse(it.number) }
+    }
+
+    /** Spoken digits ("01712 345678") are used as the number. */
+    fun find(name: String): Contact? = (resolve(name) as? ContactResolver.Resolution.Found)?.contact
+
+    fun resolve(name: String): ContactResolver.Resolution = ContactResolver.resolve(
+        name, if (PhoneNumbers.parse(name) != null) emptyList() else all(),
+    )
+
+    /** Contact name for a sender. Senders like "Teletalk" or short codes have too few digits to match: keep them as they are. */
+    fun nameFor(number: String): String {
+        val n = PhoneNumbers.tail(number)
+        if (n.length < MIN_MATCH_DIGITS) return number
+        return all().firstOrNull { PhoneNumbers.endsWith(it.number, n) }?.name ?: number
+    }
+
+    companion object {
+        const val MIN_MATCH_DIGITS = 7
+    }
+}
+
+fun commsTools(context: Context, contacts: Contacts): List<Tool> = listOf(
+    SimpleTool("call", "Call a contact by phone, WhatsApp or Messenger; set video=true for an app video call", listOf(arg("contact", "name, nickname, relation or number"), arg("app", "calling app", required = false, choices = listOf("phone", "whatsapp", "messenger")), arg("video", "video call instead of voice", required = false, choices = listOf("true", "false"))), Risk.CONFIRM) { c, _ ->
+        val who = c.require("contact", "Call who?")
+        val app = c.arg("app")?.lowercase() ?: "phone"
+        if (app !in listOf("phone", "whatsapp", "messenger")) return@SimpleTool ToolResult.fail("I can call using phone, WhatsApp or Messenger.")
+        val video = c.arg("video")?.lowercase() ?: "false"
+        if (video !in listOf("true", "false")) return@SimpleTool ToolResult.fail("Should this be a voice or video call?")
+        if (app == "phone" && video == "true") return@SimpleTool ToolResult.fail("Choose WhatsApp or Messenger for a video call.")
+        val p = when (val match = contacts.resolve(who)) {
+            is ContactResolver.Resolution.Found -> match.contact
+            is ContactResolver.Resolution.Ambiguous -> return@SimpleTool ToolResult.fail(match.question)
+            ContactResolver.Resolution.NotFound -> return@SimpleTool ToolResult.fail("I can't find $who in your contacts.")
+        }.let { it.copy(name = c.arg("contact_name")?.takeIf { PhoneNumbers.parse(who) != null } ?: it.name) }
+        if (app != "phone") return@SimpleTool AppCommunications(context, contacts).call(p, app, video == "true")
+        if (context.checkSelfPermission(Manifest.permission.CALL_PHONE) != PackageManager.PERMISSION_GRANTED)
+            return@SimpleTool ToolResult.fail("I need the phone permission. Open Jimi setup.")
+        if (context.launch(Intent(Intent.ACTION_CALL, Uri.parse("tel:" + Uri.encode(p.number)))))
+            Reply.done("I requested a call to ${c.arg("contact_name")?.takeIf { PhoneNumbers.parse(who) != null } ?: p.name}.")
+        else Reply.failed("I couldn't open the phone app.")
+    },
+    SimpleTool("send_sms", "Send an SMS, or send a Messenger message with app=messenger", listOf(arg("contact", "name, nickname, relation or number"), arg("text", "message"), arg("app", "messaging app", required = false, choices = listOf("sms", "messenger"))), Risk.CONFIRM) { c, _ ->
+        val who = c.require("contact", "To who?")
+        val text = c.require("text", "What should I say?")
+        val app = c.arg("app")?.lowercase() ?: "sms"
+        if (app !in listOf("sms", "messenger")) return@SimpleTool ToolResult.fail("Choose SMS or Messenger for this message.")
+        if (SelfAccount.isSelf(who)) return@SimpleTool if (app == "messenger") AppCommunications(context, contacts).messageSelf(app, text)
+            else ToolResult.fail("I can message you yourself on WhatsApp or Messenger, not SMS.")
+        val p = when (val match = contacts.resolve(who)) {
+            is ContactResolver.Resolution.Found -> match.contact
+            is ContactResolver.Resolution.Ambiguous -> return@SimpleTool ToolResult.fail(match.question)
+            ContactResolver.Resolution.NotFound -> return@SimpleTool ToolResult.fail("I can't find $who in your contacts.")
+        }.let { it.copy(name = c.arg("contact_name")?.takeIf { PhoneNumbers.parse(who) != null } ?: it.name) }
+        if (app == "messenger") return@SimpleTool AppCommunications(context, contacts).message(p, app, text)
+        if (context.checkSelfPermission(Manifest.permission.SEND_SMS) != PackageManager.PERMISSION_GRANTED)
+            return@SimpleTool ToolResult.fail("I need the SMS permission. Open Jimi setup.")
+        @Suppress("DEPRECATION") val sms = SmsManager.getDefault()
+        sendSms(context, sms, p, text)
+    },
+    SimpleTool("send_whatsapp", "Open the contact's WhatsApp conversation and send the exact message using accessibility", listOf(arg("contact", "name, nickname, relation or number"), arg("text", "message")), Risk.CONFIRM) { c, _ ->
+        val who = c.require("contact", "To who?")
+        val text = c.require("text", "What should I say?")
+        if (SelfAccount.isSelf(who)) return@SimpleTool AppCommunications(context, contacts).messageSelf("whatsapp", text)
+        val p = when (val match = contacts.resolve(who)) {
+            is ContactResolver.Resolution.Found -> match.contact
+            is ContactResolver.Resolution.Ambiguous -> return@SimpleTool ToolResult.fail(match.question)
+            ContactResolver.Resolution.NotFound -> return@SimpleTool ToolResult.fail("I can't find $who in your contacts.")
+        }.let { it.copy(name = c.arg("contact_name")?.takeIf { PhoneNumbers.parse(who) != null } ?: it.name) }
+        AppCommunications(context, contacts).message(p, "whatsapp", text)
+    },
+    SimpleTool("read_messages", "Read the latest text messages") { _, _ ->
+        if (context.checkSelfPermission(Manifest.permission.READ_SMS) != PackageManager.PERMISSION_GRANTED)
+            return@SimpleTool ToolResult.fail("I need the SMS permission. Open Jimi setup.")
+        val inbox = Uri.parse("content://sms/inbox")
+        // MIUI's Messages app leaves read = 0 on messages the user has opened; it only sets seen = 1
+        val unreadWhere = "read = 0 AND seen = 0"
+        val unreadCount = context.contentResolver.query(inbox, arrayOf("address"), unreadWhere, null, null)?.use { c ->
+            var n = 0
+            while (c.moveToNext()) if (!SmsSender.isBroadcast(c.getString(0))) n++
+            n
+        } ?: 0
+        val msgs = ArrayList<Pair<String, String>>()
+        val where = if (unreadCount > 0) unreadWhere else null
+        context.contentResolver.query(inbox, arrayOf("address", "body"), where, null, "date DESC")?.use { c ->
+            var scanned = 0
+            while (c.moveToNext() && msgs.size < 3 && ++scanned <= 200) {
+                val address = c.getString(0) ?: ""
+                if (!SmsSender.isBroadcast(address)) msgs.add(address to (c.getString(1) ?: ""))
+            }
+        }
+        if (msgs.isEmpty()) return@SimpleTool ToolResult.ok("No messages from people. I skip service and promo texts.")
+        val list = msgs.map { "${contacts.nameFor(it.first)}: ${it.second.take(160)}" }
+        val head = when {
+            unreadCount > msgs.size -> "$unreadCount unread. Newest ${msgs.size}:"
+            unreadCount > 0 -> "$unreadCount unread."
+            else -> "No unread messages. Latest:"
+        }
+        ToolResult.ok("$head ${list.joinToString(". ")}", list.joinToString("\n"))
+    },
+    SimpleTool("compose_email", "Write an email (opens the mail app)", listOf(arg("to", "address or contact", required = false), arg("subject", "subject", required = false), arg("body", "text", required = false))) { c, _ ->
+        val uri = Uri.parse("mailto:" + (c.arg("to")?.replace(" at ", "@")?.replace(" dot ", ".")?.replace(" ", "") ?: ""))
+        val i = Intent(Intent.ACTION_SENDTO, uri)
+        c.arg("subject")?.let { i.putExtra(Intent.EXTRA_SUBJECT, it) }
+        c.arg("body")?.let { i.putExtra(Intent.EXTRA_TEXT, it) }
+        if (context.launch(i)) Reply.done("I opened email with the message ready. Tap send.") else ToolResult.fail("No mail app found.")
+    },
+)
+
+/** Government, operator, bank and promo senders: short codes ("16216") or names ("GP", "AD-BKASH") (§M.11). */
+internal object SmsSender {
+    fun isBroadcast(address: String?): Boolean {
+        val a = address?.trim().orEmpty()
+        if (a.isEmpty()) return true
+        if (a.any(Char::isLetter)) return true
+        return a.count(Char::isDigit) < 7
+    }
+}
+
+/** Every part must receive its own successful sent callback. Null means still unconfirmed. */
+internal class SmsSentStatus(private val partCount: Int) {
+    private val confirmed = mutableSetOf<Int>()
+    private var failed = false
+
+    fun record(part: Int, sent: Boolean): Boolean? {
+        if (part !in 0 until partCount) return null
+        if (!sent) failed = true else confirmed.add(part)
+        return when {
+            failed -> false
+            confirmed.size == partCount -> true
+            else -> null
+        }
+    }
+}
+
+internal suspend fun sendSms(context: Context, sms: SmsManager, contact: Contacts.Contact, text: String): ToolResult {
+    val parts = sms.divideMessage(text)
+    if (parts.isEmpty()) return Reply.failed("the message is empty.")
+    val action = "${context.packageName}.SMS_SENT.${UUID.randomUUID()}"
+    val status = SmsSentStatus(parts.size)
+    val result = CompletableDeferred<Boolean>()
+    val receiver = object : BroadcastReceiver() {
+        override fun onReceive(context: Context, intent: Intent) {
+            if (intent.action != action) return
+            status.record(intent.getIntExtra("part", -1), resultCode == Activity.RESULT_OK)?.let { result.complete(it) }
+        }
+    }
+    val callbacks = arrayListOf<PendingIntent>()
+    var registered = false
+    try {
+        if (Build.VERSION.SDK_INT >= 33) {
+            context.registerReceiver(receiver, IntentFilter(action), Context.RECEIVER_NOT_EXPORTED)
+        } else {
+            @Suppress("DEPRECATION")
+            context.registerReceiver(receiver, IntentFilter(action))
+        }
+        registered = true
+        parts.indices.forEach { part ->
+            callbacks.add(PendingIntent.getBroadcast(context, part,
+                Intent(action).setPackage(context.packageName).putExtra("part", part),
+                PendingIntent.FLAG_ONE_SHOT or PendingIntent.FLAG_IMMUTABLE))
+        }
+        sms.sendMultipartTextMessage(contact.number, null, parts, callbacks, null)
+        return when (withTimeoutOrNull(5_000) { result.await() }) {
+            true -> Reply.done("message sent to ${contact.name}.")
+            false -> Reply.failed("the message wasn't fully sent.")
+            null -> Reply.failed("I requested the SMS, but couldn't confirm it was sent. Check Messages.")
+        }
+    } catch (e: CancellationException) {
+        throw e
+    } catch (_: Exception) {
+        return Reply.failed("I couldn't confirm the SMS was sent. Check Messages.")
+    } finally {
+        if (registered) context.unregisterReceiver(receiver)
+        callbacks.forEach { it.cancel() }
+    }
+}

@@ -6,7 +6,7 @@ command -v adb >/dev/null || { echo "adb is required" >&2; exit 1; }
 
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 destination="$repo_root/training/data/phone/$(date +%F)"
-remote=/sdcard/Android/data/com.alrasin.jarvis/files
+remote=/sdcard/Android/data/com.alrasin.jimi/files
 adb_command=(adb -s "$ANDROID_SERIAL")
 
 # Expand globs on Android; missing files produce an empty, successful listing.

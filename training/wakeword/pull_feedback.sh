@@ -5,7 +5,7 @@
 #   ANDROID_SERIAL=<ip:port> training/wakeword/pull_feedback.sh
 set -euo pipefail
 cd "$(dirname "$0")/../.."
-SRC=/sdcard/Android/data/com.alrasin.jarvis/files/wake
+SRC=/sdcard/Android/data/com.alrasin.jimi/files/wake
 OUT=models/wakeword/feedback
 TMP="$OUT/_pull"
 mkdir -p "$TMP"

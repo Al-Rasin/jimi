@@ -15,7 +15,7 @@ import threading
 import time
 import uuid
 
-PACKAGE = "com.alrasin.jarvis"
+PACKAGE = "com.alrasin.jimi"
 COMPONENT = PACKAGE + "/.debug.SmokeCommandReceiver"
 
 
@@ -189,7 +189,7 @@ def main():
             print(case["name"] + "\t" + case["text"])
         return 0
     os.umask(0o077)
-    report_dir = Path(tempfile.mkdtemp(prefix="jarvis-smoke-", dir="/private/tmp"))
+    report_dir = Path(tempfile.mkdtemp(prefix="jimi-smoke-", dir="/private/tmp"))
     report_path = report_dir / "report.json"
     results = []
     report = {"mode": "dry-run" if options.dry_run else "all" if options.all else "read-only", "results": results, "skipped": skipped}
@@ -201,7 +201,7 @@ def main():
         if options.apk:
             command(adb + ["install", "-r", str(options.apk.resolve())], timeout=180)
         events = queue.Queue()
-        logs = subprocess.Popen(adb + ["logcat", "-v", "raw", "Jarvis:I", "*:S"],
+        logs = subprocess.Popen(adb + ["logcat", "-v", "raw", "Jimi:I", "*:S"],
                                 stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, text=True)
 
         def read_logs():

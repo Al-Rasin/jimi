@@ -28,7 +28,7 @@ elif "logcat" in args:
         time.sleep(.01)
 elif "shell" in args:
     parts = shlex.split(args[-1])
-    assert parts[parts.index("-n") + 1] == "com.alrasin.jarvis/.debug.SmokeCommandReceiver"
+    assert parts[parts.index("-n") + 1] == "com.alrasin.jimi/.debug.SmokeCommandReceiver"
     extras = {}
     for index, part in enumerate(parts):
         if part in ("--es", "--ez"):

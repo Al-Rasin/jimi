@@ -55,7 +55,7 @@
     <uses-feature android:name="android.hardware.consumerir" android:required="false" />
 
     <application
-        android:name=".JarvisApp"
+        android:name=".JimiApp"
         android:allowBackup="false"
         android:fullBackupContent="@xml/backup_rules"
         android:dataExtractionRules="@xml/data_extraction_rules"
@@ -80,12 +80,12 @@
             android:launchMode="singleTop"
             android:showWhenLocked="true"
             android:turnScreenOn="true"
-            android:taskAffinity="com.alrasin.jarvis.panel"
+            android:taskAffinity="com.alrasin.jimi.panel"
             android:windowSoftInputMode="adjustResize"
-            android:theme="@style/Theme.Jarvis.Panel" />
+            android:theme="@style/Theme.Jimi.Panel" />
 
         <service
-            android:name=".actions.JarvisAccessibilityService"
+            android:name=".actions.JimiAccessibilityService"
             android:exported="true"
             android:label="@string/app_name"
             android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE">
@@ -98,7 +98,7 @@
         </service>
 
         <service
-            android:name=".notify.JarvisNotificationListener"
+            android:name=".notify.JimiNotificationListener"
             android:exported="true"
             android:label="@string/app_name"
             android:permission="android.permission.BIND_NOTIFICATION_LISTENER_SERVICE">
@@ -113,7 +113,7 @@
 
         <!-- Default assistant (D-036): replaces Google Assistant / Gemini. -->
         <service
-            android:name=".assist.JarvisVoiceInteractionService"
+            android:name=".assist.JimiVoiceInteractionService"
             android:exported="true"
             android:label="@string/app_name"
             android:permission="android.permission.BIND_VOICE_INTERACTION">
@@ -125,11 +125,11 @@
                 android:resource="@xml/voice_interaction_service" />
         </service>
         <service
-            android:name=".assist.JarvisSessionService"
+            android:name=".assist.JimiSessionService"
             android:exported="true"
             android:permission="android.permission.BIND_VOICE_INTERACTION" />
         <service
-            android:name=".assist.JarvisRecognitionService"
+            android:name=".assist.JimiRecognitionService"
             android:exported="true">
             <intent-filter>
                 <action android:name="android.speech.RecognitionService" />
@@ -140,7 +140,7 @@
         </service>
 
         <service
-            android:name=".service.JarvisCoreService"
+            android:name=".service.JimiCoreService"
             android:exported="false"
             android:foregroundServiceType="microphone" />
 

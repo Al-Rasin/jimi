@@ -69,7 +69,7 @@ class FromLearnedTest(unittest.TestCase):
 
     def test_read_db(self):
         with tempfile.TemporaryDirectory() as d:
-            path = pathlib.Path(d) / "jarvis.db"
+            path = pathlib.Path(d) / "jimi.db"
             con = sqlite3.connect(path)
             con.execute("CREATE TABLE app_info (pkg TEXT, label TEXT)")
             con.execute("CREATE TABLE app_screen (id INTEGER, pkg TEXT, name TEXT)")

@@ -5,7 +5,7 @@ from pathlib import Path
 import re
 
 ROOT = Path(__file__).resolve().parents[2]
-BASE = Path('app/src/main/java/com/alrasin/jarvis')
+BASE = Path('app/src/main/java/com/alrasin/jimi')
 
 
 def split_args(text):

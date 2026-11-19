@@ -1,0 +1,184 @@
+package com.alrasin.jimi.actions
+
+import android.content.ContentUris
+import android.content.Context
+import android.content.Intent
+import android.net.Uri
+import android.provider.ContactsContract
+import android.telephony.PhoneNumberUtils
+import android.telephony.TelephonyManager
+import com.alrasin.jimi.brain.Reply
+import com.alrasin.jimi.core.PhoneNumbers
+import com.alrasin.jimi.core.ToolResult
+import com.alrasin.jimi.core.isInstalled
+import com.alrasin.jimi.core.launch
+import com.alrasin.jimi.core.pollUntil
+import com.alrasin.jimi.notify.ChatHistory
+import kotlinx.coroutines.delay
+import java.util.Locale
+
+/** A resolved chat app: its installed package and the name to say. */
+internal data class AppChat(val pkg: String, val label: String)
+
+internal class AppCommunications(private val context: Context, private val contacts: Contacts) {
+    private fun packageFor(app: String): String? = when (app) {
+        "whatsapp" -> listOf("com.whatsapp", "com.whatsapp.w4b")
+        "messenger" -> listOf("com.facebook.orca")
+        else -> emptyList()
+    }.firstOrNull(context::isInstalled)
+
+    private fun chatLabel(app: String) = if (app == "whatsapp") "WhatsApp" else "Messenger"
+
+    private fun chat(app: String): AppChat? = packageFor(app)?.let { AppChat(it, chatLabel(app)) }
+
+    /** wa.me deep link that opens a chat with [text] pre-filled. */
+    private fun waUri(number: String, text: String): Uri =
+        Uri.parse("https://wa.me/$number").buildUpon().appendQueryParameter("text", text).build()
+
+    /** Taps Send/Send message in [chat]; null on success, a fail message otherwise. */
+    private suspend fun tapSend(service: JimiAccessibilityService, app: String, chat: AppChat): String? {
+        val ids = if (app == "whatsapp") listOf("${chat.pkg}:id/send") else emptyList()
+        if (!pollUntil(20, 250) { service.clickExact(chat.pkg, labels = listOf("Send", "Send message"), ids = ids) })
+            return "The message is ready in ${chat.label}, but I couldn't identify Send. Nothing was sent."
+        return null
+    }
+
+    private fun international(number: String): String? {
+        PhoneNumbers.international(number)?.let { return it }
+        val country = runCatching {
+            context.getSystemService(TelephonyManager::class.java)?.simCountryIso?.takeIf { it.isNotBlank() }
+                ?: context.getSystemService(TelephonyManager::class.java)?.networkCountryIso?.takeIf { it.isNotBlank() }
+        }.getOrNull() ?: Locale.getDefault().country
+        return PhoneNumberUtils.formatNumberToE164(number, country.uppercase(Locale.ROOT))?.let(PhoneNumbers::international)
+    }
+
+    private fun matchingContactIds(person: Contacts.Contact): Set<Long> = person.contactId?.let { setOf(it) }
+        ?: contacts.all().filter {
+            PhoneNumbers.parse(it.number) == PhoneNumbers.parse(person.number) ||
+                international(person.number)?.let { number -> number == international(it.number) } == true
+        }.mapNotNull { it.contactId }.toSet()
+
+    private fun openContactRow(person: Contacts.Contact, pkg: String, mime: String? = null): Boolean = runCatching {
+        val ids = matchingContactIds(person)
+        if (ids.isEmpty()) return@runCatching false
+        val matches = mutableListOf<Pair<Long, String>>()
+        context.contentResolver.query(
+            ContactsContract.Data.CONTENT_URI,
+            arrayOf(ContactsContract.Data._ID, ContactsContract.Data.CONTACT_ID, ContactsContract.Data.MIMETYPE, ContactsContract.Data.DATA1),
+            "${ContactsContract.Data.CONTACT_ID} IN (${ids.joinToString(",") { "?" }})",
+            ids.map(Long::toString).toTypedArray(), null,
+        )?.use { cursor ->
+            while (cursor.moveToNext()) {
+                val type = cursor.getString(2).orEmpty()
+                if (mime != null) {
+                    if (type != mime) continue
+                    val rowNumber = cursor.getString(3).orEmpty().substringBefore('@')
+                    val exact = PhoneNumbers.parse(rowNumber) == PhoneNumbers.parse(person.number)
+                    val e164 = international(person.number)
+                    if (!exact && (e164 == null || (e164 != rowNumber && e164 != international(rowNumber)))) continue
+                } else if (!CommsAddress.isMessengerConversation(type)) continue
+                matches.add(cursor.getLong(0) to type)
+            }
+        }
+        if (matches.size != 1) return@runCatching false
+        val row = matches.single()
+        context.launch(Intent(Intent.ACTION_VIEW).setDataAndType(ContentUris.withAppendedId(ContactsContract.Data.CONTENT_URI, row.first), row.second).setPackage(pkg))
+    }.getOrDefault(false)
+
+    suspend fun call(person: Contacts.Contact, app: String, video: Boolean): ToolResult {
+        val (pkg, label) = chat(app) ?: return ToolResult.fail("${chatLabel(app)} is not installed.")
+        if (app == "whatsapp") {
+            val mime = if (video) "vnd.android.cursor.item/vnd.com.whatsapp.video.call" else "vnd.android.cursor.item/vnd.com.whatsapp.voip.call"
+            if (openContactRow(person, pkg, mime)) return Reply.done("I requested a $label ${if (video) "video" else "voice"} call to ${person.name}.")
+        }
+        val service = requireScreen { return ToolResult.fail("Enable Jimi accessibility in Android settings so I can place the $label call.") }
+        openConversation(person, app, pkg, service)?.let { return ToolResult.fail(it) }
+        val labels = if (video) listOf("Video call", "Start video call") else listOf("Voice call", "Audio call", "Start audio call", "Call")
+        val ids = if (app == "whatsapp") listOf("$pkg:id/${if (video) "video_call" else "menuitem_conversation_call"}") else emptyList()
+        if (!conversationMatches(service, pkg, person)) return ToolResult.fail("The $label conversation changed. No call was placed.")
+        if (!service.clickExact(pkg, labels = labels, ids = ids)) return ToolResult.fail("I opened ${person.name}'s $label chat, but couldn't identify the ${if (video) "video" else "voice"} call button.")
+        return Reply.done("I requested a $label ${if (video) "video" else "voice"} call to ${person.name}.")
+    }
+
+    suspend fun message(person: Contacts.Contact, app: String, text: String): ToolResult {
+        val (pkg, label) = chat(app) ?: return ToolResult.fail("${chatLabel(app)} is not installed.")
+        val service = requireScreen { return ToolResult.fail("Enable Jimi accessibility in Android settings so I can send the $label message.") }
+        openConversation(person, app, pkg, service, text)?.let { return ToolResult.fail(it) }
+        // The Message field shows a moment after the chat opens (Messenger), so retry instead of failing at once (§M.9).
+        if (!pollUntil(12, 250) { service.replaceText(pkg, text) && service.editableText(pkg) == text })
+            return ToolResult.fail("I couldn't enter the exact message in ${person.name}'s $label chat. Nothing was sent.")
+        if (!conversationMatches(service, pkg, person)) return ToolResult.fail("The $label conversation changed. Nothing was sent.")
+        tapSend(service, app, AppChat(pkg, label))?.let { return ToolResult.fail(it) }
+        return Reply.done("I tapped send for ${person.name} in $label. Delivery isn't confirmed.")
+    }
+
+    /** Opens [person]'s chat and reads their newest [count] bubbles (read_chat fallback when notifications have nothing). */
+    suspend fun readChat(person: Contacts.Contact, app: String, count: Int): ToolResult {
+        val (pkg, label) = chat(app) ?: return ToolResult.fail("${chatLabel(app)} is not installed.")
+        val service = requireScreen { return ToolResult.fail("Enable Jimi accessibility in Android settings so I can read the $label chat.") }
+        openConversation(person, app, pkg, service)?.let { return ToolResult.fail(it.replace("Nothing was sent or called. ", "")) }
+        delay(500)
+        val texts = ChatHistory.lastIncoming(service.chatBubbles(pkg), count)
+        if (texts.isEmpty()) return ToolResult.fail("I opened ${person.name}'s $label chat, but couldn't read any message from them.")
+        val say = if (texts.size == 1) "${person.name} on $label said: ${texts[0]}"
+        else "Last ${texts.size} from ${person.name} on $label: " + texts.mapIndexed { i, t -> "${i + 1}, $t" }.joinToString(". ")
+        return ToolResult.ok(say)
+    }
+
+    /** "Message yourself" on WhatsApp, or the owner's own Messenger thread. */
+    suspend fun messageSelf(app: String, text: String): ToolResult {
+        val (pkg, label) = chat(app) ?: return ToolResult.fail("${chatLabel(app)} is not installed.")
+        val service = requireScreen { return ToolResult.fail("Enable Jimi accessibility in Android settings so I can send the $label message.") }
+        val uri = if (app == "whatsapp") {
+            val number = SelfAccount.whatsappNumber()?.let(PhoneNumbers::international)
+                ?: return ToolResult.fail("I couldn't find your own WhatsApp number.")
+            waUri(number, text)
+        } else {
+            Uri.parse("fb-messenger://user/" + (SelfAccount.messengerId() ?: return ToolResult.fail("I couldn't find your Messenger account.")))
+        }
+        if (!context.launch(Intent(Intent.ACTION_VIEW, uri).setPackage(pkg))) return ToolResult.fail("I couldn't open $label.")
+        // Messenger has no "you" mark in the thread; the deep link to the owner's own id is the check there.
+        val opened = pollUntil(20, 250) { service.editableText(pkg) != null && (app != "whatsapp" || service.isSelfChat(pkg)) }
+        if (!opened) return ToolResult.fail("I couldn't open your own $label chat. Nothing was sent. Unlock the phone and try again.")
+        service.focusEditable(pkg)
+        delay(300)
+        if (!service.replaceText(pkg, text) || !pollUntil(20, 250) { service.editableText(pkg) == text })
+            return ToolResult.fail("I couldn't enter the exact message in your $label chat. Nothing was sent.")
+        if (app == "whatsapp" && !service.isSelfChat(pkg)) return ToolResult.fail("The WhatsApp chat changed. Nothing was sent.")
+        // Messenger swaps the like button for Send only after the text is in.
+        tapSend(service, app, AppChat(pkg, label))?.let { return ToolResult.fail(it) }
+        return Reply.done("I sent it to your own $label chat.")
+    }
+
+    private suspend fun openConversation(person: Contacts.Contact, app: String, pkg: String, service: JimiAccessibilityService, text: String = ""): String? {
+        val label = chatLabel(app)
+        if (app == "whatsapp") {
+            val number = international(person.number)
+                ?: return "Save ${person.name}'s number with its country code before using WhatsApp."
+            if (!context.launch(Intent(Intent.ACTION_VIEW, waUri(number, text)).setPackage(pkg))) return "I couldn't open WhatsApp."
+        } else if (!openContactRow(person, pkg)) {
+            val launch = context.packageManager.getLaunchIntentForPackage(pkg) ?: return "I couldn't open Messenger."
+            if (!context.launch(launch) || !pollUntil(20, 250) { service.appPackage() == pkg }) return "I couldn't open Messenger. Unlock the phone and try again."
+            if (!pollUntil(20, 250) { service.clickExact(pkg, labels = listOf("Search", "Search Messenger")) }) return "I couldn't find Messenger search. Open Messenger's Chats tab and try again."
+            if (!pollUntil(20, 250) { service.replaceText(pkg, person.name) }) return "I couldn't type in Messenger search."
+            delay(750)
+            if (!pollUntil(20, 250) { service.clickUniqueText(pkg, person.name) }) return "I couldn't find one unique Messenger result for ${person.name}. Choose their conversation in Messenger."
+        }
+        val verified = pollUntil(20, 250) {
+            conversationMatches(service, pkg, person) && service.editableText(pkg) != null
+        }
+        return if (verified) null else "I couldn't verify ${person.name}'s $label conversation. Nothing was sent or called. Unlock the phone and check $label."
+    }
+
+    private fun conversationMatches(service: JimiAccessibilityService, pkg: String, person: Contacts.Contact): Boolean =
+        service.appPackage() == pkg && (
+            service.hasConversationTitle(pkg, person.name) || service.hasConversationTitle(pkg, person.number) ||
+                international(person.number)?.let { service.hasConversationTitle(pkg, "+$it") } == true
+            )
+}
+
+internal object CommsAddress {
+    fun isMessengerConversation(mime: String): Boolean = mime.startsWith("vnd.android.cursor.item/") &&
+        (mime.contains("com.facebook.messenger") || mime.contains("com.facebook.orca")) &&
+        (mime.endsWith(".chat") || mime.endsWith(".message"))
+}

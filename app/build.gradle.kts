@@ -14,11 +14,11 @@ ksp {
 val llamaSource = file("src/main/cpp/llama.cpp/CMakeLists.txt").exists()
 
 android {
-    namespace = "com.alrasin.jarvis"
+    namespace = "com.alrasin.jimi"
     compileSdk = 35
 
     defaultConfig {
-        applicationId = "com.alrasin.jarvis"
+        applicationId = "com.alrasin.jimi"
         minSdk = 30
         targetSdk = 35
         versionCode = 1

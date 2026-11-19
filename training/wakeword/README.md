@@ -54,11 +54,11 @@ the user's real pronunciation. Keep variants of the same source clip in the same
 Copy the 3 models the app needs into `models/wakeword/app-assets/wakeword/` (git-ignored, packed into the APK):
 `melspectrogram.onnx`, `embedding_model.onnx` (from the openwakeword package `resources/models/`) and `hey_jimi.onnx`
 (from `models/wakeword/out/`). If `hey_jimi.onnx` is missing the app falls back to `hey_jarvis_v0.1.onnx`.
-New model without rebuilding the app: `adb push hey_jimi.onnx /sdcard/Android/data/com.alrasin.jarvis/files/models/wakeword/`
+New model without rebuilding the app: `adb push hey_jimi.onnx /sdcard/Android/data/com.alrasin.jimi/files/models/wakeword/`
 then Stop/Start in the app.
 
-Check the Kotlin detector matches Python: put 16 kHz mono WAVs in `/sdcard/Android/data/com.alrasin.jarvis/files/test/`,
-run `adb shell am start -n com.alrasin.jarvis/.ui.MainActivity --es test_dir <that dir>`, read `adb logcat -s Jarvis | grep TEST`.
+Check the Kotlin detector matches Python: put 16 kHz mono WAVs in `/sdcard/Android/data/com.alrasin.jimi/files/test/`,
+run `adb shell am start -n com.alrasin.jimi/.ui.MainActivity --es test_dir <that dir>`, read `adb logcat -s Jimi | grep TEST`.
 
 ## 5. Feedback loop (D-023)
 Every voice wake asks "Was that you?" (✓/✗). Clips are saved on the phone with the answer in the file name.

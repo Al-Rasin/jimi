@@ -73,22 +73,22 @@ Demo APKs (sherpa-onnx, from huggingface.co/csukuangfj/sherpa-onnx-apk), files i
 Test them one at a time.
 
 ### Wake word — sherpa-onnx KWS gigaspeech 3.3M (2026-10-21) ❌ FAIL
-- Demo needs BPE tokens in `keywords.txt` (typing "Hey Jarvis" gives `Cannot find ID for token Hey`).
+- Demo needs BPE tokens in `keywords.txt` (typing "Hey Jimi" gives `Cannot find ID for token Hey`).
   Patched APK assets with `▁HE Y ▁JA R VI S` etc., boost `:2.0–2.5`, threshold `#0.08–0.12`, re-signed with debug key.
-- Result: user said "Hey Jarvis" 30+ times → detected only a few times, only very close to the phone.
-- Verdict: too weak for always-on wake word. Do not use this model for "Hey Jarvis".
+- Result: user said "Hey Jimi" 30+ times → detected only a few times, only very close to the phone.
+- Verdict: too weak for always-on wake word. Do not use this model for "Hey Jimi".
 - Next try: openWakeWord pretrained `hey_jarvis` model (trained only on this phrase), test on user's recorded voice.
 
 ### Wake word — openWakeWord `hey_jarvis_v0.1` (2026-10-21) ⚠️ PARTIAL
 - Test: user recorded 86 s on phone (MIUI Sound Recorder, AAC → 16 kHz mono WAV):
-  5x "Hey Jarvis" close, 5x at ~2 m, ~60 s normal talk. Scored on Mac (openwakeword + onnxruntime).
+  5x "Hey Jimi" close, 5x at ~2 m, ~60 s normal talk. Scored on Mac (openwakeword + onnxruntime).
 - Threshold 0.5: close **4/5** (scores 0.76–0.99), far **1/5**, normal talk **0 false triggers**.
 - Software volume boost (x3, x6) did not help far speech (clips close speech).
 - Verdict: much better than sherpa KWS; good when close, weak at 2 m. Options: lower threshold + VAD,
   openWakeWord custom verifier trained on user's voice, or train a custom model.
 
 **"Hey Jimi" custom model (2026-10-22, D-024)** — tested on Mac (Python, same scores as phone):
-| Model | Synthetic test recall @0.5 | False wakes/h (11 h val set) | rec1: 29× "Hey Jimi" | rec2: 3 min talk/TV | "Hey Jarvis" ×10 |
+| Model | Synthetic test recall @0.5 | False wakes/h (11 h val set) | rec1: 29× "Hey Jimi" | rec2: 3 min talk/TV | "Hey Jimi" ×10 |
 |---|---|---|---|---|---|
 | openWakeWord auto_train (weight 1500→×2) | 26% | ~0 | 3 | 0 | 0 |
 | train_fast weight 1000 | 78% | 146 | 30 (1 extra) | 3 ❌ | 4 ❌ |
@@ -120,13 +120,13 @@ First call without warm-up is ~4× slower → app warms up at load. Speaker ID s
 
 ## How to run the speech benchmark on the phone (#48)
 1. Record 16 kHz mono WAV clips (quiet room + noisy room). For each `x.wav`, put `x.txt` beside it with the exact words said.
-2. Push: `adb push clips/ /sdcard/Android/data/com.alrasin.jarvis/files/clips/`
+2. Push: `adb push clips/ /sdcard/Android/data/com.alrasin.jimi/files/clips/`
 3. Run per model (English Kroko built-in, other sherpa model dir, or Bangla Whisper):
-   - `adb shell am start -n com.alrasin.jarvis/.ui.MainActivity --es stt_dir /sdcard/Android/data/com.alrasin.jarvis/files/clips --ez no_speak true`
+   - `adb shell am start -n com.alrasin.jimi/.ui.MainActivity --es stt_dir /sdcard/Android/data/com.alrasin.jimi/files/clips --ez no_speak true`
    - add `--es stt_model <model dir>` or `--es stt_model bangla`
    - If the log says a model file "does not exist" but it is there: adb made the folder with mode 2770, so the app
      cannot read it. Fix: `adb shell chmod 777 <each pushed folder>`.
-4. Results: one row per run appended to `/sdcard/Android/data/com.alrasin.jarvis/files/bench/stt.md` (model, clips, rtf, WER, load). Per-clip lines in debug log (`STT ...`). Paste rows below.
+4. Results: one row per run appended to `/sdcard/Android/data/com.alrasin.jimi/files/bench/stt.md` (model, clips, rtf, WER, load). Per-clip lines in debug log (`STT ...`). Paste rows below.
 
 ### Phone results (owed)
 | Model | Clips | rtf | WER (scored) | Load |

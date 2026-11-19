@@ -1,6 +1,6 @@
-"""Explicitly stop Jarvis, pull its Room DB with root, and retain a local snapshot.
+"""Explicitly stop Jimi, pull its Room DB with root, and retain a local snapshot.
 
-Running this interrupts the assistant; reopen Jarvis afterwards. The snapshot
+Running this interrupts the assistant; reopen Jimi afterwards. The snapshot
 contains all Room tables, so keep it in the git-ignored training/data directory.
 No adb operations run when this module is imported.
 """
@@ -17,7 +17,7 @@ import tempfile
 import uuid
 
 
-PACKAGE = "com.alrasin.jarvis"
+PACKAGE = "com.alrasin.jimi"
 REMOTE_DB = f"/data/data/{PACKAGE}/databases/jarvis.db"
 DATA_DIR = Path(__file__).resolve().parents[1] / "data" / "notifications"
 
@@ -28,7 +28,7 @@ def export_database(output: Path, serial: str | None = None) -> Path:
     if output.exists():
         raise FileExistsError(f"Refusing to overwrite {output}")
     adb = ["adb"] + (["-s", serial] if serial else [])
-    remote = f"/data/local/tmp/jarvis-notifications-{uuid.uuid4().hex}"
+    remote = f"/data/local/tmp/jimi-notifications-{uuid.uuid4().hex}"
 
     def run(*args, check=True):
         return subprocess.run(adb + list(args), check=check, capture_output=True, text=True)
@@ -49,23 +49,23 @@ def export_database(output: Path, serial: str | None = None) -> Path:
             )
             snapshot = Path(local) / "snapshot"
             run("pull", remote, str(snapshot))
-            source = snapshot / "jarvis.db"
+            source = snapshot / "jimi.db"
             if not source.is_file():
                 raise RuntimeError("adb pull did not produce jarvis.db")
             # Opening normally allows recovery of the copied WAL; never immutable=1.
-            destination = Path(local) / "jarvis.db"
+            destination = Path(local) / "jimi.db"
             with closing(sqlite3.connect(source)) as src, closing(sqlite3.connect(destination)) as dst:
                 if src.execute("PRAGMA quick_check").fetchone() != ("ok",):
                     raise RuntimeError("Exported database failed SQLite quick_check")
                 src.backup(dst)
             os.chmod(destination, 0o600)
             output.mkdir(mode=0o700)
-            destination.rename(output / "jarvis.db")
+            destination.rename(output / "jimi.db")
         finally:
             cleanup = root(f"rm -rf {remote}", check=False)
             if cleanup.returncode:
                 raise RuntimeError(f"Remote cleanup failed; remove root staging directory {remote}")
-    return output / "jarvis.db"
+    return output / "jimi.db"
 
 
 def main():
@@ -77,7 +77,7 @@ def main():
         help="new private export directory (default: git-ignored training/data/notifications/export-<UTC>)",
     )
     args = parser.parse_args()
-    print("Stopping Jarvis for a consistent DB export. Reopen Jarvis manually afterwards.", flush=True)
+    print("Stopping Jimi for a consistent DB export. Reopen Jimi manually afterwards.", flush=True)
     print(export_database(args.output, args.serial))
 
 

@@ -26,7 +26,7 @@ def main():
             text = re.sub(r'\{\{[^}]+\}\}', 'Alex', text)
             commands.add(text)
     # Exclude explicitly misheard phone examples: those are not intended speech.
-    code = (repo / 'app/src/test/java/com/alrasin/jarvis/brain/RuleMatcherTest.kt').read_text()
+    code = (repo / 'app/src/test/java/com/alrasin/jimi/brain/RuleMatcherTest.kt').read_text()
     code = re.sub(r'@Test fun misheardCommands\(\).*?(?=@Test)', '', code, flags=re.S)
     commands.update(json.loads('"' + x + '"') for x in re.findall(r'\bm\("((?:[^"\\]|\\.)*)"\)', code))
     pack = args.pack

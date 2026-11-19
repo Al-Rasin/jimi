@@ -28,7 +28,7 @@ python3 training/screen/collect.py --depth 2 --max-screens 40 --settings-actions
 bash training/screen/run_overnight.sh            # add: --limit 50 for a short test
 # stop training early: touch training/outputs/screen/STOP
 ```
-Push to the phone: `adb push models/smollm2-135m-jarvis-screen-*-Q8_0.gguf /sdcard/Android/data/com.alrasin.jarvis/files/models/llm/`.
+Push to the phone: `adb push models/smollm2-135m-jarvis-screen-*-Q8_0.gguf /sdcard/Android/data/com.alrasin.jimi/files/models/llm/`.
 
 ## Replay data
 `OfficerChul/Android-Control-84k` has screenshots and x,y answers only, no accessibility text. It cannot be used in

@@ -30,7 +30,7 @@ class ExportDatabaseTest(unittest.TestCase):
                 if "pull" in command:
                     target = Path(command[-1])
                     target.mkdir()
-                    shutil.copyfile(source, target / "jarvis.db")
+                    shutil.copyfile(source, target / "jimi.db")
                     shutil.copyfile(str(source) + "-wal", target / "jarvis.db-wal")
                 return subprocess.CompletedProcess(command, 0, "", "")
 
@@ -38,9 +38,9 @@ class ExportDatabaseTest(unittest.TestCase):
                 result = export_database(base / "export", serial="test-device")
             with closing(sqlite3.connect(result)) as database:
                 self.assertEqual(database.execute("SELECT title FROM notification_log").fetchall(), [("synthetic WAL row",)])
-            self.assertIn("am force-stop com.alrasin.jarvis", shlex.split(commands[0][-1])[0])
+            self.assertIn("am force-stop com.alrasin.jimi", shlex.split(commands[0][-1])[0])
             self.assertIn(REMOTE_DB + "-wal", commands[1][-1])
-            self.assertIn("rm -rf /data/local/tmp/jarvis-notifications-", commands[-1][-1])
+            self.assertIn("rm -rf /data/local/tmp/jimi-notifications-", commands[-1][-1])
             self.assertEqual(commands[0][:3], ["adb", "-s", "test-device"])
             self.assertEqual(os.stat(result).st_mode & 0o777, 0o600)
             self.assertEqual(os.stat(result.parent).st_mode & 0o777, 0o700)

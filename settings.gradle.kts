@@ -13,5 +13,5 @@ dependencyResolutionManagement {
         maven("https://jitpack.io")   // libsu (D-009 root shell)
     }
 }
-rootProject.name = "Jarvis"
+rootProject.name = "Jimi"
 include(":app")

@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
     <!-- Assistant panel: see-through; it draws its own blurred, tinted backdrop (D-050), so no window dim. -->
-    <style name="Theme.Jarvis.Panel" parent="@android:style/Theme.Material.NoActionBar">
+    <style name="Theme.Jimi.Panel" parent="@android:style/Theme.Material.NoActionBar">
         <item name="android:windowIsTranslucent">true</item>
         <item name="android:windowBackground">@android:color/transparent</item>
         <item name="android:backgroundDimEnabled">false</item>

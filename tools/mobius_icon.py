@@ -53,4 +53,4 @@ import os
 res=sys.argv[1]
 open(os.path.join(res,"ic_launcher_foreground.xml"),"w").write(vector(108,108,54,54,30/1.3,"color"))
 open(os.path.join(res,"ic_launcher_monochrome.xml"),"w").write(vector(108,108,54,54,30/1.3,"solid"))
-open(os.path.join(res,"ic_jarvis.xml"),"w").write(vector(24,24,12,12,11/1.4,"solid"))
+open(os.path.join(res,"ic_jimi.xml"),"w").write(vector(24,24,12,12,11/1.4,"solid"))

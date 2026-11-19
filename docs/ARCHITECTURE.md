@@ -2,7 +2,7 @@
 
 ## 1. Big picture
 ```
-                 ┌──────────── JarvisCoreService (foreground, always on, root-protected) ────────────┐
+                 ┌──────────── JimiCoreService (foreground, always on, root-protected) ────────────┐
  Mic ──► Wake word ──► VAD ──► STT (streaming) ──► Router ──► Tool executor ──► Result
   ▲      "Hey Jimi"                                 │  ▲            │              │
   │                                                 ▼  │            ▼              ▼
@@ -19,15 +19,15 @@
 | Module | Job | Depends on |
 |---|---|---|
 | `:app` | Compose UI (chat, history, notifications log, notes, settings, debug), Hilt setup | all |
-| `:core` | Shared models: `Tool`, `ToolCall`, `ToolResult`, `Risk`, `Reply`, `JarvisLog`, utils | — |
+| `:core` | Shared models: `Tool`, `ToolCall`, `ToolResult`, `Risk`, `Reply`, `JimiLog`, utils | — |
 | `:data` | Room DB + repositories (history, notes, reminders, notifications, memory facts), DataStore settings, encrypted secrets | `:core` |
 | `:voice` | sherpa-onnx wrappers: `WakeWordDetector`, `Vad`, `SpeechToText`, `TextToSpeech`, `SpeakerVerifier`; audio focus | `:core` |
 | `:llm` | llama.cpp JNI (`LlamaEngine`), model loading/unloading, streaming tokens, GBNF grammar for JSON | `:core` |
 | `:brain` | `Router`, `RuleMatcher`, `ToolCaller` (FunctionGemma), `ChatResponder`, prompts, persona, memory retrieval, cloud providers | `:core`, `:llm`, `:data`, `:knowledge` |
-| `:actions` | Tool implementations: `RootShell` (libsu), `IntentActions`, `JarvisAccessibilityService`, `SystemActions`, `ScreenReader` | `:core`, `:data` |
-| `:notify` | `JarvisNotificationListener`, `NotificationClassifier`, triage rules, auto-clear + log | `:core`, `:data`, `:llm` |
+| `:actions` | Tool implementations: `RootShell` (libsu), `IntentActions`, `JimiAccessibilityService`, `SystemActions`, `ScreenReader` | `:core`, `:data` |
+| `:notify` | `JimiNotificationListener`, `NotificationClassifier`, triage rules, auto-clear + log | `:core`, `:data`, `:llm` |
 | `:knowledge` | `WebSearch`, `PageReader` (jsoup), `WikiOffline` (Kiwix ZIM), `Embedder` + chunk ranking (RAG) | `:core` |
-| `:service` | `JarvisCoreService`, boot receiver, proactive engine, routines engine, lock-screen overlay | most modules |
+| `:service` | `JimiCoreService`, boot receiver, proactive engine, routines engine, lock-screen overlay | most modules |
 | `training/` (not Gradle) | Python: dataset tools, fine-tune notebooks, eval, export GGUF | — |
 
 If a module feels too heavy early, it is OK to start inside `:app` with the same package names
@@ -48,7 +48,7 @@ and split later — but packages must match the module names above.
 
 ### As built (2026-10-22)
 One `:app` module, packages named like the modules above. Class map:
-- `service/JarvisCoreService` — mic loop: wake (`voice/WakeWordDetector`) → `voice/SpeechToText` session (1 s pre-roll,
+- `service/JimiCoreService` — mic loop: wake (`voice/WakeWordDetector`) → `voice/SpeechToText` session (1 s pre-roll,
   own end-of-speech D-027) → `brain/Assistant.handle()` → voice (`voice/TextToSpeech`, queue per sentence) + panel
   (`ui/AssistantActivity`) + quiet notification. Follow-up listening after a reply (D-028). "One moment" filler after 1.5 s.
   Voice ID score from the command audio when locked (`voice/SpeakerVerifier`, D-034). Watchdog alarm in `BootReceiver`.
@@ -56,7 +56,7 @@ One `:app` module, packages named like the modules above. Class map:
   (FunctionGemma, `llm/FunctionGemma` prompt + GBNF, D-030) → `CloudBrain` (optional, D-035) → `ModelBrain.chat` (Qwen3) → "can't".
   Every turn → `conversation_turn`; every tool → `tool_call_log`.
 - `actions/ToolExecutor` = SecurityGate (CONFIRM → yes/no; while locked CONFIRM becomes VOICE_ID; lockdown after panic).
-- `llm/Llama` — JNI to llama.cpp (`app/src/main/cpp/jarvis_llm.cpp`), prefix KV cache, grammar, streaming.
+- `llm/Llama` — JNI to llama.cpp (`app/src/main/cpp/jimi_llm.cpp`), prefix KV cache, grammar, streaming.
 - `training/toolcall/` — dataset, MLX fine-tune, eval for the tool caller (D-033). `training/wakeword/` — wake word.
 
 ## 4. Tool contract (shared by rules, LLM, cloud, training data)

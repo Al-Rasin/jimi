@@ -34,7 +34,7 @@ python3 training/toolcall/eval.py --bin <llama-completion> --model models/functi
     --context "time 2026-10-22 10:00:00"
 ```
 
-Push to the phone: `adb push models/functiongemma-270m-jarvis-v2-Q8_0.gguf /sdcard/Android/data/com.alrasin.jarvis/files/models/llm/`.
+Push to the phone: `adb push models/functiongemma-270m-jarvis-v2-Q8_0.gguf /sdcard/Android/data/com.alrasin.jimi/files/models/llm/`.
 
 Note: the prompt prefix must match the app exactly. If a tool, its description or args change, re-run all steps.
 

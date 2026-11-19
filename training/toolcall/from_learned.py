@@ -2,7 +2,7 @@
 
 Sources (any mix):
   --db      jarvis.db snapshot (training/notifications/export_db.py pulls it): app map, recipes, user fixes
-  --appmap  jarvis_appmap_*.json from Settings → export (app map only)
+  --appmap  jimi_appmap_*.json from Settings → export (app map only)
 
 Rows go to training/data/toolcall/learned.jsonl as {"text", "tool", "args"}; make_dataset.py --learned adds them.
 The app map does the screen work, so the model only learns to pick the task: "open X in Y" → app_go(app, target),

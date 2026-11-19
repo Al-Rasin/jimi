@@ -5,7 +5,7 @@ No downloads or execution of dataset code. Inputs may be JSONL, a JSON list, or
 a Hugging Face /rows response. Default mappings cover only Google's flashlight
 actions. Other functions require an explicit, human-reviewed --mapping JSON:
 {"search_web": {"tool": "web_search", "args": {"query": "query"}}}.
-Mapping keys are source function names; args map source keys to Jarvis keys.
+Mapping keys are source function names; args map source keys to Jimi keys.
 """
 
 import argparse

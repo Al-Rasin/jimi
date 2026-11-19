@@ -49,7 +49,7 @@ def main():
                 (native / Path(name).name).write_bytes(aar.read(name))
     android = str(sdk / "platforms/android-35/android.jar")
     cp = os.pathsep.join([stdlib, annotations, android, str(work / "sherpa.jar")])
-    voice = repo / "app/src/main/java/com/alrasin/jarvis/voice"
+    voice = repo / "app/src/main/java/com/alrasin/jimi/voice"
     run([str(java_home / "bin/java"), "-Xmx384m", "-cp", os.pathsep.join(compiler),
          "org.jetbrains.kotlin.cli.jvm.K2JVMCompiler", "-no-stdlib", "-no-reflect", "-jvm-target", "17",
          "-classpath", cp, "-d", str(work / "runner.jar"),
@@ -74,11 +74,11 @@ def main():
     for library in native.glob("*.so"):
         run(adb + ["push", str(library), remote + "/lib/"])
     run(adb + ["push", str(work / "runner-dex.jar"), remote + "/runner.jar"])
-    script = ("apk=$(pm path com.alrasin.jarvis | cut -d: -f2); "
+    script = ("apk=$(pm path com.alrasin.jimi | cut -d: -f2); "
               f"for f in encoder.onnx decoder.onnx joiner.onnx tokens.txt; do "
               f"unzip -p \"$apk\" assets/stt/\"$f\" > {remote}/model/\"$f\" || exit 1; done; "
               f"LD_LIBRARY_PATH={remote}/lib CLASSPATH={remote}/runner.jar "
-              f"app_process /system/bin com.alrasin.jarvis.eval.PhoneAccuracy {remote}")
+              f"app_process /system/bin com.alrasin.jimi.eval.PhoneAccuracy {remote}")
     result = run(adb + ["shell", "su -c " + shlex.quote(script)])
     (work / "aggregate.txt").write_text(result)
     print(result.strip())

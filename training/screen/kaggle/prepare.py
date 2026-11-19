@@ -58,7 +58,7 @@ def main():
     shutil.copyfile(SCREEN / "privacy.py", out / "privacy.py")
     (out / "run_mode.json").write_text(json.dumps({"mode": a.mode, "screens": len(rows)}))
     (out / "dataset-metadata.json").write_text(json.dumps(
-        {"title": "Jarvis screen teachers", "id": f"{a.owner}/{DATASET_SLUG}",
+        {"title": "Jimi screen teachers", "id": f"{a.owner}/{DATASET_SLUG}",
          "licenses": [{"name": "CC0-1.0"}], "isPrivate": True}, indent=2))
     print(f"{len(rows)} screens, {sum(len(r['template_goals']) for r in rows)} template goals -> {out}")
 

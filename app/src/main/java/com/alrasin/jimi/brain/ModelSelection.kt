@@ -1,0 +1,22 @@
+package com.alrasin.jimi.brain
+
+import com.alrasin.jimi.llm.ChatModels
+import java.io.File
+
+internal object ModelSelection {
+    fun fileFor(route: IntentRouter.Route, dir: File, selection: String = ChatModels.DEFAULT): File? {
+        if (route == IntentRouter.Route.WEB) return null
+        if (route == IntentRouter.Route.CHAT && selection == ChatModels.LFM) {
+            ChatModels.findLfm(dir)?.let { return it }
+        }
+        if (route == IntentRouter.Route.CHAT && selection == ChatModels.QWEN35) {
+            ChatModels.findQwen35(dir)?.let { return it }
+        }
+        val prefixes = if (route == IntentRouter.Route.CHAT) listOf("qwen3", "gemma-3")
+            else listOf("functiongemma")
+        return dir.listFiles().orEmpty()
+            .filter { it.isFile && it.extension.equals("gguf", ignoreCase = true) }
+            .sortedWith(compareBy<File>({ !(it.name.contains("jimi") || it.name.contains("jarvis")) }, { ChatModels.isQwen35(it.name) }))
+            .firstOrNull { file -> prefixes.any { file.name.startsWith(it, ignoreCase = true) } }
+    }
+}
