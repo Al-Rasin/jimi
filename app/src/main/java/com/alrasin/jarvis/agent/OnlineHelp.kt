@@ -1,5 +1,6 @@
 package com.alrasin.jarvis.agent
 
+import com.alrasin.jarvis.core.catching
 import com.alrasin.jarvis.actions.PhoneProfile
 import com.alrasin.jarvis.actions.Web
 import com.alrasin.jarvis.brain.CloudBrain
@@ -66,17 +67,17 @@ class OnlineHelp @Inject constructor(private val cloud: CloudBrain) {
     private val web = Web()
 
     /** True when a lookup can run now: cloud on, a key saved and the phone online. */
-    suspend fun available(): Boolean = runCatching { cloud.enabled() }.getOrDefault(false)
+    suspend fun available(): Boolean = catching { cloud.enabled() }.getOrDefault(false)
 
     /** Steps for [task] in [appName] / [pkg], or empty. Never throws; capped at ~25 s. */
     suspend fun lookup(task: String, appName: String, pkg: String): List<String> {
         if (PhoneProfile.isPaymentPackage(pkg) || !available()) return emptyList()
         val provider = cloud.provider() ?: return emptyList()
         return withTimeoutOrNull(25_000) {
-            runCatching {
+            catching {
                 val q = OnlineSteps.query(task, appName)
                 val sources = search(q)
-                if (sources.isEmpty()) return@runCatching emptyList()
+                if (sources.isEmpty()) return@catching emptyList()
                 val answer = provider.chat(OnlineSteps.SYSTEM, emptyList(), OnlineSteps.prompt(task, appName, sources))
                 OnlineSteps.steps(answer).also { JarvisLog.i("online help: \"$q\" → ${it.size} steps") }
             }.onFailure { JarvisLog.i("online help failed: ${it.message}") }.getOrNull()
@@ -94,7 +95,7 @@ class OnlineHelp @Inject constructor(private val cloud: CloudBrain) {
             Triple(a.text(), r.selectFirst(".result__snippet")?.text().orEmpty(), href)
         }.filter { it.third.startsWith("http") && !it.third.contains("duckduckgo.com/y.js") }.take(5)
         val top = results.firstOrNull()?.third?.let { url ->
-            runCatching {
+            catching {
                 val page = Jsoup.parse(web.get(url), url)
                 page.select("script,style,nav,header,footer,aside").remove()
                 page.select("h2, h3, p, li").joinToString("\n") { it.text() }.take(3_500)

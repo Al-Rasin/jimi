@@ -1,5 +1,6 @@
 package com.alrasin.jarvis.agent
 
+import com.alrasin.jarvis.core.catching
 import android.content.Context
 import com.alrasin.jarvis.actions.a11y.scroll
 import com.alrasin.jarvis.agent.appmap.AppCard
@@ -267,7 +268,7 @@ class RecipeStore @Inject constructor(
             val pkg = card.packages.firstOrNull { version(it) != null } ?: return@flatMap emptyList()
             RecipeBook.fromCard(card, pkg)
         }
-        val saved = runCatching { dao.all() }.getOrDefault(emptyList()).map { row ->
+        val saved = catching { dao.all() }.getOrDefault(emptyList()).map { row ->
             RecipeBook.fromRow(row, appCards.card(row.pkg)?.name ?: label(row.pkg))
         }
         return (saved + cards).filter { r ->

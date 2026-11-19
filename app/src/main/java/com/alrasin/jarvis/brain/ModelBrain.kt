@@ -1,5 +1,6 @@
 package com.alrasin.jarvis.brain
 
+import com.alrasin.jarvis.core.catching
 import android.content.Context
 import com.alrasin.jarvis.actions.ToolRegistry
 import com.alrasin.jarvis.core.JarvisLog
@@ -165,7 +166,7 @@ class ModelBrain @Inject constructor(
             if (tools.isEmpty()) { JarvisLog.i("llm tool skipped: no likely tool"); return@withModels null }
             val m = toolModel() ?: return@withModels null
             val t0 = System.currentTimeMillis()
-            val out = runCatching {
+            val out = catching {
                 val g = grammars.getOrPut(tools.map { it.name }) { FunctionGemma.grammar(tools) }
                 m.generate(FunctionGemma.prompt(tools, ctx, text), g, maxTokens = 80, stop = listOf("<end_function_call>", "<end_of_turn>"))
             }.onFailure { JarvisLog.e("tool model failed", it) }.getOrNull() ?: return@withModels null
@@ -232,7 +233,7 @@ class ModelBrain @Inject constructor(
                 var pieces = 0
                 var firstAt = 0L
                 var yielded = 0L
-                val out = runCatching {
+                val out = catching {
                     m.generate(prompt, null, maxTokens = 120, stop = listOf("<|im_end|>", "<end_of_turn>")) { p ->
                         pieces++
                         if (spoke) yielded += com.alrasin.jarvis.voice.SpeechGate.yieldToVoice()

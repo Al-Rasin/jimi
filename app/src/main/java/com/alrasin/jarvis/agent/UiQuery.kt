@@ -31,6 +31,9 @@ import kotlinx.coroutines.suspendCancellableCoroutine
  */
 object UiQuery {
 
+    /** Time for the target app to read the clipboard before the old clip is put back. */
+    private const val PASTE_SETTLE_MS = 300L
+
     /** One matching rule, tried in the order given to [find]. */
     sealed class Selector {
         data class Id(val resourceId: String) : Selector()
@@ -237,13 +240,18 @@ object UiQuery {
         return RootInput.text(text).ok
     }
 
-    private fun pasteViaClipboard(context: Context, node: AccessibilityNodeInfo, text: String): Boolean {
+    /** Pastes [text], then puts the user's old clipboard back (or clears it) so the message does not stay there. */
+    private suspend fun pasteViaClipboard(context: Context, node: AccessibilityNodeInfo, text: String): Boolean {
         if (!node.isEditable) return false
         val clipboard = context.getSystemService(ClipboardManager::class.java) ?: return false
+        val old = runCatching { clipboard.primaryClip }.getOrNull()
         clipboard.setPrimaryClip(ClipData.newPlainText("jarvis", text))
         node.performAction(AccessibilityNodeInfo.ACTION_CLICK)
         node.performAction(AccessibilityNodeInfo.ACTION_FOCUS)
-        return node.performAction(AccessibilityNodeInfo.ACTION_PASTE)
+        val ok = node.performAction(AccessibilityNodeInfo.ACTION_PASTE)
+        delay(PASTE_SETTLE_MS)
+        runCatching { if (old != null) clipboard.setPrimaryClip(old) else clipboard.clearPrimaryClip() }
+        return ok
     }
 
     /** ACTION_IME_ENTER → root keyevent 66 (KEYCODE_ENTER). */

@@ -1,5 +1,6 @@
 package com.alrasin.jarvis.agent.appmap
 
+import com.alrasin.jarvis.core.catching
 import android.content.Context
 import android.content.pm.ApplicationInfo
 import android.content.pm.PackageManager
@@ -37,7 +38,7 @@ class AppLearner @Inject constructor(
 
     /** Called after a window change or a click settled. */
     suspend fun onScreen(pkg: String, windowClass: String, nodes: List<ScreenStructure.RawNode>) = lock.withLock {
-        runCatching {
+        catching {
             val elements = ScreenStructure.elements(nodes)
             if (elements.isEmpty()) return@withLock
             val fp = AppFingerprint.compute(windowClass, ScreenStructure.parts(elements))
@@ -69,13 +70,13 @@ class AppLearner @Inject constructor(
     }
 
     /** Buttons the user said "yes, learn it" to for [pkg] (§J.7). */
-    suspend fun approvedLabels(pkg: String): Set<String> = runCatching {
+    suspend fun approvedLabels(pkg: String): Set<String> = catching {
         dao.asksFor(pkg).filter { it.status == AppAskQueue.APPROVED }.map { it.label }.toSet()
     }.getOrDefault(emptySet())
 
     /** Queue unknown buttons as questions. The unique row means a denied one is never asked again. */
     suspend fun queueAsks(pkg: String, screen: String, elements: List<ScreenStructure.Element>) {
-        runCatching {
+        catching {
             val now = System.currentTimeMillis()
             elements.forEach {
                 dao.insertAsk(AppAsk(pkg = pkg, label = it.label, role = it.role, screen = screen, status = AppAskQueue.PENDING, createdAt = now))
@@ -85,7 +86,7 @@ class AppLearner @Inject constructor(
 
     /** Save risky elements the explorer skipped, marked high, on the current screen. */
     suspend fun noteRisky(pkg: String, elements: List<ScreenStructure.Element>) = lock.withLock {
-        runCatching {
+        catching {
             val screen = lastScreen?.takeIf { lastPkg == pkg && elements.isNotEmpty() } ?: return@withLock
             val known = dao.elementsFor(screen).map { it.role to it.label }.toSet()
             elements.filter { (it.role to it.label) !in known }

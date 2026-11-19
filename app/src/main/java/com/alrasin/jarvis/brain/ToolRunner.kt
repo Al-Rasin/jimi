@@ -1,5 +1,6 @@
 package com.alrasin.jarvis.brain
 
+import com.alrasin.jarvis.core.catching
 import android.content.Context
 import com.alrasin.jarvis.actions.ContactResolver
 import com.alrasin.jarvis.actions.ScreenAsk
@@ -188,7 +189,7 @@ internal class ToolRunner(
 
     private suspend fun log(heard: String, call: ToolCall, source: String, r: ToolResult) {
         if (coroutineContext[SmokeSession] != null) return
-        runCatching {
+        catching {
             toolLog.insert(
                 ToolCallLog(
                     timeMs = System.currentTimeMillis(), heard = heard, tool = call.tool, argsJson = Json.write(call.args),

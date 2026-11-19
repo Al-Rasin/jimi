@@ -1,5 +1,6 @@
 package com.alrasin.jarvis.agent
 
+import com.alrasin.jarvis.core.catching
 import com.alrasin.jarvis.actions.PhoneProfile
 import com.alrasin.jarvis.core.JarvisLog
 import com.alrasin.jarvis.data.RecipeDao
@@ -264,7 +265,7 @@ class TeachSession @Inject constructor(private val dao: RecipeDao) {
 
     /** Taught recipe rows, cached; [refresh] after save / rename / delete. */
     suspend fun taught(): List<RecipeRow> =
-        taughtRows ?: runCatching { dao.all().filter { it.source == TeachBook.SOURCE } }.getOrDefault(emptyList()).also { taughtRows = it }
+        taughtRows ?: catching { dao.all().filter { it.source == TeachBook.SOURCE } }.getOrDefault(emptyList()).also { taughtRows = it }
 
     fun refresh() {
         taughtRows = null

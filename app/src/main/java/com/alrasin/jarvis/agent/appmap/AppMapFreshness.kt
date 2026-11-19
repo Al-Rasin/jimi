@@ -1,5 +1,6 @@
 package com.alrasin.jarvis.agent.appmap
 
+import com.alrasin.jarvis.core.catching
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
@@ -59,11 +60,11 @@ class AppMapFreshness @Inject constructor(
     }
 
     /** Compares every saved app with what is installed now. */
-    suspend fun reconcile() = runCatching {
+    suspend fun reconcile() = catching {
         dao.allInfoOnce().forEach { check(it.pkg, added = false) }
     }.onFailure { JarvisLog.e("app-map: reconcile failed: ${it.message}") }
 
-    private suspend fun check(pkg: String, added: Boolean) = runCatching {
+    private suspend fun check(pkg: String, added: Boolean) = catching {
         val pm = context.packageManager
         val pi = runCatching { pm.getPackageInfo(pkg, 0) }.getOrNull()
         val old = dao.info(pkg)
@@ -73,7 +74,7 @@ class AppMapFreshness @Inject constructor(
                 dao.putInfo(AppInfo(pkg, pi.longVersionCode, label, "unknown", source = "installed", lastLearned = 0))
                 JarvisLog.i("app-map: new app $pkg, not learned yet")
             }
-            return@runCatching
+            return@catching
         }
         when (SelfHeal.freshness(old.versionCode, pi?.longVersionCode)) {
             SelfHeal.Fresh.DELETE -> { dao.forgetApp(pkg); JarvisLog.i("app-map: $pkg removed, map deleted") }

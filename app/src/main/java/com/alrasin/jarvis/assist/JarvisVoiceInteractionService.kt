@@ -15,7 +15,9 @@ import com.alrasin.jarvis.service.JarvisCoreService
 import com.alrasin.jarvis.ui.MainActivity
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.flow.first
-import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.MainScope
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.launch
 import javax.inject.Inject
 
 /**
@@ -41,15 +43,25 @@ private class JarvisSession(
     private val service: VoiceInteractionSessionService,
     private val settings: Settings,
 ) : VoiceInteractionSession(service) {
+    private val scope = MainScope()
+
+    // Settings are read off the main thread's blocking path, so the assist gesture never freezes the UI.
     override fun onShow(args: Bundle?, showFlags: Int) {
         super.onShow(args, showFlags)
-        if (service.checkSelfPermission(Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED ||
-            !runBlocking { settings.setupComplete.first() }) {
-            startAssistantActivity(Intent(service, MainActivity::class.java))
-        } else {
-            JarvisCoreService.listen(service)
+        scope.launch {
+            if (service.checkSelfPermission(Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED ||
+                !settings.setupComplete.first()) {
+                startAssistantActivity(Intent(service, MainActivity::class.java))
+            } else {
+                JarvisCoreService.listen(service)
+            }
+            hide()
         }
-        hide()
+    }
+
+    override fun onDestroy() {
+        scope.cancel()
+        super.onDestroy()
     }
 }
 

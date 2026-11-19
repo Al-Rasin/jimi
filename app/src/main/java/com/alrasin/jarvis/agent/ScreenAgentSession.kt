@@ -1,5 +1,6 @@
 package com.alrasin.jarvis.agent
 
+import com.alrasin.jarvis.core.catching
 import android.content.Context
 import com.alrasin.jarvis.actions.Outcome
 import com.alrasin.jarvis.actions.PhoneProfile
@@ -109,7 +110,7 @@ class ScreenAgentSession @Inject constructor(
         val pkg = done.map { it.pkg }.firstOrNull { it.isNotBlank() && it != context.packageName } ?: return
         if (PhoneProfile.isPaymentPackage(pkg) || done.any { it.element?.password == true }) return
         val risky = confirmed || done.any { p -> p.element?.let { Skills.isRisky(it.text.ifBlank { it.description }) } == true }
-        runCatching {
+        catching {
             val pm = context.packageManager
             val version = pm.getPackageInfo(pkg, 0).longVersionCode
             val name = pm.getApplicationLabel(pm.getApplicationInfo(pkg, 0)).toString()
