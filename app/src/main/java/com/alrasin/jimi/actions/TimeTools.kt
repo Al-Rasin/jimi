@@ -1,5 +1,6 @@
 package com.alrasin.jimi.actions
 
+import android.accessibilityservice.AccessibilityService
 import android.app.AlarmManager
 import android.content.Context
 import android.content.Intent
@@ -62,7 +63,7 @@ fun timeTools(context: Context): List<Tool> = listOf(
         val rows = ClockDb.enabledRowsOrNull() ?: return@SimpleTool ToolResult.fail("I can't read the Clock alarms right now.")
         ToolResult.ok(alarmSummary(rows, LocalTime.now()))
     },
-    SimpleTool(
+    clockTool(
         "set_alarm", "Set an alarm",
         listOf(
             arg("time", "24h time HH:mm, e.g. 07:30"),
@@ -75,9 +76,9 @@ fun timeTools(context: Context): List<Tool> = listOf(
         val plan = try {
             resolveAlarm(time, c.arg("date"), c.arg("repeat"), LocalDateTime.now())
         } catch (e: NumberFormatException) {
-            return@SimpleTool ToolResult.fail("I couldn't read that alarm time. Say it like 7:30 AM.")
+            return@clockTool ToolResult.fail("I couldn't read that alarm time. Say it like 7:30 AM.")
         } catch (e: IllegalArgumentException) {
-            return@SimpleTool ToolResult.fail(e.message ?: "I couldn't resolve that alarm time.")
+            return@clockTool ToolResult.fail(e.message ?: "I couldn't resolve that alarm time.")
         }
         val h = plan.at.hour
         val m = plan.at.minute
@@ -88,7 +89,7 @@ fun timeTools(context: Context): List<Tool> = listOf(
         c.arg("label")?.let { i.putExtra(AlarmClock.EXTRA_MESSAGE, it) }
         val days = plan.days
         if (days != null) i.putExtra(AlarmClock.EXTRA_DAYS, ArrayList(days))
-        if (!context.launchClock(i)) return@SimpleTool ToolResult.fail("The clock app didn't take the alarm.")
+        if (!context.launchClock(i)) return@clockTool ToolResult.fail("The clock app didn't take the alarm.")
         val expected = plan.at.atZone(ZoneId.systemDefault()).toInstant().toEpochMilli()
         var seen: Long? = null
         val check: (Long?) -> Boolean = { next -> seen = next; matchesAlarmMinute(next, expected) }
@@ -101,41 +102,41 @@ fun timeTools(context: Context): List<Tool> = listOf(
         if (!verified) verified = clockHasAlarm(expected)
         if (!verified) {
             JimiLog.e("set_alarm: Clock request sent, but the requested alarm could not be confirmed (next=$seen)")
-            return@SimpleTool ToolResult.ok("I asked Clock to set ${plan.at.format(ALARM_DATE_FORMAT)}, but could not verify it. Please check Clock.")
+            return@clockTool ToolResult.ok("I asked Clock to set ${plan.at.format(ALARM_DATE_FORMAT)}, but could not verify it. Please check Clock.")
         }
         val repeatReply = if (plan.days != null) " I requested${plan.repeatText.removePrefix(",")}." else ""
         ToolResult.ok("Alarm set for ${plan.at.format(ALARM_DATE_FORMAT)}.$repeatReply")
     },
-    SimpleTool("set_timer", "Start a countdown timer", listOf(arg("seconds", "length in seconds"), arg("label", "name", required = false))) { c, _ ->
+    clockTool("set_timer", "Start a countdown timer", listOf(arg("seconds", "length in seconds"), arg("label", "name", required = false))) { c, _ ->
         val secs = parseTimerSeconds(c.arg("seconds"))
-            ?: return@SimpleTool ToolResult.fail("For how long? Use a positive whole number of seconds.")
+            ?: return@clockTool ToolResult.fail("For how long? Use a positive whole number of seconds.")
         val i = Intent(AlarmClock.ACTION_SET_TIMER)
             .putExtra(AlarmClock.EXTRA_LENGTH, secs)
             .putExtra(AlarmClock.EXTRA_SKIP_UI, true)
         c.arg("label")?.let { i.putExtra(AlarmClock.EXTRA_MESSAGE, it) }
         val end = System.currentTimeMillis() + secs * 1000L
-        if (!context.launchClock(i)) return@SimpleTool ToolResult.fail("The clock app didn't take the timer.")
+        if (!context.launchClock(i)) return@clockTool ToolResult.fail("The clock app didn't take the timer.")
         // Clock schedules a running timer as an alarm clock, so the next alarm shows it unless an alarm comes first.
         var seen: Long? = null
         val verified = awaitAlarmState(context) { next -> seen = next; next != null && abs(next - end) <= TIMER_SLACK_MS }
         JimiLog.i("set_timer: verified=$verified next=$seen end=$end")
         if (!verified && seen.let { it == null || it > end + TIMER_SLACK_MS }) {
-            return@SimpleTool ToolResult.ok("I asked Clock to start a ${speakDuration(secs)} timer, but could not verify it. Please check Clock.")
+            return@clockTool ToolResult.ok("I asked Clock to start a ${speakDuration(secs)} timer, but could not verify it. Please check Clock.")
         }
         timerSetResult(secs)
     },
-    SimpleTool(
+    clockTool(
         "cancel_alarm", "Turn off alarms and timers; time=HH:mm (24h) turns off only that alarm",
         listOf(
             arg("time", "24h HH:mm of the one alarm to turn off", required = false),
             arg("only", "timer = stop timers only, keep alarms", required = false),
         ),
     ) { c, _ ->
-        if (c.arg("only") == "timer") return@SimpleTool cancelTimers(context)
+        if (c.arg("only") == "timer") return@clockTool cancelTimers(context)
         c.arg("time")?.takeIf { it.isNotBlank() }?.let { time ->
             // A time was asked for: never fall through to "cancel all" when it can't be read.
-            val at = alarmTime(time) ?: return@SimpleTool ToolResult.fail("Which alarm? Say its time, like 7:30 AM.")
-            return@SimpleTool cancelOneAlarm(context, at)
+            val at = alarmTime(time) ?: return@clockTool ToolResult.fail("Which alarm? Say its time, like 7:30 AM.")
+            return@clockTool cancelOneAlarm(context, at)
         }
         val alarmsSent = context.launchClock(Intent(AlarmClock.ACTION_DISMISS_ALARM)
             .putExtra(AlarmClock.EXTRA_ALARM_SEARCH_MODE, AlarmClock.ALARM_SEARCH_MODE_ALL))
@@ -154,7 +155,7 @@ fun timeTools(context: Context): List<Tool> = listOf(
             noNextAlarm = left.isEmpty() && awaitClockIdle(context, tries = 20)
         }
         JimiLog.i("cancel_alarm: no next alarm confirmed=$noNextAlarm")
-        if (!alarmsSent && !noNextAlarm) return@SimpleTool ToolResult.fail("The clock didn't accept the turn-off request. Check the Clock app.")
+        if (!alarmsSent && !noNextAlarm) return@clockTool ToolResult.fail("The clock didn't accept the turn-off request. Check the Clock app.")
         cancelAlarmResult(noNextAlarm)
     },
 )
@@ -208,7 +209,11 @@ private suspend fun clockHasAlarm(at: Long): Boolean {
 
 /** A running Clock timer is a TIMER_ALERT alarm (root only; false without root). */
 private suspend fun timerRunning(): Boolean =
-    RootShell.run("dumpsys alarm | grep -c TIMER_ALERT", log = false).out.trim().toIntOrNull()?.let { it > 0 } == true
+    pendingTimerAlert(RootShell.run("dumpsys alarm", log = false).out)
+
+/** Only the pending list counts; the stats part below keeps timers that already rang. */
+internal fun pendingTimerAlert(dump: String): Boolean =
+    dump.substringBefore("Pending alarms per uid").substringBefore("Top Alarms").contains("TIMER_ALERT")
 
 /** Opens the Clock timer tab and taps its stop button (bottom left on MIUI Clock). Best try. */
 private suspend fun stopTimerInClock(context: Context) {
@@ -232,7 +237,8 @@ internal fun timerSetResult(seconds: Int): ToolResult =
 private suspend fun cancelTimers(context: Context): ToolResult {
     val sent = context.launchClock(Intent(AlarmClock.ACTION_DISMISS_TIMER))
     if (timerRunning()) stopTimerInClock(context)
-    val stillRunning = timerRunning()
+    // Clock drops the timer alarm a moment after the tap.
+    val stillRunning = !pollUntil(tries = 6, pauseMs = 300) { !timerRunning() }
     JimiLog.i("cancel_alarm: timers only, request=$sent still running=$stillRunning")
     return if (stillRunning) ToolResult.fail("I couldn't stop the timer. Check the Clock app.")
     else ToolResult.ok("Okay, the timer is off.")
@@ -368,3 +374,40 @@ internal fun rowsAt(rows: List<ClockDb.Row>, time: LocalTime): List<ClockDb.Row>
 
 private fun isAt(triggerMillis: Long?, time: LocalTime): Boolean = triggerMillis != null &&
     LocalDateTime.ofInstant(java.time.Instant.ofEpochMilli(triggerMillis), ZoneId.systemDefault()).toLocalTime().withSecond(0).withNano(0) == time
+
+/** A Clock tool that brings the user back if MIUI Clock jumps to the front (it ignores EXTRA_SKIP_UI). */
+private fun clockTool(
+    name: String,
+    description: String,
+    args: List<com.alrasin.jimi.core.ArgSpec> = emptyList(),
+    block: suspend (com.alrasin.jimi.core.ToolCall, com.alrasin.jimi.core.ToolContext) -> ToolResult,
+) = SimpleTool(name, description, args) { c, x ->
+    // MIUI drops the accessibility service at times (e.g. after an update); it is needed to come back.
+    if (JimiAccessibilityService.instance == null) reviveScreen()
+    val before = foregroundPackage()
+    val result = block(c, x)
+    leaveClockIfItJumped(before)
+    result
+}
+
+/** Top app window's package, Jimi included (agentRoot skips Jimi). */
+private fun foregroundPackage(): String? {
+    val service = JimiAccessibilityService.instance ?: return null
+    val top = service.windows.filter { it.type == android.view.accessibility.AccessibilityWindowInfo.TYPE_APPLICATION }
+        .maxByOrNull { it.layer }
+    return (top?.root ?: service.rootInActiveWindow)?.packageName?.toString()
+}
+
+internal fun clockJumpedToFront(before: String?, now: String?): Boolean =
+    now != null && now != before && CLOCK_PACKAGES.any { now == it }
+
+private val CLOCK_PACKAGES = listOf("com.android.deskclock", "com.google.android.deskclock", "com.sec.android.app.clockpackage")
+
+private suspend fun leaveClockIfItJumped(before: String?) {
+    val service = JimiAccessibilityService.instance ?: return JimiLog.i("Clock: no screen control, can't come back")
+    // Clock opens a little after the intent, so look for a short while.
+    val jumped = pollUntil(tries = 6, pauseMs = 250) { clockJumpedToFront(before, foregroundPackage()) }
+    if (!jumped) return JimiLog.i("Clock stayed behind (before=$before)")
+    service.global(AccessibilityService.GLOBAL_ACTION_BACK)
+    JimiLog.i("Clock jumped to front over $before; pressed back")
+}

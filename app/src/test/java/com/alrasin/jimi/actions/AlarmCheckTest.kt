@@ -52,4 +52,19 @@ class AlarmCheckTest {
             assertNull(value, parseTimerSeconds(value))
         }
     }
+
+    @Test
+    fun clockJumpOnlyWhenClockNewlyOnTop() {
+        assertTrue(clockJumpedToFront("com.alrasin.jimi", "com.android.deskclock"))
+        assertFalse(clockJumpedToFront("com.android.deskclock", "com.android.deskclock"))
+        assertFalse(clockJumpedToFront("com.alrasin.jimi", "com.alrasin.jimi"))
+        assertFalse(clockJumpedToFront("com.alrasin.jimi", null))
+    }
+
+    @Test
+    fun timerAlertInStatsIsNotRunning() {
+        val dump = "Pending alarm batches: 2\n  RTC_WAKEUP foo\n  Pending alarms per uid: []\n  Alarm Stats:\n *walarm*:com.android.deskclock.TIMER_ALERT"
+        assertFalse(pendingTimerAlert(dump))
+        assertTrue(pendingTimerAlert("Pending alarm batches: 1\n tag=*walarm*:com.android.deskclock.TIMER_ALERT\n Pending alarms per uid: []"))
+    }
 }
