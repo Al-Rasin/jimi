@@ -101,6 +101,20 @@ class DataToolsMemoryTest {
         assertEquals(setOf("I like tea", "My car is blue"), memory.all().map { it.text }.toSet())
     }
 
+    @Test fun recallAboutAnswersTheMatchingFactOnly() = runBlocking {
+        val memory = FakeMemoryDao(listOf(
+            MemoryFact(id = 1, timeMs = 1, text = "My car is blue"),
+            MemoryFact(id = 2, timeMs = 2, text = "My car is parked on level 2"),
+            wifi,
+        ))
+        val recall = tools(memory).single { it.name == "recall_facts" }
+        val ctx = ToolContext(ContextWrapper(null), "where did i park", false)
+        assertEquals("You told me: My car is parked on level 2.", recall.run(ToolCall("recall_facts", mapOf("about" to "where parked car")), ctx).say)
+        val empty = FakeMemoryDao(listOf(wifi))
+        val none = tools(empty).single { it.name == "recall_facts" }.run(ToolCall("recall_facts", mapOf("about" to "where parked car")), ctx)
+        assertEquals("I don't remember that. Tell me and I'll keep it.", none.say)
+    }
+
     @Test fun staleReferentDoesNotDeleteAnotherFact() = runBlocking {
         val memory = FakeMemoryDao(listOf(wifi, birthday))
         assertFalse(forget(memory, "that", 999).ok)

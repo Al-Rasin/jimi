@@ -9,7 +9,8 @@ private val CLEAN_RE = Regex("[^a-z' ]")
 private val SMALL_TALK_RE = Regex("(hi|hello|hey|yo|hii|helo|salam|assalamualaikum|assalamu alaikum)( there| jimi)?")
 private val SMALL_TALK_RE_2 = Regex("good (afternoon|evening)")
 private val SMALL_TALK_RE_3 = Regex("how are you( doing)?|hows it going|how do you do|whats up|sup")
-private val SMALL_TALK_RE_4 = Regex("(who|what) are you|whats your name|your name|introduce yourself")
+private val SMALL_TALK_RE_4 = Regex("(who|what) are you|whats your name|your name|introduce yourself|(tell me |talk )?(more )?about (yourself|you)")
+private val MAKER_RE = Regex("who (made|created|built|programmed|designed|trained) you|who is your (creator|maker|developer|owner)|where (are|do) you (from|come from)")
 private val SMALL_TALK_RE_5 = Regex("(thank you|thanks|thank u|thx|great|good job|nice|well done|awesome|perfect)( very much| so much| a lot)?( jimi)?")
 private val SMALL_TALK_RE_6 = Regex("(are you there|you there|can you hear me|are you listening)")
 private val SMALL_TALK_RE_7 = Regex("(bye|goodbye|see you|later|see ya)")
@@ -95,6 +96,7 @@ object Persona {
             t.matches(SMALL_TALK_RE_6) -> "I'm here, $ADDRESS."
             t.matches(SMALL_TALK_RE_7) -> "Bye, $ADDRESS."
             t.matches(SMALL_TALK_RE_8) -> JOKES.random()
+            t.matches(MAKER_RE) -> "I was built just for you and this phone, $ADDRESS. I run right here, even offline."
             t.matches(AGE_RE) -> "I'm new, $ADDRESS. I get a little better every update."
             t.matches(LOVE_RE) -> "That's kind, $ADDRESS. I'm always here for you."
             t.matches(COIN_RE) -> if (Random.nextBoolean()) "Heads." else "Tails."

@@ -124,6 +124,9 @@ class RingerAndStatusTest {
         assertEquals(status("memory"), RuleMatcher.match("how much ram is free"))
         assertEquals(status("memory"), RuleMatcher.match("is my memory full"))
         assertEquals("recall_facts", RuleMatcher.match("what do you remember about me")?.tool)
+        for (q in listOf("where did i park", "where is my car parked", "where did I park my car?", "where's my bike")) {
+            assertEquals(q, mapOf("about" to "where parked car"), RuleMatcher.match(q)?.takeIf { it.tool == "recall_facts" }?.args)
+        }
         assertEquals(status("battery"), RuleMatcher.match("is my phone charging"))
     }
 }
@@ -140,5 +143,28 @@ class EverydayGapsTest {
         assert(Persona.smallTalk("roll a dice", 10)!!.startsWith("You rolled a "))
         assert(Persona.smallTalk("how old are you", 10)!!.startsWith("I'm new"))
         assert(Persona.smallTalk("i love you", 10) != null)
+    }
+}
+
+class StatusAndSelfTalkTest {
+    @Test fun askingIfAToggleIsOnOnlyReadsIt() {
+        for ((q, target) in listOf(
+            "is wifi on" to "wifi", "is bluetooth turned off" to "bluetooth", "is the flashlight on" to "flashlight",
+            "what wifi am i connected to" to "wifi", "am i connected to wifi" to "wifi",
+        )) {
+            assertEquals(q, ToolCall("toggle", mapOf("target" to target, "state" to "status")), RuleMatcher.match(q))
+        }
+        assertEquals("on", RuleMatcher.match("turn wifi on")?.args?.get("state"))
+    }
+    @Test fun selfAndMakerQuestionsStayInSmallTalk() {
+        for (q in listOf("tell me about yourself", "who are you")) {
+            assertEquals(q, "I'm Jimi, your phone assistant.", Persona.smallTalk(q, 10))
+            assertEquals(q, null, RuleMatcher.match(q)?.takeIf { it.tool == "wiki_lookup" })
+        }
+        assert(Persona.smallTalk("who made you", 10)!!.startsWith("I was built just for you"))
+        assertEquals("wiki_lookup", RuleMatcher.match("tell me about the moon")?.tool)
+    }
+    @Test fun stopwatchOpensClock() {
+        assertEquals(ToolCall("open_app", mapOf("app" to "clock")), RuleMatcher.match("start a stopwatch"))
     }
 }

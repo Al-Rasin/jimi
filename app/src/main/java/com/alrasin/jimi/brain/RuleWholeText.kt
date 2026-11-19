@@ -68,6 +68,12 @@ internal val KNOWLEDGE_WHOLE_RE_4 = Regex("^(?:(?:so )?what (?:all |else )?(?:(?
 internal val KNOWLEDGE_WHOLE_RE_5 = Regex("^(?:where am i(?: right)?(?: now)?|(?:whats|what is|tell me|show me) my (?:current )?location|my (?:current )?location|where are we(?: now)?)$")
 internal val KNOWLEDGE_WHOLE_RE_6 = Regex("^(?:(?:will|is) it (?:going to )?rain(?: today| tomorrow)?|do i need an umbrella(?: today)?|how (?:hot|cold) is it(?: today| outside)?|temperature(?: outside)?|whats the temperature(?: outside)?)$")
 internal val MEMORY_WHOLE_RE = Regex("^(?:what do you (?:remember|know)(?: about me)?|what (?:have|did) you (?:remembered|remember|learned)(?: about me)?|(?:list|show|tell me)(?: my| your)? (?:facts|memories))$")
+/** "is wifi on", "is bluetooth turned off", "what wifi am i connected to": read only. Group 1 = the feature name. */
+internal val TOGGLE_STATUS_RE = Regex("^(?:(?:is|are) (?:the |my )?(.+?) (?:turned |switched )?(?:on|off|enabled|disabled|working|connected)(?: now| right now)?|what (wifi|wi fi|bluetooth) (?:am i|is my phone|is the phone) connected to|(?:am i|is my phone|is the phone) connected to (wifi|wi fi|bluetooth))$")
+internal val STOPWATCH_RE = Regex("^(?:(?:start|open|show|begin|run) (?:a |the |my )?stop ?watch|stop ?watch)$")
+internal val SELF_TOPIC_RE = Regex("^(?:tell me |talk )?(?:more )?about (?:yourself|you|jimi|jimmy)$|^(?:who|what) (?:is|are) (?:you|jimi|jimmy)$")
+/** "where did i park", "where is my car parked": answered from a remembered fact, not the slow model. */
+internal val PARKED_WHOLE_RE = Regex("^(?:where did i (?:park|leave)(?: (?:my|the) (?:car|bike|scooter|motorbike))?|where(?: is|s| s) my (?:car|bike|scooter|motorbike)(?: parked)?|where (?:is|was) (?:my|the) (?:car|bike) parked)$")
 internal val APP_MAP_WHOLE_RE = Regex("^(?:(?:do you have |you have )?any (?:app )?questions(?: for me)?|what (?:do you )?(?:want|need) to ask(?: me)?|(?:show |open )?(?:the )?permission queue|ask (?:me )?your questions?)$")
 internal val APP_MAP_WHOLE_RE_2 = Regex("^(?:(?:yes|yeah|ok|sure),? (?:learn|tap|try) it|yes you (?:can|may)(?: tap it)?|(?:you can|you may) tap it)$")
 internal val APP_MAP_WHOLE_RE_3 = Regex("^(?:(?:no|nope),? (?:skip|leave) it|(?:dont|do not) (?:learn|tap|touch) (?:it|that))$")

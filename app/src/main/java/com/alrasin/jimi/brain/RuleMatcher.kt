@@ -96,6 +96,13 @@ object RuleMatcher {
     private fun toggle(t: String): ToolCall? {
         if (TOGGLE_RE.containsMatchIn(t)) return null
         if (t == "on flushed light") return call("toggle", "target" to "flashlight", "state" to "on")
+        // "is wifi on?" asks; it must never switch anything
+        TOGGLE_STATUS_RE.matchEntire(t)?.let { m ->
+            val name = m.groupValues.drop(1).first { it.isNotEmpty() }
+            // battery saver status already has its own "setting" answer
+            TOGGLE_TARGETS.entries.filter { it.key != "battery_saver" }.firstOrNull { (_, names) -> names.any { Regex("^(?:$it)$").matches(name) } }
+                ?.let { return call("toggle", "target" to it.key, "state" to "status") }
+        }
         if (t.matches(SILENT_PHONE_RE)) return call("toggle", "target" to "dnd", "state" to "on")
         if (t.matches(VIBRATE_PHONE_RE)) return call("toggle", "target" to "vibrate", "state" to "on")
         if (t.matches(RING_PHONE_RE)) return call("toggle", "target" to "vibrate", "state" to "off")
@@ -317,6 +324,8 @@ object RuleMatcher {
             ?.let { return call("news", "topic" to it.groupValues[1]) }
         KNOWLEDGE_RE_3.find(t)
             ?.let { if (!t.startsWith("find my")) return call("web_search", "query" to it.groupValues[1]) }
+        // "tell me about yourself" is small talk, not an encyclopedia topic
+        if (t.matches(SELF_TOPIC_RE)) return null
         KNOWLEDGE_RE_4.find(t)
             ?.let { return call("wiki_lookup", "topic" to it.groupValues[1].replace(WIKI_TAIL_RE, "")) }
         KNOWLEDGE_RE_5.find(t)?.let { return call("wiki_lookup", "topic" to it.groupValues[1].replace(WIKI_TAIL_RE, "")) }
@@ -380,6 +389,7 @@ object RuleMatcher {
     /** [raw] keeps words polite() drops ("jimi", "just", "now"), so "remember jimi means my assistant" saves it all (§M.10). */
     private fun memory(t: String, raw: String = t): ToolCall? {
         if (t.matches(MEMORY_WHOLE_RE)) return call("recall_facts")
+        if (t.matches(PARKED_WHOLE_RE)) return call("recall_facts", "about" to "where parked car")
         MEMORY_RE.find(t)?.let {
             if (it.groupValues[1].startsWith("to ")) return null   // "remember to buy milk" = reminder, handled by LLM/chat
             val whole = MEMORY_RE_2.find(raw)
@@ -423,6 +433,8 @@ object RuleMatcher {
     }
 
     private fun apps(t: String): ToolCall? {
+        // No stopwatch tool; the Clock app has one, so open it rather than search for an app named "a stopwatch".
+        if (t.matches(STOPWATCH_RE)) return call("open_app", "app" to "clock")
         APPS_RE.find(t)
             ?.let { return call("close_app", "app" to it.groupValues[1]) }
         APPS_RE_2.find(t)

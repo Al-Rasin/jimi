@@ -109,8 +109,14 @@ fun dataTools(
             if (lastFactId == candidate.memory.id) lastFactId = null
             ToolResult.ok("Forgotten: ${candidate.memory.text}.", Json.write(mapOf("id" to candidate.memory.id, "text" to candidate.memory.text)))
         },
-        SimpleTool("recall_facts", "What Jimi remembers") { _, _ ->
+        SimpleTool("recall_facts", "What Jimi remembers", listOf(arg("about", "topic to look up, optional", required = false))) { c, _ ->
             val all = tidyFacts(memory)
+            c.arg("about")?.let { about ->
+                val hit = MemoryRetriever.retrieve(about, all.map { MemoryRetriever.Memory(it.id, it.text, it.timeMs) }, topK = 1)
+                    .firstOrNull() ?: return@SimpleTool ToolResult.ok("I don't remember that. Tell me and I'll keep it.")
+                lastFactId = hit.id
+                return@SimpleTool ToolResult.ok("You told me: ${hit.text}.")
+            }
             lastFactId = all.singleOrNull()?.id
             if (all.isEmpty()) ToolResult.ok("I don't remember anything yet.")
             else ToolResult.ok("I remember: " + all.take(5).joinToString(". ") { it.text } + ".", all.joinToString("\n") { "• ${it.text}" })
