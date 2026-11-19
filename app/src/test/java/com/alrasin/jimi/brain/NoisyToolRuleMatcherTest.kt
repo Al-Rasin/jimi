@@ -188,3 +188,15 @@ class FillerAndAmountTest {
         assertEquals("read_messages", RuleMatcher.match("unread messages")?.tool)
     }
 }
+
+class AlarmNoteRotateHeatTest {
+    @Test fun phrasesMapToTheRightTool() {
+        assertEquals("list_alarms", RuleMatcher.match("what time is my alarm")?.tool)
+        assertEquals(ToolCall("create_note", mapOf("text" to "milk")), RuleMatcher.match("add milk to my notes"))
+        assertEquals(ToolCall("set_brightness", mapOf("level" to "100")), RuleMatcher.match("set brightness to max"))
+        assertEquals(ToolCall("toggle", mapOf("target" to "auto_rotate", "state" to "on")), RuleMatcher.match("rotate the screen"))
+        assertEquals(ToolCall("toggle", mapOf("target" to "auto_rotate", "state" to "off")), RuleMatcher.match("lock rotation"))
+        assertEquals(ToolCall("device_status", mapOf("what" to "temperature")), RuleMatcher.match("is my phone hot"))
+        assertEquals(ToolCall("device_status", mapOf("what" to "temperature")), RuleMatcher.match("phone temperature"))
+    }
+}

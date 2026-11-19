@@ -23,6 +23,8 @@ internal val TIME_RE_8 = Regex("\\b(?:called|named|labelled|labeled|for) ([a-z ]
 internal val TIME_RE_9 = Regex(".*\\d.*|tomorrow|today|tonight")
 internal val TIME_RE_10 = Regex("(?:at )?(1[0-2]|[1-9])(?: (\\d{2}))?(?: o clock)?")
 internal val NOTES_RE = Regex("^(?:take|make|create|add|write|save) (?:a |an )?(?:new )?note(?: that| saying| to say| about)?:? (.+)$")
+// "add milk to my notes"
+internal val NOTES_INTO_RE = Regex("^(?:add|put|write|save) (.+?) (?:to|in|on|into) (?:my |the )?notes?$")
 internal val NOTES_RE_2 = Regex("^(?:note|note down|write down|jot down)(?: that)? (.+)$")
 internal val NOTES_RE_3 = Regex("^(?:delete|remove|cancel|clear) (?:the |my )?(all )?reminders?(?: (?:to|about|for) (.+))?$")
 internal val NOTES_RE_4 = Regex("^(?:remind me|(?:set|create|add|make) (?:a |an )?(?:new )?reminder|reminder)(?:(?: to| that| about| for)(?= ))?(.*)$")

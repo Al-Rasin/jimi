@@ -89,6 +89,8 @@ object RuleMatcher {
 
     private fun talk(t: String): ToolCall? = when {
         t.matches(re(PANIC)) -> call("panic")
+        // before comms: "phone temperature" is not "phone <contact>"
+        t.matches(TEMPERATURE_RE) -> call("device_status", "what" to "temperature")
         t.matches(TALK_WHOLE_RE) -> call("cancel")
         t.matches(TALK_WHOLE_RE_2) -> call("cancel")
         t.matches(TALK_WHOLE_RE_3) -> call("repeat_last")
@@ -250,6 +252,8 @@ object RuleMatcher {
             t.matches(SYSTEM_WHOLE_RE_5) -> return call("set_brightness", "level" to "auto")
             t.matches(SYSTEM_WHOLE_RE_6) -> return call("device_status", "what" to "time")
             t.matches(SYSTEM_WHOLE_RE_7) -> return call("device_status", "what" to "date")
+            t.matches(ROTATE_ON_RE) -> return call("toggle", "target" to "auto_rotate", "state" to "on")
+            t.matches(ROTATE_OFF_RE) -> return call("toggle", "target" to "auto_rotate", "state" to "off")
             t.matches(SYSTEM_WHOLE_RE_8) -> return call("device_status", "what" to "battery")
             t.matches(SYSTEM_WHOLE_RE_9) -> return call("device_status", "what" to "storage")
             t.matches(SYSTEM_TOMORROW_RE) -> return call("device_status", "what" to "tomorrow")

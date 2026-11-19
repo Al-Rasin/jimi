@@ -20,7 +20,50 @@ object QuickFacts {
     fun answer(input: String, now: ZonedDateTime = ZonedDateTime.now()): String? {
         val t = prepare(input)
         if (t.isEmpty()) return null
-        return worldTime(t, now) ?: units(t) ?: dates(t, now.toLocalDate())
+        return worldTime(t, now) ?: units(t) ?: dates(t, now.toLocalDate()) ?: spell(t) ?: capital(t)
+    }
+
+    // ---- spelling ----
+
+    private val SPELL = Regex("^(?:how (?:do|does|would) (?:you|i|one) spell|how is|can you spell|please spell|spell|spelling of|whats the spelling of|what is the spelling of) ([a-z]{2,24})(?: spelled| spelt)?$")
+
+    /** "how do you spell necessary": speech-to-text already wrote the word right, so read its letters. */
+    private fun spell(t: String): String? {
+        val m = SPELL.matchEntire(t) ?: return null
+        val w = m.groupValues[1]
+        if (t.startsWith("how is ") && !t.endsWith(" spelled") && !t.endsWith(" spelt")) return null
+        return "${w.replaceFirstChar { it.uppercase() }} is spelled ${w.uppercase().toList().joinToString("-")}."
+    }
+
+    // ---- capitals (the small model often gets these wrong) ----
+
+    private val CAPITALS = mapOf(
+        "bangladesh" to "Dhaka", "india" to "New Delhi", "pakistan" to "Islamabad", "nepal" to "Kathmandu",
+        "bhutan" to "Thimphu", "sri lanka" to "Colombo", "myanmar" to "Naypyidaw", "china" to "Beijing",
+        "japan" to "Tokyo", "south korea" to "Seoul", "north korea" to "Pyongyang", "thailand" to "Bangkok",
+        "malaysia" to "Kuala Lumpur", "indonesia" to "Jakarta", "philippines" to "Manila", "vietnam" to "Hanoi",
+        "singapore" to "Singapore", "afghanistan" to "Kabul", "iran" to "Tehran", "iraq" to "Baghdad",
+        "saudi arabia" to "Riyadh", "uae" to "Abu Dhabi", "united arab emirates" to "Abu Dhabi", "qatar" to "Doha",
+        "kuwait" to "Kuwait City", "oman" to "Muscat", "turkey" to "Ankara", "egypt" to "Cairo", "israel" to "Jerusalem",
+        "palestine" to "Ramallah", "syria" to "Damascus", "jordan" to "Amman", "lebanon" to "Beirut",
+        "russia" to "Moscow", "ukraine" to "Kyiv", "uk" to "London", "united kingdom" to "London",
+        "england" to "London", "france" to "Paris", "germany" to "Berlin", "italy" to "Rome", "spain" to "Madrid",
+        "portugal" to "Lisbon", "netherlands" to "Amsterdam", "belgium" to "Brussels", "switzerland" to "Bern",
+        "austria" to "Vienna", "sweden" to "Stockholm", "norway" to "Oslo", "denmark" to "Copenhagen",
+        "finland" to "Helsinki", "poland" to "Warsaw", "greece" to "Athens", "ireland" to "Dublin",
+        "usa" to "Washington, D.C.", "america" to "Washington, D.C.", "united states" to "Washington, D.C.",
+        "canada" to "Ottawa", "mexico" to "Mexico City", "brazil" to "Brasilia", "argentina" to "Buenos Aires",
+        "australia" to "Canberra", "new zealand" to "Wellington", "south africa" to "Pretoria", "nigeria" to "Abuja",
+        "kenya" to "Nairobi", "ethiopia" to "Addis Ababa", "morocco" to "Rabat", "maldives" to "Male",
+    )
+    private val CAPITAL = Regex("^(?:whats |what is |tell me |which is |which city is )?(?:the )?capital (?:city )?of (?:the )?([a-z ]+?)$|^([a-z ]+?)s capital(?: city)?$")
+
+    private fun capital(t: String): String? {
+        val m = CAPITAL.matchEntire(t) ?: return null
+        val place = m.groupValues[1].ifEmpty { m.groupValues[2] }
+        val city = CAPITALS[place] ?: return null
+        val name = if (place.length <= 3) place.uppercase() else place.split(" ").joinToString(" ") { it.replaceFirstChar(Char::uppercase) }
+        return "The capital of $name is ${city.trimEnd('.')}."
     }
 
     private fun prepare(input: String): String {

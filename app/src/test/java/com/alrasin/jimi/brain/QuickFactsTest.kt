@@ -19,6 +19,16 @@ class QuickFactsTest {
         assertNull(a("what time is it"))
     }
 
+    @Test fun spellingAndCapitals() {
+        assertEquals("Necessary is spelled N-E-C-E-S-S-A-R-Y.", a("How do you spell necessary?"))
+        assertEquals("Beautiful is spelled B-E-A-U-T-I-F-U-L.", a("how is beautiful spelled"))
+        assertNull(a("how is the weather"))
+        assertEquals("The capital of France is Paris.", a("what is the capital of france"))
+        assertEquals("The capital of Bangladesh is Dhaka.", a("capital of bangladesh"))
+        assertEquals("The capital of USA is Washington, D.C.", a("what's the capital of the usa"))
+        assertNull(a("what is the capital of narnia"))
+    }
+
     @Test fun units() {
         assertEquals("1 kilogram is 1000 grams.", a("how many grams in a kilo"))
         assertEquals("5 kilometers is 3.11 miles.", a("convert 5 km to miles"))

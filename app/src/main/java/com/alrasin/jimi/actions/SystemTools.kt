@@ -1,6 +1,7 @@
 package com.alrasin.jimi.actions
 
 import android.annotation.SuppressLint
+import com.alrasin.jimi.brain.Persona
 import android.accessibilityservice.AccessibilityService
 import android.app.ActivityManager
 import android.app.NotificationManager
@@ -269,7 +270,7 @@ fun systemTools(context: Context, torch: Torch): List<Tool> {
             else if (actual == target && manual) Reply.done("brightness is ${actual * 100 / maxBrightness} percent.")
             else Reply.failed("brightness reads ${actual * 100 / maxBrightness} percent. The change isn't confirmed.")
         },
-        SimpleTool("device_status", "Time, date, battery, storage, memory or all", listOf(arg("what", "what to tell", choices = listOf("time", "date", "tomorrow", "battery", "storage", "memory", "all")))) { c, _ ->
+        SimpleTool("device_status", "Time, date, battery, phone temperature, storage, memory or all", listOf(arg("what", "what to tell", choices = listOf("time", "date", "tomorrow", "battery", "temperature", "storage", "memory", "all")))) { c, _ ->
             val now = Date()
             val time = SimpleDateFormat("h:mm a", Locale.US).format(now)
             val date = SimpleDateFormat("EEEE, d MMMM", Locale.US).format(now)
@@ -279,6 +280,8 @@ fun systemTools(context: Context, torch: Torch): List<Tool> {
                 ?.getIntExtra(BatteryManager.EXTRA_STATUS, -1)
             val charging = status == BatteryManager.BATTERY_STATUS_CHARGING || status == BatteryManager.BATTERY_STATUS_FULL
             val battery = "Battery $pct percent${if (charging) ", charging" else ""}."
+            val tenths = context.registerReceiver(null, IntentFilter(Intent.ACTION_BATTERY_CHANGED))
+                ?.getIntExtra(BatteryManager.EXTRA_TEMPERATURE, Int.MIN_VALUE) ?: Int.MIN_VALUE
             val fs = StatFs(Environment.getDataDirectory().path)
             val storage = "${fs.availableBytes / 1_000_000_000} GB free of ${fs.totalBytes / 1_000_000_000} GB."
             ToolResult.ok(
@@ -287,6 +290,7 @@ fun systemTools(context: Context, torch: Torch): List<Tool> {
                     "date" -> "Today is $date."
                     "battery" -> battery
                     "storage" -> storage
+                    "temperature" -> temperature(tenths)
                     "tomorrow" -> "Tomorrow is ${SimpleDateFormat("EEEE, d MMMM", Locale.US).format(Date(now.time + 86_400_000L))}."
                     "memory" -> memory(context)
                     else -> "It's $time, $date. $battery $storage"
@@ -358,6 +362,18 @@ internal fun toggleTruth(label: String, wanted: Boolean, actual: Boolean?): Tool
 }
 
 /** Free RAM in words: "1.2 GB of RAM free out of 3.7 GB." */
+/** Battery temperature is the phone's own heat sensor every phone has; [tenths] is in tenths of a degree C. */
+internal fun temperature(tenths: Int): String {
+    if (tenths == Int.MIN_VALUE || tenths <= 0) return "I can't read the phone's temperature right now, ${Persona.ADDRESS}."
+    val c = tenths / 10
+    val feel = when {
+        c >= 45 -> "That's hot. Let it rest and unplug the charger."
+        c >= 40 -> "It's warm, but okay."
+        else -> "That's normal."
+    }
+    return "The phone is $c degrees. $feel"
+}
+
 private fun memory(context: Context): String {
     val info = ActivityManager.MemoryInfo()
     context.getSystemService(ActivityManager::class.java).getMemoryInfo(info)

@@ -76,6 +76,7 @@ internal object TimeRules {
         if (t.matches(NOTES_WHOLE_RE)) return call("read_notes")
         NOTES_RE.find(t)
             ?.let { return call("create_note", "text" to it.groupValues[1]) }
+        NOTES_INTO_RE.matchEntire(t)?.let { return call("create_note", "text" to it.groupValues[1]) }
         NOTES_RE_2.find(t)?.let { return call("create_note", "text" to it.groupValues[1]) }
         if (t.matches(NOTES_WHOLE_RE_2)) return call("list_reminders")
         NOTES_RE_3.find(t)?.let {
@@ -214,7 +215,7 @@ internal object TimeRules {
 private val ALARM_QUESTION_RE = Regex(
     "^(?:(?:check |see |tell me )?(?:how many|whats|what|which|list|show|tell me|read|check)(?: me)?(?: (?:are|is|all|of|the|my|next))* alarms?\\b.*" +
         "|(?:do i have|have i got|have i set|are there|is there|is|are|any) (?:any )?alarms?\\b.*" +
-        "|(?:when|what time) (?:is|does) (?:my |the )?next alarm.*|(?:my|all my) alarms(?: please)?)$"
+        "|(?:when|what time) (?:is|does) (?:my |the )?(?:next )?alarm.*|(?:my|all my) alarms(?: please)?)$"
 )
 // "which alarms are set" asks, it does not set: drop a trailing "(are) set (now)" before the change check.
 private val ALARM_IS_SET_END_RE = Regex("\\b(?:alarms?|are|is) set(?: (?:right )?now| for (?:today|tomorrow))?$")

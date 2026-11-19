@@ -24,7 +24,12 @@ internal val MEDIA_WHOLE_RE_7 = Regex("^(?:mute(?: the)?(?: phone| volume| sound
 internal val MEDIA_WHOLE_RE_8 = Regex("^(?:(?:(?:set |turn |put )?(?:the )?(?:max|maximum|full) volume)|(?:(?:set|turn|put) )?(?:the )?volume (?:(?:up )?to )?(?:the )?(?:max|maximum|full|highest)|max (?:out )?(?:the )?volume)$")
 internal val SYSTEM_WHOLE_RE = Regex("^(?:(?:increase|raise|turn up)(?: the)? brightness|brightness up|brighter|make (?:it|the screen) brighter)$")
 internal val SYSTEM_WHOLE_RE_2 = Regex("^(?:(?:decrease|lower|reduce|turn down|dim)(?: the)? (?:brightness|screen)|brightness down|dimmer|make (?:it|the screen) darker)$")
-internal val SYSTEM_WHOLE_RE_3 = Regex("^(?:(?:max|maximum|full) brightness|brightness (?:max|maximum|full))$")
+internal val SYSTEM_WHOLE_RE_3 = Regex("^(?:(?:max|maximum|full) brightness|(?:(?:set|turn|put|make) )?(?:the )?(?:screen )?brightness (?:to )?(?:all the way up|(?:the )?(?:max|maximum|full|highest)))$")
+// "is my phone hot", "phone temperature"
+internal val TEMPERATURE_RE = Regex("^(?:is (?:my |the )?(?:phone|battery) (?:hot|too hot|overheating|heating(?: up)?|getting hot)|(?:whats |what is |check )?(?:the |my )?(?:phone|battery|device)(?:s)? temperature|how hot is (?:my |the )?(?:phone|battery))$")
+// "rotate the screen" turns auto rotate on; "lock rotation" turns it off
+internal val ROTATE_ON_RE = Regex("^(?:rotate|unlock) (?:the )?(?:screen|display)(?: rotation)?|unlock (?:screen )?rotation$")
+internal val ROTATE_OFF_RE = Regex("^(?:lock|stop|disable) (?:the )?(?:screen |display )?rotation|lock (?:the )?(?:screen|display) orientation$")
 internal val SYSTEM_WHOLE_RE_4 = Regex("^(?:(?:min|minimum|lowest) brightness|brightness (?:min|minimum|lowest))$")
 internal val SYSTEM_WHOLE_RE_5 = Regex("^(?:auto brightness(?: on)?|(?:turn on |enable )?(?:auto|automatic|adaptive) brightness)$")
 internal val SYSTEM_WHOLE_RE_6 = Regex("^(?:(?:whats |what is )?(?:the )?time(?: is it)?(?: now)?|what time is it|tell me the time|time now)$")

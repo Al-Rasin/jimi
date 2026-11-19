@@ -28,7 +28,7 @@ object ToolFit {
         "set_timer" to w("timers?|countdown|minutes?|seconds?|hours?"),
         "media_control" to w("music|songs?|tracks?|play|playing|pause|resume|skip|next|previous|video|audio"),
         "play_media" to w("play|listen|watch|music|songs?|video|youtube|spotify"),
-        "device_status" to w("battery|charge|charging|time|date|day|today|storage|space|ram"),
+        "device_status" to w("battery|charge|charging|time|date|day|today|storage|space|ram|temperature|hot|overheating"),
         "weather" to w("weather|rain|raining|umbrella|hot|cold|temperature|forecast|outside|sunny|wind|windy|humid|humidity"),
         "close_app" to w("close|kill|exit|quit|stop"),
         "open_app" to w("open|launch|start|run|go to|show"),
