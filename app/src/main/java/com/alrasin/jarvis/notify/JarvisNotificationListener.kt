@@ -68,9 +68,9 @@ class JarvisNotificationListener : NotificationListenerService() {
                     readImportant(sbn, row)
                     val clearable = sbn.isClearable && n.flags and Notification.FLAG_GROUP_SUMMARY == 0
                     if (clearable && !row.important && settings.autoClearNotifications.first()) {
-                        val result = history.clear(listOf(row)) { cancelUnchanged(sbn, row) }
+                        val result = history.clear(listOf(row), undoable = false) { cancelUnchanged(sbn, row) }
                         if (result.failed > 0 || result.errors.isNotEmpty()) JarvisLog.e("Notification clear incomplete; history retained")
-                    } else {
+                    } else if (firstPost(sbn.key, row)) {
                         dao.insert(row)
                     }
                 }
@@ -123,6 +123,16 @@ class JarvisNotificationListener : NotificationListenerService() {
         val line = Proactive.importantLine(row, mode.quiet, skipChats, now, lastImportantAt, chat) ?: return
         lastImportantAt = now
         JarvisCoreService.say(this, line)
+    }
+
+    /** Apps re-post the same notification (progress, re-sort); log each key + content only once. Runs under [operations]. */
+    private val lastLogged = object : LinkedHashMap<String, Int>(64, 0.75f, true) {
+        override fun removeEldestEntry(eldest: MutableMap.MutableEntry<String, Int>?) = size > MAX_LOGGED_KEYS
+    }
+
+    private fun firstPost(key: String, row: NotificationLog): Boolean {
+        val sig = "${row.title}\u0000${row.text}".hashCode()
+        return lastLogged.put(key, sig) != sig
     }
 
     override fun onNotificationRemoved(sbn: StatusBarNotification) {
@@ -228,6 +238,7 @@ class JarvisNotificationListener : NotificationListenerService() {
     companion object {
         @Volatile var instance: JarvisNotificationListener? = null
             private set
+        private const val MAX_LOGGED_KEYS = 200
         const val COMPONENT = "com.alrasin.jarvis/com.alrasin.jarvis.notify.JarvisNotificationListener"
     }
 }

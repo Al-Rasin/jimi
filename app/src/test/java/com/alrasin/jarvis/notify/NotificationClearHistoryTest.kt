@@ -145,6 +145,16 @@ class NotificationClearHistoryTest {
         assertEquals("cleared", dao.rows.first().status)
     }
 
+    @Test fun autoClearKeepsUserUndoBatch() = runBlocking {
+        history.clear(listOf(item("Mine"))) {}
+        val result = history.clear(listOf(item("Junk")), undoable = false) {}
+        assertEquals(ClearResult(1, 0), result)
+        assertEquals("cleared", dao.rows.last().status)
+        val restored = mutableListOf<String>()
+        history.undo { restored += it.title }
+        assertEquals(listOf("Mine"), restored)
+    }
+
     @Test fun emptyClearDoesNotForgetPreviousBatch() = runBlocking {
         history.clear(listOf(item())) {}
         assertEquals(ClearResult(0, 0), history.clear(emptyList()) { error("unexpected") })

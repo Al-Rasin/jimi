@@ -41,7 +41,7 @@ class ZimReader(file: File) : Closeable {
         h.position(72)
         checksumPos = h.long.takeIf { it > 0 } ?: raf.length()
         mimeTypes = readMimeList(mimeListPos)
-        articleNs = if (major >= 6 && minor >= 1) 'C' else 'A'
+        articleNs = articleNamespace(major, minor)
     }
 
     /** One directory entry. [redirect] is an entry index; otherwise [cluster]/[blob] point at the content. */
@@ -231,6 +231,9 @@ class ZimReader(file: File) : Closeable {
         private const val MAX_STRING = 4096
 
         /** Sort key used by both lists: namespace byte, then the UTF-8 bytes of URL or title. */
+        /** New namespace scheme ('C') started with format 6.1; any later major keeps it. */
+        internal fun articleNamespace(major: Int, minor: Int): Char = if (major > 6 || (major == 6 && minor >= 1)) 'C' else 'A'
+
         fun key(ns: Char, s: String): ByteArray = byteArrayOf(ns.code.toByte()) + s.toByteArray(Charsets.UTF_8)
 
         fun compare(a: ByteArray, b: ByteArray): Int {

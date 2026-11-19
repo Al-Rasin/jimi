@@ -16,14 +16,22 @@ data class ClearResult(val completed: Int, val failed: Int, val errors: List<Str
 class NotificationClearHistory(private val dao: NotificationDao, private val journal: ClearJournal) {
     private val mutex = Mutex()
 
-    suspend fun clear(items: List<NotificationLog>, cancel: suspend (index: Int) -> Unit): ClearResult = mutex.withLock {
+    /**
+     * [undoable] = false is for auto-clear of junk: rows are still saved, but the user's own last clear
+     * stays the one that "undo last clear" brings back.
+     */
+    suspend fun clear(
+        items: List<NotificationLog>,
+        undoable: Boolean = true,
+        cancel: suspend (index: Int) -> Unit,
+    ): ClearResult = mutex.withLock {
         if (items.isEmpty()) return@withLock ClearResult(0, 0)
         val ids = mutableListOf<Long>()
         var previousIds: List<Long>? = null
         try {
-            previousIds = journal.read()
+            if (undoable) previousIds = journal.read()
             for (item in items) ids += dao.insert(item.copy(id = 0, status = "clear_pending"))
-            journal.write(ids.toList())
+            if (undoable) journal.write(ids.toList())
         } catch (e: Exception) {
             e.rethrowCancellation()
             for (id in ids) {
@@ -63,7 +71,7 @@ class NotificationClearHistory(private val dao: NotificationDao, private val jou
                 errors += "Could not update history for notification ${index + 1}; its saved copy is still available."
             }
         }
-        if (completed == 0 && !pending) {
+        if (undoable && completed == 0 && !pending) {
             try {
                 journal.write(previousIds.orEmpty())
             } catch (e: Exception) {

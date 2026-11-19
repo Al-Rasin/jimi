@@ -26,6 +26,13 @@ class ZimReaderTest {
     /** Entry for the test writer: content (blob) or a redirect to another url. */
     private data class E(val ns: Char, val url: String, val title: String, val html: String? = null, val redirectTo: String? = null)
 
+    @Test fun articleNamespaceFollowsFormatVersion() {
+        assertEquals('A', ZimReader.articleNamespace(5, 0))
+        assertEquals('A', ZimReader.articleNamespace(6, 0))
+        assertEquals('C', ZimReader.articleNamespace(6, 1))
+        assertEquals('C', ZimReader.articleNamespace(7, 0))
+    }
+
     @Test fun findsArticleByUrlTitleAndRedirect() {
         for (compression in listOf(1, 4)) {
             val zim = ZimReader(writeZim(compression))
