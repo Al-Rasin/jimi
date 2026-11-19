@@ -305,4 +305,15 @@ class ComplaintPhrasesTest {
         assertEquals("setting", m("turn on light mode")?.tool)
         assertEquals("I'm Jimi, your phone assistant.", com.alrasin.jimi.brain.Persona.smallTalk("What is your name?", 10))
     }
+
+    @Test fun moreTranslatedPhrases() {
+        assertEquals(ToolCall("call", mapOf("contact" to "rahim")), m("Make a call to Rahim."))
+        assertEquals(ToolCall("open_app", mapOf("app" to "settings")), m("Open the settings."))
+        assertEquals(ToolCall("open_app", mapOf("app" to "settings")), m("open settings"))
+        assertEquals("read_messages", m("Any new message?")?.tool)
+        assertEquals(ToolCall("set_volume", mapOf("level" to "0")), m("Turn off the sound."))
+        assertEquals(ToolCall("set_volume", mapOf("level" to "up")), m("turn up the sound"))
+        assertEquals(ToolCall("create_note", mapOf("text" to "buy milk")), m("Note down buy milk."))
+        assertEquals("cancel", m("Cancel it.")?.tool)
+    }
 }

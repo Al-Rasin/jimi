@@ -76,7 +76,11 @@ object RuleMatcher {
         }
         // "let's play a game" is chat, not a video search
         if (t.matches(PLAY_GAME_RE)) return null
-        for ((re, to) in REWRITES) re.matchEntire(t)?.let { return match(re.replace(t, to), now) }
+        for ((re, to) in REWRITES) re.matchEntire(t)?.let {
+            val out = re.replace(t, to)
+            // A rewrite that maps to itself would recurse forever.
+            if (out != t) return match(out, now)
+        }
         if (t.matches(OTHER_VOLUME_RE)) return call("setting", "name" to "sound", "state" to "open")
         if (t.matches(FONT_SIZE_RE)) return call("setting", "name" to "font size", "state" to "open")
         if (t.matches(SCREEN_TIMEOUT_RE)) return call("setting", "name" to "screen timeout", "state" to "open")
@@ -106,6 +110,14 @@ object RuleMatcher {
         Regex("^(?:open|start) (?:the |my )?(?:torch )?lights?$") to "turn on flashlight",
         Regex("^(?:close|stop) (?:the |my )?(?:torch )?lights?$") to "turn off flashlight",
         Regex("^give (?:a )?(?:call|ring) to (.+)$") to "call $1",
+        Regex("^(?:make|place|do) (?:a )?(?:phone )?call to (.+)$") to "call $1",
+        Regex("^(?!open settings$)(?:open|show|go to|take me to) (?:the |my )?(?:phone )?settings?(?: app)?$") to "open settings",
+        Regex("^(?:any|are there any|do i have any|is there any|got any) (?:new |unread )?(?:messages?|sms|texts?)$") to "read messages",
+        Regex("^turn off (?:the )?(?:sound|audio)$") to "mute",
+        Regex("^turn (up|down) (?:the )?(?:sound|audio)$") to "volume $1",
+        Regex("^turn on (?:the )?(?:sound|audio)$") to "unmute",
+        Regex("^note down (.+)$") to "take a note $1",
+        Regex("^cancel (?:it|that|this)$") to "cancel",
         Regex("^(increase|decrease|raise|lower|reduce) (?:the )?(?:sound|audio)$") to "$1 the volume",
         Regex("^make (?:the )?screen (?:more )?(bright|brighter)$") to "make it brighter",
         Regex("^make (?:the )?screen (?:more )?(dim|dimmer|dark|darker)$") to "dim the screen",
