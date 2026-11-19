@@ -7,8 +7,11 @@ internal val POLITE_LEAD_RE = Regex("^(?:(?:hey |ok |okay )?(?:jarvis|jimi|jimmy
 internal val TOGGLE_RE = Regex("^(?:explain|define|why|how|what does|what do|tell me about|dont|do not|never)\\b")
 internal val TOGGLE_RE_2 = Regex("\\b(turn on|switch on|enable|activate|start|open|connect)\\b")
 internal val TOGGLE_RE_3 = Regex("\\b(turn off|switch off|disable|deactivate|stop|close|shut off|disconnect)\\b")
-/** "put my phone on silent", "silent mode": the user means do not disturb (no ringer tool yet). */
+/** "put my phone on silent", "silent mode": the user means do not disturb. */
 internal val SILENT_PHONE_RE = Regex("^(?:(?:put|set|switch|turn|make|keep) (?:my |the )?phone (?:on |to |in(?:to)? )?(?:silent|silence|mute)(?: mode)?|silent mode|mute (?:my |the )?phone)$")
+internal val VIBRATE_PHONE_RE = Regex("^(?:(?:put|set|switch|turn|make|keep) (?:my |the )?phone (?:on |to |in(?:to)? )?vibrat(?:e|ion)(?: only)?(?: mode)?|vibrate mode|phone on vibrate)$")
+/** "put my phone on ring", "unmute my phone": ringer back to normal. */
+internal val RING_PHONE_RE = Regex("^(?:(?:put|set|switch|turn|make) (?:my |the )?phone (?:back )?(?:on |to |in(?:to)? )?(?:ring|ringing|normal|sound|general)(?: mode)?|unmute (?:my |the )?phone|turn (?:on )?(?:the )?ringer(?: on)?|ringer on)$")
 internal val TIME_RE = Regex("^(?:set |start |put )?(?:a |an )?(?:timer|countdown)(?: for| of)? (.+)$")
 internal val TIME_RE_2 = Regex("^(?:set |start |put )?(?:a |an )?(.+?) (?:timer|countdown)$")
 internal val TIME_RE_3 = Regex("^(?:set |start |put )?(?:a |an |for )?(.+)$")

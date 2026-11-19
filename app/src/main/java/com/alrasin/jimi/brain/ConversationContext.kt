@@ -181,7 +181,7 @@ class ConversationContext(
         val SWITCH_TOOLS = setOf("toggle", "setting")
         val TOGGLE_NAMES = mapOf(
             "flashlight" to "flashlight", "torch" to "flashlight", "wifi" to "wifi", "wi-fi" to "wifi", "bluetooth" to "bluetooth",
-            "mobile data" to "data", "data" to "data", "dnd" to "dnd", "do not disturb" to "dnd", "airplane mode" to "airplane",
+            "mobile data" to "data", "data" to "data", "dnd" to "dnd", "do not disturb" to "dnd", "airplane mode" to "airplane", "vibrate" to "vibrate", "vibrate mode" to "vibrate",
             "flight mode" to "airplane", "location" to "location", "gps" to "location", "battery saver" to "battery_saver",
             "auto rotate" to "auto_rotate", "rotation" to "auto_rotate", "wireless debugging" to "wireless_debugging",
             "usb debugging" to "usb_debugging",

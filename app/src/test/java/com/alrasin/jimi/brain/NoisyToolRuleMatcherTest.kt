@@ -106,3 +106,24 @@ class PhoneThingsAreNotContactsTest {
         assertEquals(max, RuleMatcher.match("turn the volume up to max"))
     }
 }
+
+class RingerAndStatusTest {
+    private fun status(what: String) = ToolCall("device_status", mapOf("what" to what))
+    private fun toggle(target: String, state: String) = ToolCall("toggle", mapOf("target" to target, "state" to state))
+
+    @Test fun vibrateAndRingModes() {
+        assertEquals(toggle("vibrate", "on"), RuleMatcher.match("put phone on vibrate"))
+        assertEquals(toggle("vibrate", "on"), RuleMatcher.match("turn on vibrate mode"))
+        assertEquals(toggle("vibrate", "off"), RuleMatcher.match("put my phone on ring mode"))
+        assertEquals(toggle("vibrate", "off"), RuleMatcher.match("unmute my phone"))
+        assertEquals(toggle("dnd", "on"), RuleMatcher.match("put my phone on silent"))
+        assertEquals("setting", RuleMatcher.match("turn on vibration")?.tool)
+    }
+    @Test fun tomorrowAndRam() {
+        assertEquals(status("tomorrow"), RuleMatcher.match("what day is tomorrow"))
+        assertEquals(status("memory"), RuleMatcher.match("how much ram is free"))
+        assertEquals(status("memory"), RuleMatcher.match("is my memory full"))
+        assertEquals("recall_facts", RuleMatcher.match("what do you remember about me")?.tool)
+        assertEquals(status("battery"), RuleMatcher.match("is my phone charging"))
+    }
+}

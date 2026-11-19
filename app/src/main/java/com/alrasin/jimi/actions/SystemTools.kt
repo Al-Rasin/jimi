@@ -2,6 +2,7 @@ package com.alrasin.jimi.actions
 
 import android.annotation.SuppressLint
 import android.accessibilityservice.AccessibilityService
+import android.app.ActivityManager
 import android.app.NotificationManager
 import android.bluetooth.BluetoothManager
 import android.content.Context
@@ -11,6 +12,7 @@ import android.content.res.Resources
 import android.hardware.camera2.CameraCharacteristics
 import android.hardware.camera2.CameraManager
 import android.location.LocationManager
+import android.media.AudioManager
 import android.media.MediaScannerConnection
 import android.net.wifi.WifiManager
 import android.os.BatteryManager
@@ -110,7 +112,7 @@ class Torch(private val context: Context) {
 }
 
 val TOGGLE_TARGETS = listOf("flashlight", "wifi", "bluetooth", "data", "dnd", "airplane", "location", "hotspot", "battery_saver", "auto_rotate",
-    "wireless_debugging", "usb_debugging")
+    "wireless_debugging", "usb_debugging", "vibrate")
 
 fun systemTools(context: Context, torch: Torch): List<Tool> {
     fun settingsPage(target: String): Boolean {
@@ -124,6 +126,7 @@ fun systemTools(context: Context, torch: Torch): List<Tool> {
             "battery_saver" -> Settings.ACTION_BATTERY_SAVER_SETTINGS
             "auto_rotate", "brightness" -> Settings.ACTION_DISPLAY_SETTINGS
             "hotspot" -> Settings.ACTION_WIRELESS_SETTINGS
+            "vibrate" -> Settings.ACTION_SOUND_SETTINGS
             "wireless_debugging", "usb_debugging" -> Settings.ACTION_APPLICATION_DEVELOPMENT_SETTINGS
             else -> return false
         }
@@ -158,6 +161,7 @@ fun systemTools(context: Context, torch: Torch): List<Tool> {
         "auto_rotate" -> Settings.System.getInt(context.contentResolver, Settings.System.ACCELEROMETER_ROTATION) == 1
         "wireless_debugging" -> Settings.Global.getInt(context.contentResolver, "adb_wifi_enabled", 0) == 1
         "usb_debugging" -> Settings.Global.getInt(context.contentResolver, Settings.Global.ADB_ENABLED, 0) == 1
+        "vibrate" -> context.getSystemService(AudioManager::class.java).ringerMode == AudioManager.RINGER_MODE_VIBRATE
         else -> null
         } }.getOrNull()
     }
@@ -193,6 +197,12 @@ fun systemTools(context: Context, torch: Torch): List<Tool> {
                 *(if (on) arrayOf("settings put global development_settings_enabled 1") else emptyArray()),
                 "settings put global adb_enabled ${if (on) 1 else 0}",
             ).ok
+            // Ringer vibrate on; "off" means normal ringing again.
+            "vibrate" -> runCatching {
+                context.getSystemService(AudioManager::class.java).ringerMode =
+                    if (on) AudioManager.RINGER_MODE_VIBRATE else AudioManager.RINGER_MODE_NORMAL
+                true
+            }.getOrDefault(false) || RootShell.run("cmd audio set-ringer-mode ${if (on) "VIBRATE" else "NORMAL"}").ok
             else -> false
         }
     }
@@ -200,7 +210,7 @@ fun systemTools(context: Context, torch: Torch): List<Tool> {
     fun nice(target: String) = when (target) {
         "dnd" -> "Do not disturb"; "data" -> "Mobile data"; "battery_saver" -> "Battery saver"
         "auto_rotate" -> "Auto rotate"; "wifi" -> "Wi-Fi"; "airplane" -> "Airplane mode"
-        "wireless_debugging" -> "Wireless debugging"; "usb_debugging" -> "USB debugging"
+        "wireless_debugging" -> "Wireless debugging"; "usb_debugging" -> "USB debugging"; "vibrate" -> "Vibrate mode"
         else -> target.replaceFirstChar { it.uppercase() }
     }
 
@@ -259,7 +269,7 @@ fun systemTools(context: Context, torch: Torch): List<Tool> {
             else if (actual == target && manual) Reply.done("brightness is ${actual * 100 / maxBrightness} percent.")
             else Reply.failed("brightness reads ${actual * 100 / maxBrightness} percent. The change isn't confirmed.")
         },
-        SimpleTool("device_status", "Time, date, battery, storage or all", listOf(arg("what", "what to tell", choices = listOf("time", "date", "battery", "storage", "all")))) { c, _ ->
+        SimpleTool("device_status", "Time, date, battery, storage, memory or all", listOf(arg("what", "what to tell", choices = listOf("time", "date", "tomorrow", "battery", "storage", "memory", "all")))) { c, _ ->
             val now = Date()
             val time = SimpleDateFormat("h:mm a", Locale.US).format(now)
             val date = SimpleDateFormat("EEEE, d MMMM", Locale.US).format(now)
@@ -277,6 +287,8 @@ fun systemTools(context: Context, torch: Torch): List<Tool> {
                     "date" -> "Today is $date."
                     "battery" -> battery
                     "storage" -> storage
+                    "tomorrow" -> "Tomorrow is ${SimpleDateFormat("EEEE, d MMMM", Locale.US).format(Date(now.time + 86_400_000L))}."
+                    "memory" -> memory(context)
                     else -> "It's $time, $date. $battery $storage"
                 },
             )
@@ -343,4 +355,12 @@ internal fun toggleTruth(label: String, wanted: Boolean, actual: Boolean?): Tool
     actual == null -> Reply.failed("I requested the change, but couldn't verify $label.")
     actual == wanted -> Reply.done("$label is ${if (actual) "on" else "off"}.")
     else -> Reply.failed("$label is still ${if (actual) "on" else "off"}.")
+}
+
+/** Free RAM in words: "1.2 GB of RAM free out of 3.7 GB." */
+private fun memory(context: Context): String {
+    val info = ActivityManager.MemoryInfo()
+    context.getSystemService(ActivityManager::class.java).getMemoryInfo(info)
+    fun gb(b: Long) = String.format(Locale.US, "%.1f", b / 1_073_741_824.0)
+    return "${gb(info.availMem)} GB of RAM free out of ${gb(info.totalMem)} GB."
 }

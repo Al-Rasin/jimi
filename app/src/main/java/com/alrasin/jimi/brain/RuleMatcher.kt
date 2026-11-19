@@ -29,6 +29,7 @@ object RuleMatcher {
         "hotspot" to listOf("hotspot", "hot spot", "tethering"),
         "battery_saver" to listOf("battery saver", "power saving", "power saver", "battery saving"),
         "auto_rotate" to listOf("auto rotate", "rotation", "auto rotation"),
+        "vibrate" to listOf("vibrate mode", "vibration mode", "vibrate only"),
     )
 
     fun normalize(text: String, keepClockColon: Boolean = false): String = NumberWords.normalize(
@@ -96,6 +97,8 @@ object RuleMatcher {
         if (TOGGLE_RE.containsMatchIn(t)) return null
         if (t == "on flushed light") return call("toggle", "target" to "flashlight", "state" to "on")
         if (t.matches(SILENT_PHONE_RE)) return call("toggle", "target" to "dnd", "state" to "on")
+        if (t.matches(VIBRATE_PHONE_RE)) return call("toggle", "target" to "vibrate", "state" to "on")
+        if (t.matches(RING_PHONE_RE)) return call("toggle", "target" to "vibrate", "state" to "off")
         val on = TOGGLE_RE_2.containsMatchIn(t) || t.endsWith(" on")
         val off = TOGGLE_RE_3.containsMatchIn(t) || t.endsWith(" off")
         if (on == off) {
@@ -234,6 +237,8 @@ object RuleMatcher {
             t.matches(SYSTEM_WHOLE_RE_7) -> return call("device_status", "what" to "date")
             t.matches(SYSTEM_WHOLE_RE_8) -> return call("device_status", "what" to "battery")
             t.matches(SYSTEM_WHOLE_RE_9) -> return call("device_status", "what" to "storage")
+            t.matches(SYSTEM_TOMORROW_RE) -> return call("device_status", "what" to "tomorrow")
+            t.matches(SYSTEM_MEMORY_RE) -> return call("device_status", "what" to "memory")
             t.matches(SYSTEM_WHOLE_RE_10) -> return call("device_status", "what" to "all")
             t.matches(SYSTEM_WHOLE_RE_11) -> return call("take_screenshot")
             t.matches(SYSTEM_WHOLE_RE_12) -> return call("lock_phone")
