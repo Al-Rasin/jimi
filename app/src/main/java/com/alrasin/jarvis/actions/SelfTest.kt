@@ -27,6 +27,7 @@ object SelfTest {
         c("volume up", "set_volume", "level" to "up"),
         c("set an alarm for 6 30 am", "set_alarm"),
         c("wake me up at 7", "set_alarm"),
+        c("how many alarms do i have", "list_alarms"),
         c("set a timer for 5 minutes", "set_timer"),
         c("what time is it", "device_status", "what" to "time"),
         c("what is the date today", "device_status", "what" to "date"),

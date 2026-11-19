@@ -24,6 +24,7 @@ object ToolFit {
         "create_note" to w("notes?|jot|write down|save this"),
         "set_alarm" to w("alarms?|wake|morning"),
         "cancel_alarm" to w("alarms?|timers?"),
+        "list_alarms" to w("alarms?"),
         "set_timer" to w("timers?|countdown|minutes?|seconds?|hours?"),
         "media_control" to w("music|songs?|tracks?|play|playing|pause|resume|skip|next|previous|video|audio"),
         "play_media" to w("play|listen|watch|music|songs?|video|youtube|spotify"),

@@ -20,10 +20,11 @@ internal object WeatherRequest {
             .replace(TextNorm.SPACES, " ").trim()
             .removeSuffix(" right") // normalize() drops the "now" of "right now"
             .replace(here, "")
+            .removePrefix("please ").removeSuffix(" please")
         val location = MATCH_RE_4.find(withoutDay)
         val question = if (location == null) withoutDay else withoutDay.substring(0, location.range.first)
         val patterns = listOf(
-            "(?:(?:whats|what is|hows|how is|tell me|show me|give me|check|get)(?: me)? )?(?:the )?(?:weather|temperature)" +
+            "(?:(?:whats|what is|hows|how is|tell me|show me|give me|check|get|getting|can you get|i need|i want|need|want)(?: me)? )?(?:the )?(?:weather|temperature)" +
                 "(?: like| forecast| report| update| updates| conditions?| info)?",
             "(?:will it|is it going to|is it) (?:rain|raining)",
             "(?:do i need|should i take|should i carry) (?:an? |my )?umbrella",

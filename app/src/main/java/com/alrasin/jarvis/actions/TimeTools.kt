@@ -26,11 +26,14 @@ import kotlinx.coroutines.delay
 private val CLOCK_HAS_ALARM_RE = Regex("enabled=1, alarmtime=(\\d+)")
 private val STOP_TIMER_IN_CLOCK_RE = Regex("(\\d+)x(\\d+)")
 private val READ_ALARM_TIME_RE = Regex("^(\\d{1,2})(?::(\\d{2}))?(?::00)?\\s*(am|pm|a m|p m)?$")
+private val ISO_DATE_TIME_RE = Regex("^\\d{4}-\\d{2}-\\d{2}[T ](\\d{1,2}:\\d{2})(?::\\d{2})?$")
 private val CANCEL_ONE_ALARM_RE = Regex("^(\\d{1,2})(?:[:.](\\d{2}))?\\s*(a\\.?m\\.?|p\\.?m\\.?)?$", RegexOption.IGNORE_CASE)
 
 /** "07:30", "7:30 AM", "7 pm", "19.30" → that clock time; null when it is not a valid time. */
 internal fun alarmTime(text: String): LocalTime? {
-    val (hs, ms, ap) = CANCEL_ONE_ALARM_RE.find(text.trim())?.destructured ?: return null
+    // The model sometimes sends a full date-time ("2026-11-20T17:30"); only the clock part matters.
+    val clock = ISO_DATE_TIME_RE.matchEntire(text.trim())?.groupValues?.get(1) ?: text.trim()
+    val (hs, ms, ap) = CANCEL_ONE_ALARM_RE.find(clock)?.destructured ?: return null
     var h = hs.toInt()
     val m = ms.ifEmpty { "0" }.toInt()
     if (ap.isNotEmpty()) {
@@ -41,8 +44,24 @@ internal fun alarmTime(text: String): LocalTime? {
     return runCatching { LocalTime.of(h, m) }.getOrNull()
 }
 
+/** "You have 3 alarms on: 5:10 AM, 5:15 AM and 8:30 PM. Next is 5:10 AM." — sorted from the next one after [now]. */
+internal fun alarmSummary(rows: List<ClockDb.Row>, now: LocalTime): String {
+    if (rows.isEmpty()) return "You have no alarms on."
+    val fmt = java.time.format.DateTimeFormatter.ofPattern("h:mm a", Locale.US)
+    val times = rows.map { LocalTime.of(it.hour, it.minute) }.distinct().sorted()
+    val ordered = times.filter { it.isAfter(now) } + times.filterNot { it.isAfter(now) }
+    val names = ordered.map { it.format(fmt) }
+    val list = if (names.size == 1) names[0] else names.dropLast(1).joinToString(", ") + " and " + names.last()
+    val count = if (names.size == 1) "1 alarm" else "${names.size} alarms"
+    return if (names.size == 1) "You have $count on, at $list." else "You have $count on: $list. Next is ${names[0]}."
+}
+
 /** Alarms and timers through the phone's Clock app. */
 fun timeTools(context: Context): List<Tool> = listOf(
+    SimpleTool("list_alarms", "Say which alarms are on and the next one; read only") { _, _ ->
+        val rows = ClockDb.enabledRowsOrNull() ?: return@SimpleTool ToolResult.fail("I can't read the Clock alarms right now.")
+        ToolResult.ok(alarmSummary(rows, LocalTime.now()))
+    },
     SimpleTool(
         "set_alarm", "Set an alarm",
         listOf(

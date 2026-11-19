@@ -204,6 +204,7 @@ class TextToSpeech(
         private var stream: Stream? = null
         /** Return this early from [playPcm] so the next piece is written before this one ends. */
         private const val LEAD_MS = 150
+        private const val STALL_MS = 150L
         private const val BUFFER_MS = 500
         /** Free the speaker this long after the last piece. */
         private const val IDLE_MS = 2_000L
@@ -315,6 +316,9 @@ class TextToSpeech(
                 // done when only LEAD_MS is left, so the next piece follows with no gap
                 val done = maxOf(end - rate * LEAD_MS / 1000, start + 1)
                 var deadline = 0L
+                var expectedEnd = 0L
+                var lastHead = -1L
+                var lastMove = 0L
                 while (true) {
                     val head = synchronized(playbackLock) {
                         if (!live()) return cancel(epoch, stop)
@@ -324,8 +328,15 @@ class TextToSpeech(
                     if (stop()) return cancel(epoch, stop)
                     heard(head)
                     if (head >= done) break
-                    if (deadline == 0L) deadline = System.currentTimeMillis() + (end - head) * 1000 / rate + 2000
-                    if (System.currentTimeMillis() > deadline) break   // playback stuck; do not hang the reply
+                    val now = System.currentTimeMillis()
+                    if (deadline == 0L) {
+                        expectedEnd = now + (end - head) * 1000 / rate
+                        deadline = expectedEnd + 2000
+                    }
+                    if (head != lastHead) { lastHead = head; lastMove = now }
+                    // MTK drops an underrun track and its head stops short of the end; the sound already played.
+                    if (now >= expectedEnd && now - lastMove > STALL_MS) break
+                    if (now > deadline) break   // playback stuck; do not hang the reply
                     Thread.sleep(10)
                 }
                 if (!started) onStarted()

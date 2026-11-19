@@ -16,8 +16,13 @@ internal object ClockDb {
 
     data class Row(val id: Long, val hour: Int, val minute: Int)
 
-    suspend fun enabledRows(): List<Row> =
-        parseEnabled(RootShell.run("content query --uri $URI --projection _id:enabled:hour:minutes", log = false).out)
+    suspend fun enabledRows(): List<Row> = enabledRowsOrNull().orEmpty()
+
+    /** Alarms that are on, or null when the Clock table can't be read (no root). */
+    suspend fun enabledRowsOrNull(): List<Row>? {
+        val res = RootShell.run("content query --uri $URI --projection _id:enabled:hour:minutes", log = false)
+        return if (res.ok) parseEnabled(res.out) else null
+    }
 
     /** Switches off [rows] and lets Clock reschedule. Returns the rows that are still on afterwards. */
     suspend fun disable(rows: List<Row>): List<Row> {

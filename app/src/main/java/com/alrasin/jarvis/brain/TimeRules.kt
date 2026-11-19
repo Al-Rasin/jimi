@@ -17,7 +17,11 @@ internal object TimeRules {
 
     private fun re(p: String) = Regex("^(?:$p)$")
 
+    /** "how many alarms do i have", "when is my next alarm": a question, never a change. */
+    fun isAlarmQuestion(t: String): Boolean = t.matches(ALARM_QUESTION_RE) && !ALARM_CHANGE_RE.containsMatchIn(t)
+
     fun time(t: String, now: LocalDateTime): ToolCall? {
+        if (isAlarmQuestion(t)) return call("list_alarms")
         // timer
         val timer = TIME_RE.find(t)
             ?: TIME_RE_2.find(t)
@@ -205,3 +209,10 @@ internal object TimeRules {
         return call("cancel_alarm", "time" to "%02d:%02d".format(at.hour, at.minute))
     }
 }
+
+private val ALARM_QUESTION_RE = Regex(
+    "^(?:(?:how many|what|which|list|show|tell me|read|check)(?: me)?(?: (?:are|is|all|of|the|my))* alarms?\\b.*" +
+        "|(?:do i have|have i got|have i set|are there|is there|any) (?:any )?alarms?\\b.*" +
+        "|(?:when|what time) (?:is|does) (?:my |the )?next alarm.*|(?:my|all my) alarms(?: please)?)$"
+)
+private val ALARM_CHANGE_RE = Regex("\\b(?:set|cancel|delete|remove|stop|turn|switch|dismiss|clear|snooze|change|add|make|create|wake)\\b")
