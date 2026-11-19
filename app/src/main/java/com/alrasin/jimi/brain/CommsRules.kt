@@ -20,7 +20,8 @@ internal object CommsRules {
         }
         // "call using grameenphone" names a SIM, not a person: ask who.
         if (calling.matches(COMMS_RE_3)) return call("call")
-        COMMS_RE_4.find(calling)?.let {
+        // "phone battery", "ring mode", "call log" name a phone thing, not a person: let later rules answer.
+        COMMS_RE_4.find(calling)?.takeUnless { it.groupValues[2].matches(NOT_A_CONTACT_RE) }?.let {
             return call("call", "contact" to it.groupValues[2], "app" to it.groupValues[3].takeUnless { app -> app.isEmpty() || app == "speaker" }?.let(::commsApp),
                 "video" to it.groupValues[1].takeIf { mode -> mode.isNotEmpty() }?.let { mode -> (mode == "video").toString() })
         }
@@ -55,6 +56,8 @@ internal object CommsRules {
         t.matches(CALL_CONTROL_WHOLE_RE_5) -> call("redial")
         else -> null
     }
+
+    private val NOT_A_CONTACT_RE = Regex("^(?:(?:my|the|this) )?(?:phone|mode|tone|ringtone|ringer|volume|settings?|log|logs|history|recording|recorder|storage|battery|charge|number|waiting|screen|status|memory|ram|sound|silent|vibrat\\w*|alarms?|timer)\\b.*")
 
     private fun commsApp(app: String) = app.replace(" ", "")
 

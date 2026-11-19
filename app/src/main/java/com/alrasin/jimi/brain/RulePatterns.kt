@@ -86,7 +86,7 @@ internal val SCREEN_RE_3 = Regex("^(?:type|write|enter)(?: text)? (.+)$")
 internal val KNOWLEDGE_RE = Regex("^(?:whats |what is |how is |hows )?(?:the )?weather(?: like)?(?: (?:today|now|tomorrow))?(?: in ([a-z ]+?))?(?: (?:today|now|tomorrow))?$")
 internal val KNOWLEDGE_RE_2 = Regex("^(?:(?:whats|what is|what are) (?:in )?|(?:read|tell|give|show)(?: me)? |any |get(?: me)? )?(?:the )?(?:latest |top |todays |breaking )*" +
             "(?:news|headlines)(?: (?:today|now|update|updates|headlines))?(?:(?: about| on| in| from)? ([a-z ]+?))?(?: today)?$")
-internal val KNOWLEDGE_RE_3 = Regex("^(?:search|google|look up|search for|search the web for|search google for|find)(?: for)? (.+?)(?: on (?:google|the internet|the web|internet))?$")
+internal val KNOWLEDGE_RE_3 = Regex("^(?:search the web for|search (?:on )?google for|search the internet for|google search for|search for|search|google|look up|find)(?: for)? (.+?)(?: on (?:google|the internet|the web|internet))?$")
 internal val KNOWLEDGE_RE_4 = Regex("^(?:wikipedia|wiki|look up on wikipedia|search wikipedia for|tell me about) (.+)$")
 internal val WIKI_TAIL_RE = Regex(" (?:on|from|in|using) (?:the )?(?:wikipedia|wiki)$")
 internal val KNOWLEDGE_RE_5 = Regex("^(?:who is|who was|who were) (.+)$")

@@ -2,6 +2,7 @@ package com.alrasin.jimi.brain
 
 import com.alrasin.jimi.core.ToolCall
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNotEquals
 import org.junit.Assert.assertNull
 import org.junit.Test
 import java.time.LocalDateTime
@@ -82,5 +83,26 @@ class ScreenAndPrayerPhrasesTest {
     }
     @Test fun tellMeFajrTime() {
         assertEquals(ToolCall("prayer_times", mapOf("prayer" to "fajr")), RuleMatcher.match("tell me the fajr time"))
+    }
+}
+
+class PhoneThingsAreNotContactsTest {
+    @Test fun phoneWordsDoNotCallFakeContacts() {
+        for (text in listOf("ring mode", "phone settings", "call log", "phone number")) {
+            assertNotEquals(text, "call", RuleMatcher.match(text)?.tool)
+        }
+        assertEquals(ToolCall("device_status", mapOf("what" to "battery")), RuleMatcher.match("phone battery"))
+        assertEquals("call", RuleMatcher.match("call my mom")?.tool)
+        assertEquals("call", RuleMatcher.match("ring karim")?.tool)
+    }
+    @Test fun searchGoogleForKeepsOnlyQuery() {
+        assertEquals(ToolCall("web_search", mapOf("query" to "best phones")), RuleMatcher.match("search google for best phones"))
+        assertEquals(ToolCall("web_search", mapOf("query" to "cheap flights")), RuleMatcher.match("search the web for cheap flights"))
+    }
+    @Test fun volumeToMax() {
+        val max = ToolCall("set_volume", mapOf("level" to "100"))
+        assertEquals(max, RuleMatcher.match("set volume to max"))
+        assertEquals(max, RuleMatcher.match("volume to max"))
+        assertEquals(max, RuleMatcher.match("turn the volume up to max"))
     }
 }
