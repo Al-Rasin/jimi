@@ -77,6 +77,18 @@ fun appTools(context: Context, apps: AppList): List<Tool> = listOf(
     },
     SimpleTool("close_app", "Close (force stop) an app", listOf(arg("app", "app name"))) { c, _ ->
         val name = c.require("app", "Which app?")
+        when (closeTarget(name)) {
+            CloseTarget.ALL -> return@SimpleTool if (RootShell.run("am kill-all").ok) Reply.done("I cleared the apps running in the background.")
+                else ToolResult.fail("I need root to clear background apps.")
+            CloseTarget.CURRENT -> {
+                val pkg = JimiAccessibilityService.instance?.agentRoot()?.packageName?.toString()
+                    ?: return@SimpleTool ToolResult.fail("I can't see which app is open.")
+                if (pkg == context.packageName || pkg.contains("launcher") || pkg == "com.android.systemui") return@SimpleTool ToolResult.fail("No app is open.")
+                val label = apps.all().firstOrNull { it.pkg == pkg }?.label ?: "the app"
+                return@SimpleTool if (RootShell.run("am force-stop $pkg").ok) Reply.done("I closed $label.") else ToolResult.fail("Couldn't close $label.")
+            }
+            null -> Unit
+        }
         val app = apps.find(name) ?: return@SimpleTool ToolResult.fail("I can't find an app called $name.")
         if (app.pkg == context.packageName) return@SimpleTool ToolResult.fail("I can't close myself.")
         val r = RootShell.run("am force-stop ${app.pkg}")
@@ -92,3 +104,12 @@ fun appTools(context: Context, apps: AppList): List<Tool> = listOf(
         else ToolResult.fail("No browser found.")
     },
 )
+
+internal enum class CloseTarget { CURRENT, ALL }
+
+/** "close the app" means the one on screen; "close all apps" clears the background. */
+internal fun closeTarget(name: String): CloseTarget? = when (name.lowercase().trim().removePrefix("the ").removePrefix("my ")) {
+    "app", "this", "this app", "it", "current app", "open app", "this one" -> CloseTarget.CURRENT
+    "all", "all apps", "all the apps", "everything", "background apps", "all background apps", "apps", "all my apps" -> CloseTarget.ALL
+    else -> null
+}

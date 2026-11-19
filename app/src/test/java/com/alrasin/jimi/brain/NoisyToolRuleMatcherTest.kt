@@ -334,6 +334,11 @@ class ComplaintPhrasesTest {
         assertEquals(ToolCall("toggle", mapOf("target" to "vibrate", "state" to "off")), m("Put phone in normal mode."))
     }
 
+    @Test fun spokenCorrection() {
+        assertEquals(ToolCall("open_app", mapOf("app" to "youtube")), m("I said open YouTube."))
+        assertEquals(ToolCall("open_app", mapOf("app" to "whatsapp")), m("No, I mean open WhatsApp."))
+    }
+
     @Test fun lastPhotoSelfieShoppingDay() {
         assertEquals(ToolCall("open_app", mapOf("app" to "gallery")), m("Open the last photo."))
         assertEquals(ToolCall("open_app", mapOf("app" to "camera")), m("Open camera in selfie mode."))
