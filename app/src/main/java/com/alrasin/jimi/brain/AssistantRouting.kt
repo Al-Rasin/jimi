@@ -14,8 +14,12 @@ internal object AssistantRouting {
     /** A chain plan when the sentence has parts; a matching non-loose rule for the whole sentence wins (it may own the "and"). */
     internal fun chainPlan(text: String, rule: ToolCall?, intent: IntentRouter.Decision): TaskChain.Plan? {
         if (intent.isConfident && intent.route == IntentRouter.Route.CHAT) return null
-        if (rule != null && rule.tool !in LOOSE_TOOLS && AgentRouting.acceptsSingleTool(text, rule.tool)) return null
-        return TaskChain.plan(text) { RuleMatcher.match(it) }
+        val plan = TaskChain.plan(text) { RuleMatcher.match(it) }
+        if (rule != null && rule.tool !in LOOSE_TOOLS && AgentRouting.acceptsSingleTool(text, rule.tool)) {
+            // "set alarm at 6 and 7" is still two alarms.
+            return plan?.takeIf { p -> rule.tool == "set_alarm" && p.complete && p.steps.all { it.call?.tool == "set_alarm" } }
+        }
+        return plan
     }
 
     internal fun ruleRouteCall(text: String, rule: ToolCall?, intent: IntentRouter.Decision): ToolCall? {

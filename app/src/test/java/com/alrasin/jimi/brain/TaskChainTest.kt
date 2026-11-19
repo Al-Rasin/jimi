@@ -53,6 +53,19 @@ class TaskChainTest {
         assertEquals("red shoes", p.steps[1].call!!.arg("query"))
     }
 
+    @Test fun bareSecondPartReusesVerb() {
+        val p = route("turn off bluetooth and wifi and torch")!!
+        assertEquals(listOf("bluetooth", "wifi", "flashlight"), p.steps.map { it.call!!.arg("target") })
+        assertTrue(p.steps.all { it.call!!.arg("state") == "off" })
+        assertEquals("on", route("turn on wifi and bluetooth")!!.steps[1].call!!.arg("state"))
+        val a = route("set alarm at 6 and 7")!!
+        assertEquals(listOf("06:00", "07:00"), a.steps.map { it.call!!.arg("time") })
+        assertEquals("off", route("turn on wifi then turn off bluetooth")!!.steps[1].call!!.arg("state"))
+        assertTrue(route("turn on wifi and order a pizza")!!.unknown.isNotEmpty())
+        assertNull(route("set alarm for 6 and 30"))
+        assertEquals("06:30", RuleMatcher.match("wake me up at 6 and 30 am")!!.arg("time"))
+    }
+
     @Test fun namesWithAndStayWhole() {
         assertNull(plan("open tom and jerry"))
         val p = plan("turn off wifi and then open tom and jerry")!!

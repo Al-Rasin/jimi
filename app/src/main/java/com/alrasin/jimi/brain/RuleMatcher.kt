@@ -117,6 +117,8 @@ object RuleMatcher {
         Regex("^turn (up|down) (?:the )?(?:sound|audio)$") to "volume $1",
         Regex("^turn on (?:the )?(?:sound|audio)$") to "unmute",
         Regex("^note down (.+)$") to "take a note $1",
+        // "alarm at 6 and 30" is said for 6:30.
+        Regex("^(.*\\b(?:alarm|wake me(?: up)?)\\b.*?\\b(?:at|for) )(\\d{1,2}) and ([0-5]\\d)\\b(.*)$") to "$1$2:$3$4",
         Regex("^cancel (?:it|that|this)$") to "cancel",
         Regex("^(?:show|find|open)(?: me)? (?:the |my )?(?:photos?|pictures?|pics|images) (?:of|from|taken|i took) (?:on )?(.+)$") to "show photos from $1",
         Regex("^play (?:a |some |the )?(?:songs?|music) (?:of|by|from) (.+)$") to "play $1 songs",

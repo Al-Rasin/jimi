@@ -26,6 +26,7 @@ object TaskChain {
     private val SEARCH = Regex("^(?:search|find|look for|look up)(?: for)? (.+)$", RegexOption.IGNORE_CASE)
     private val PLAY = Regex("^play (.+)$", RegexOption.IGNORE_CASE)
     private val NOT_A_STEP = setOf("cancel", "repeat_last")
+    private val SHARES_VERB = setOf("toggle", "set_alarm")
 
     /** Parts with the separator text that came before each one (empty for the first). */
     fun split(text: String): List<Pair<String, String>> {
@@ -49,7 +50,14 @@ object TaskChain {
         if (pieces.size < 2) return null
         val steps = ArrayList<Step>()
         for ((sep, piece) in pieces) {
-            val call = matchIn(piece, appOf(steps), match)
+            val own = matchIn(piece, appOf(steps), match)
+            // A bare "torch" toggles; after "turn off bluetooth and" it means off.
+            val sh = if (own == null || own.arg("state") == "toggle") steps.lastOrNull()?.let { shared(it, piece, match) } else null
+            if (sh != null) {
+                steps += sh
+                continue
+            }
+            val call = own
             if (call == null && steps.isNotEmpty()) {
                 val merged = steps.last().text + sep + piece
                 val mergedCall = matchIn(merged, appOf(steps.dropLast(1)), match)
@@ -72,6 +80,18 @@ object TaskChain {
         val can = plan.known.joinToString(" and ") { it.text }
         val cant = plan.unknown.joinToString(" or ") { it.text }
         return "I can $can, but not $cant. Say the part I can do on its own, or turn on cloud AI for the rest."
+    }
+
+    /** "turn on wifi and bluetooth", "alarm at 6 and 7": the bare part reuses the verb of the step before it. */
+    private fun shared(prev: Step, piece: String, match: (String) -> ToolCall?): Step? {
+        val tool = prev.call?.tool?.takeIf { it in SHARES_VERB } ?: return null
+        val words = prev.text.split(" ")
+        for (drop in 1..minOf(3, words.size - 1)) {
+            val text = words.dropLast(drop).joinToString(" ") + " " + piece
+            val call = match(text) ?: continue
+            if (call.tool == tool && call.args.isNotEmpty() && call != prev.call) return Step(text, call)
+        }
+        return null
     }
 
     private fun appOf(steps: List<Step>): String? = steps.asReversed().firstNotNullOfOrNull { it.call?.arg("app") }
