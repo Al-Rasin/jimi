@@ -57,6 +57,8 @@ object RuleMatcher {
             " please ", " pls ", " can you ", " could you ", " would you ", " will you ", " i want you to ",
             " i want to ", " i would like to ", " i'd like to ", " for me ", " jarvis ", " jimi ", " jimmy ", " as you me ", " asium me ",
             " hey ", " ok ", " okay ", " just ", " now ",
+            // spoken fillers the recognizer sometimes writes out
+            " um ", " umm ", " uh ", " uhh ", " erm ", " hmm ",
         ).forEach { w -> s = s.replace(w, " ") }
         return s.replace(TextNorm.SPACES, " ").trim()
     }
@@ -151,9 +153,10 @@ object RuleMatcher {
         }
         MEDIA_RE.find(t)
             ?.let { return call("set_volume", "level" to it.groupValues[1]) }
+        val v = t.replace(A_BIT_RE, "")
         when {
-            t.matches(MEDIA_WHOLE_RE_5) -> return call("set_volume", "level" to "up")
-            t.matches(MEDIA_WHOLE_RE_6) -> return call("set_volume", "level" to "down")
+            v.matches(MEDIA_WHOLE_RE_5) -> return call("set_volume", "level" to "up")
+            v.matches(MEDIA_WHOLE_RE_6) -> return call("set_volume", "level" to "down")
             t.matches(MEDIA_WHOLE_RE_7) -> return call("set_volume", "level" to "0")
             t.matches(MEDIA_WHOLE_RE_8) -> return call("set_volume", "level" to "100")
         }

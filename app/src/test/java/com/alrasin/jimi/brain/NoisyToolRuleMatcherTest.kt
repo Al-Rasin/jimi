@@ -179,3 +179,12 @@ class StateLastAndRecallAboutTest {
         assertEquals(ToolCall("recall_facts", mapOf("about" to "where i kept my keys")), RuleMatcher.match("do you remember where i kept my keys"))
     }
 }
+
+class FillerAndAmountTest {
+    @Test fun fillersAndAmountWordsAreIgnored() {
+        assertEquals(ToolCall("open_app", mapOf("app" to "whatsapp")), RuleMatcher.match("um open uh whatsapp"))
+        assertEquals(ToolCall("set_volume", mapOf("level" to "up")), RuleMatcher.match("turn up the volume a bit"))
+        assertEquals(ToolCall("set_volume", mapOf("level" to "down")), RuleMatcher.match("turn it down a little"))
+        assertEquals("read_messages", RuleMatcher.match("unread messages")?.tool)
+    }
+}

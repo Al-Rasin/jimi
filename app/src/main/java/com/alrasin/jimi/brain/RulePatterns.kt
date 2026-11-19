@@ -77,6 +77,8 @@ internal val NOISY_TOOL_RE_9 = Regex("\\b(?:volume|sound)(?: to| at)? (\\d+)(?: 
 internal val NOISY_TOOL_RE_10 = Regex("\\b(?:volume|sound) (up|down|off|max|maximum|full)\\b")
 internal val NOISY_TOOL_RE_11 = Regex("\\b(?:on|off)\\b")
 internal val SETTING_RE = Regex("^(?:open |show |go to |take me to )(?:the |my )?(.+?) settings?$")
+/** "turn it up a bit": the amount words change nothing. */
+internal val A_BIT_RE = Regex(" (?:a (?:little )?bit|a little|slightly|some more|more)$")
 internal val SETTING_AFTER_RE = Regex("^(?:the |my )?([a-z ]+?) (on|off)$")
 internal val SETTING_RE_2 = Regex("^(turn on|switch on|enable|turn off|switch off|disable) (?:the |my )?(.+)$")
 internal val SETTING_RE_3 = Regex("\\b(?:mode|saver|sync|nfc|rotation|vibration|vibrate|haptics?|feedback|night light|eye comfort|dark theme|always on display|settings?)$")
