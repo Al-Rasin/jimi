@@ -100,6 +100,8 @@ object RuleMatcher {
         Regex("^(?:i need|i want|i wanna|let me|lets|let s|id like|i would like) (?:to )?(?!you\\b|know\\b|go\\b|see\\b|think\\b|talk\\b)(.+)$") to "$1",
         Regex("^(?:listen to|hear) (?!you\\b|me\\b)(.+)$") to "play $1",
         Regex("^(?:a )?timer (?:for|of) (.+)$") to "set a timer for $1",
+        Regex("^(?:the )?lights? (on|off)$") to "turn $1 flashlight",
+        Regex("^(?:torch|flashlight|flash light)$") to "toggle flashlight",
         Regex("^(?:have to |want to |need to |must )?wake up (at|in|by) (.+)$") to "wake me up $1 $2",
         Regex("^(?:the )?(?:media )?volume (?:is )?(?:too )?(?:low|lower|quieter)$") to "volume down",
         Regex("^(?:the )?(?:media )?volume (?:higher|louder)$") to "volume up",

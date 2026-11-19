@@ -286,4 +286,11 @@ class ComplaintPhrasesTest {
         assertNull(m("lets play a game"))
         assertEquals("play_media", m("listen to quran")?.tool)
     }
+    @Test fun lightsTorchLockMyPhone() {
+        assertEquals(ToolCall("toggle", mapOf("target" to "flashlight", "state" to "off")), m("lights off"))
+        assertEquals(ToolCall("toggle", mapOf("target" to "flashlight", "state" to "toggle")), m("torch"))
+        assertEquals(ToolCall("lock_phone", emptyMap()), m("lock my phone"))
+        assertEquals(ToolCall("unlock_phone", emptyMap()), m("unlock my phone"))
+        assertNull(m("wifi"))
+    }
 }
