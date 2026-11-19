@@ -95,6 +95,7 @@ object RuleMatcher {
     private fun toggle(t: String): ToolCall? {
         if (TOGGLE_RE.containsMatchIn(t)) return null
         if (t == "on flushed light") return call("toggle", "target" to "flashlight", "state" to "on")
+        if (t.matches(SILENT_PHONE_RE)) return call("toggle", "target" to "dnd", "state" to "on")
         val on = TOGGLE_RE_2.containsMatchIn(t) || t.endsWith(" on")
         val off = TOGGLE_RE_3.containsMatchIn(t) || t.endsWith(" off")
         if (on == off) {
