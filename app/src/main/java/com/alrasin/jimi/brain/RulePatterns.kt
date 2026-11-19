@@ -142,6 +142,7 @@ internal val APPS_RE_2 = Regex("^(?:open|launch|start|run|show|switch to(?! .*\\
 internal val SELF_TEST_WHOLE_RE = Regex("^(?:(?:run |do |start )?(?:a |an |your )?(?:self ?test|self check|health check|diagnostics?|full test)|test (?:yourself|your ?self|your skills|your tools|all tools)|check yourself)$")
 
 /** "<switch something on> for 30 minutes": the head is matched again as a plain toggle. */
+internal val UNTIL_TOGGLE_RE = Regex("^(.+?) (?:until|till|til|up to) ((?:\\d{1,2}(?::\\d{2})?(?: ?[ap] ?m)?|noon|midnight|morning|tomorrow morning)(?: (?:tonight|today|tomorrow|in the morning|at night))?)$")
 internal val TIMED_TOGGLE_RE = Regex("^(.+?) for (?:the next |another )?((?:an?|half an|\\d+(?:\\.\\d+)?|one|two|three|four|five|ten|fifteen|twenty|thirty|forty|forty five|sixty|ninety) (?:and a half )?(?:minutes?|mins?|hours?|hrs?)(?: and \\d+ minutes?)?)$")
 
 /** "go back 10 seconds", "skip ahead 30 seconds", "fast forward 1 minute", "rewind". */

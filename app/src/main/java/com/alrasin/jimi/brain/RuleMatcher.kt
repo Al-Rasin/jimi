@@ -68,10 +68,19 @@ object RuleMatcher {
 
     /** "do not disturb for 1 hour", "flashlight on for 2 minutes": switch on now, off again later. */
     private fun timedToggle(t: String, now: LocalDateTime): ToolCall? {
-        val m = TIMED_TOGGLE_RE.matchEntire(t) ?: return null
-        val secs = TimeParser.duration(m.groupValues[2]) ?: return null
+        val forMatch = TIMED_TOGGLE_RE.matchEntire(t)
+        val m = forMatch ?: UNTIL_TOGGLE_RE.matchEntire(t) ?: return null
+        val secs = if (forMatch != null) TimeParser.duration(m.groupValues[2]) else untilSeconds(m.groupValues[2], now)
+        if (secs == null || secs <= 0) return null
         val inner = match(m.groupValues[1], now)?.takeIf { it.tool == "toggle" && it.args["state"] == "on" } ?: return null
         return inner.copy(args = inner.args + ("minutes" to ((secs + 59) / 60).toString()))
+    }
+
+    /** "until 7 am" / "till tomorrow morning": seconds from now, at most a day. */
+    private fun untilSeconds(text: String, now: LocalDateTime): Long? {
+        val at = TimeParser.parse("at $text", now)?.at ?: return null
+        val secs = java.time.Duration.between(now, at).seconds
+        return secs.takeIf { it in 60..86_400 }
     }
 
     fun match(input: String, now: LocalDateTime = LocalDateTime.now()): ToolCall? {
@@ -121,6 +130,7 @@ object RuleMatcher {
     private val REWRITES = listOf(
         Regex("^(?:i need|i want|i wanna|let me|lets|let s|id like|i would like) (?:to )?(?!you\\b|know\\b|go\\b|see\\b|think\\b|talk\\b)(.+)$") to "$1",
         Regex("^(?:listen to|hear) (?!you\\b|me\\b)(.+)$") to "play $1",
+        Regex("^(?:reply|respond|write back) (?:to )?(?!the\\b|this\\b|that\\b|it\\b)([a-z]+(?: [a-z]+)?) (?:saying|with|that) (.+)$") to "text $1 saying $2",
         Regex("^(?:a )?timer (?:for|of) (.+)$") to "set a timer for $1",
         Regex("^(?:the )?lights? (on|off)$") to "turn $1 flashlight",
         Regex("^(?:turn|switch|put) (on|off) (?:the |my )?(?:torch )?lights?$") to "turn $1 flashlight",
