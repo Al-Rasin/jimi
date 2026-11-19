@@ -37,6 +37,13 @@ class QuickFactsTest {
         assertEquals("Tonight it's a new moon, Boss.", QuickFacts.answer("what's the moon phase", newMoon))
     }
 
+    @Test fun fixedFacts() {
+        assertEquals("The Moon is about 384,400 kilometers from Earth.", QuickFacts.answer("how far is the moon"))
+        assertEquals("An adult human has 206 bones.", QuickFacts.answer("how many bones in the human body"))
+        assertEquals("Jupiter is the biggest planet.", QuickFacts.answer("what is the biggest planet"))
+        assertEquals(null, QuickFacts.answer("light"))
+    }
+
     @Test fun units() {
         assertEquals("1 kilogram is 1000 grams.", a("how many grams in a kilo"))
         assertEquals("5 kilometers is 3.11 miles.", a("convert 5 km to miles"))

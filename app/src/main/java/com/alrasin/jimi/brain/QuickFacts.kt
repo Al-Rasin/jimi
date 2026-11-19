@@ -20,8 +20,53 @@ object QuickFacts {
     fun answer(input: String, now: ZonedDateTime = ZonedDateTime.now()): String? {
         val t = prepare(input)
         if (t.isEmpty()) return null
-        return worldTime(t, now) ?: units(t) ?: dates(t, now.toLocalDate()) ?: spell(t) ?: capital(t) ?: moon(t, now)
+        return worldTime(t, now) ?: units(t) ?: dates(t, now.toLocalDate()) ?: spell(t) ?: capital(t) ?: moon(t, now) ?: fact(t)
     }
+
+    // ---- a few fixed facts the small model often gets wrong ----
+
+    private val ASK = "(?:(?:do you know |tell me )?(?:whats|what is|what are|how far is|how far away is|how big is|how hot is|how many|how much|how fast is|how fast does|how long is|how tall is|how deep is|how old is|which is|who is|who was|when is|when was) )?(?:the )?"
+    private val FACTS = listOf(
+        "(?:distance (?:to|from earth to|between earth and) the moon|the moon from earth|moon(?: from earth)?(?: from us)?)" to
+            "The Moon is about 384,400 kilometers from Earth.",
+        "(?:distance (?:to|from earth to|between earth and) the sun|the sun from earth|sun(?: from earth)?(?: from us)?)" to
+            "The Sun is about 150 million kilometers from Earth.",
+        "speed of light|light travel|fast does light travel" to "Light travels about 300,000 kilometers per second.",
+        "speed of sound|sound travel|fast does sound travel" to "Sound travels about 343 meters per second in air.",
+        "boiling point of water|water boil(?: at)?|temperature (?:does )?water boils?(?: at)?" to "Water boils at 100 degrees Celsius at sea level.",
+        "freezing point of water|water freeze(?: at)?|temperature (?:does )?water freezes?(?: at)?" to "Water freezes at 0 degrees Celsius.",
+        "(?:days are there in|days in|days does) (?:a |one )?year(?: have)?" to "A year has 365 days, or 366 in a leap year.",
+        "(?:days are there in|days in|days does) (?:a |one )?week(?: have)?" to "A week has 7 days.",
+        "(?:weeks are there in|weeks in|weeks does) (?:a |one )?year(?: have)?" to "A year has 52 weeks and one or two days.",
+        "(?:hours are there in|hours in|hours does) (?:a |one )?day(?: have)?" to "A day has 24 hours.",
+        "(?:seconds are there in|seconds in) (?:a |one )?(?:minute)" to "A minute has 60 seconds.",
+        "(?:seconds are there in|seconds in) (?:a |one )?(?:hour)" to "An hour has 3,600 seconds.",
+        "(?:seconds are there in|seconds in) (?:a |one )?(?:day)" to "A day has 86,400 seconds.",
+        "(?:planets are there|planets in (?:the |our )?solar system)" to
+            "There are 8 planets: Mercury, Venus, Earth, Mars, Jupiter, Saturn, Uranus and Neptune.",
+        "(?:biggest|largest) planet(?: in (?:the |our )?solar system)?" to "Jupiter is the biggest planet.",
+        "(?:smallest) planet(?: in (?:the |our )?solar system)?" to "Mercury is the smallest planet.",
+        "(?:closest|nearest) planet to the sun" to "Mercury is the closest planet to the Sun.",
+        "(?:hottest) planet(?: in (?:the |our )?solar system)?" to "Venus is the hottest planet.",
+        "(?:continents are there|continents in the world)" to
+            "There are 7 continents: Asia, Africa, North America, South America, Antarctica, Europe and Australia.",
+        "(?:oceans are there|oceans in the world)" to "There are 5 oceans: Pacific, Atlantic, Indian, Southern and Arctic.",
+        "(?:biggest|largest) ocean(?: in the world)?" to "The Pacific is the biggest ocean.",
+        "(?:tallest|highest) mountain(?: in the world)?|mount everest|everest" to "Mount Everest is the tallest mountain, about 8,849 meters high.",
+        "(?:longest) river(?: in the world)?" to "The Nile is usually called the longest river, about 6,650 kilometers.",
+        "(?:biggest|largest) country(?: in the world)?" to "Russia is the biggest country by area.",
+        "(?:smallest) country(?: in the world)?" to "Vatican City is the smallest country.",
+        "(?:biggest|largest|most populated|most populous) country by population|country with the most people" to
+            "India has the most people, just ahead of China.",
+        "(?:biggest|largest) animal(?: in the world)?" to "The blue whale is the biggest animal ever known.",
+        "(?:fastest) (?:land )?animal(?: in the world)?" to "The cheetah is the fastest land animal, up to about 110 kilometers per hour.",
+        "(?:bones are there in|bones in|bones does) (?:the |a )?(?:human body|adult human|body)(?: have)?" to "An adult human has 206 bones.",
+        "(?:teeth does|teeth do|teeth in) (?:an )?(?:adult|human|person|people)(?: have)?" to "An adult has 32 teeth.",
+        "(?:chemical formula (?:of|for) water|formula of water)" to "Water is H2O.",
+        "(?:value of )?pi" to "Pi is about 3.14159.",
+    ).map { (q, a) -> Regex("^$ASK(?:$q)(?: in kilometers| in km| in miles| from here)?$") to a }
+
+    private fun fact(t: String): String? = FACTS.firstOrNull { it.first.matches(t) }?.second
 
     // ---- moon phase (simple synodic month from a known new moon) ----
 
