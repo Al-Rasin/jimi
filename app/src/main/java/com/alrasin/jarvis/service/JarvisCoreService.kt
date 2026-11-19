@@ -597,12 +597,15 @@ class JarvisCoreService : LifecycleService() {
             _microphoneAvailable.value = false
             _phase.value = PHASE_PREPARING
             JarvisLog.i("STT engine=Phone capture=$source; sherpa microphone released")
+            val wokeAt = SystemClock.elapsedRealtime()
             try {
                 val replied = source == "voice" && playWakeReplyFirst()
+                if (replied) JarvisLog.i("latency: wake reply done ${SystemClock.elapsedRealtime() - wokeAt} ms after wake")
                 if (epoch != speechEpoch) return true
                 val raw = coroutineScope {
                     val recognition = async { phone.recognize(snapshot.hotwords, onReady = {
                         if (epoch == speechEpoch) {
+                            JarvisLog.i("latency: mic ready ${SystemClock.elapsedRealtime() - wokeAt} ms after wake")
                             _phase.value = if (source == "follow_up") PHASE_FOLLOW_UP else PHASE_HEARING
                             if (source != "voice") tone.listen() else if (!replied) acknowledgeWake(tone)
                         }
@@ -635,7 +638,7 @@ class JarvisCoreService : LifecycleService() {
                     JarvisLog.i("STT engine=Phone unavailable/error/blank; retry Phone when online, offline fallback otherwise")
                     return true
                 }
-                JarvisLog.i("STT engine=Phone transcript received (${heard.length} characters)")
+                JarvisLog.i("STT engine=Phone transcript received (${heard.length} characters), ${SystemClock.elapsedRealtime() - wokeAt} ms after wake")
                 synchronized(speechState) {
                     if (epoch == speechEpoch) {
                         tone.endListening()
