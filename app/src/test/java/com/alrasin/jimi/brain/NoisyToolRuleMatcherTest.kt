@@ -324,4 +324,11 @@ class ComplaintPhrasesTest {
         assertEquals(ToolCall("open_map", mapOf("place" to "home", "mode" to "navigate")), m("Take me home."))
         assertEquals("go_home", m("go home")?.tool)
     }
+
+    @Test fun lastPhotoSelfieShoppingDay() {
+        assertEquals(ToolCall("open_app", mapOf("app" to "gallery")), m("Open the last photo."))
+        assertEquals(ToolCall("open_app", mapOf("app" to "camera")), m("Open camera in selfie mode."))
+        assertEquals(ToolCall("create_note", mapOf("text" to "shopping list milk")), m("Add milk to my shopping list."))
+        assertEquals(ToolCall("device_status", mapOf("what" to "tomorrow")), m("What day is it tomorrow?"))
+    }
 }

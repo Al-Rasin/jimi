@@ -117,6 +117,10 @@ object RuleMatcher {
         Regex("^turn (up|down) (?:the )?(?:sound|audio)$") to "volume $1",
         Regex("^turn on (?:the )?(?:sound|audio)$") to "unmute",
         Regex("^note down (.+)$") to "take a note $1",
+        Regex("^(?:what|which) day is it (today|tomorrow)$") to "what day is $1",
+        Regex("^(?:open|show)(?: me)? (?:the |my )?(?:last|latest|recent|newest) (?:photos?|pictures?|pics?|images?)$") to "open gallery",
+        Regex("^open (?:the )?camera (?:in|on) (?:selfie|front)(?: camera)? mode$") to "open camera",
+        Regex("^(?:add|put) (.+?) (?:to|on|in) (?:my |the )?(?:shopping|grocery|groceries) list$") to "take a note shopping list $1",
         // "alarm at 6 and 30" is said for 6:30.
         Regex("^(.*\\b(?:alarm|wake me(?: up)?)\\b.*?\\b(?:at|for) )(\\d{1,2}) and ([0-5]\\d)\\b(.*)$") to "$1$2:$3$4",
         Regex("^cancel (?:it|that|this)$") to "cancel",
