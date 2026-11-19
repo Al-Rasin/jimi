@@ -274,4 +274,14 @@ class IntentRouterTest {
             RuleMatcher.appNameMatches = previous
         }
     }
+
+    @Test fun namingWikipediaKeepsTheWikiTool() {
+        for (s in listOf("tell me about black holes from wikipedia", "who is albert einstein on wikipedia")) {
+            val call = RuleMatcher.match(s)
+            assertEquals(s, "wiki_lookup", call?.tool)
+            assertFalse(s, call!!.args["topic"]!!.contains("wiki"))
+            assertEquals(s, IntentRouter.Route.TOOL, IntentRouter.classify(s, call).route)
+        }
+        assertEquals(IntentRouter.Route.CHAT, IntentRouter.classify("tell me about black holes").route)
+    }
 }

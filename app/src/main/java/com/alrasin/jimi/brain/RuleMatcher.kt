@@ -312,8 +312,8 @@ object RuleMatcher {
         KNOWLEDGE_RE_3.find(t)
             ?.let { if (!t.startsWith("find my")) return call("web_search", "query" to it.groupValues[1]) }
         KNOWLEDGE_RE_4.find(t)
-            ?.let { return call("wiki_lookup", "topic" to it.groupValues[1].removeSuffix(" on wikipedia")) }
-        KNOWLEDGE_RE_5.find(t)?.let { return call("wiki_lookup", "topic" to it.groupValues[1]) }
+            ?.let { return call("wiki_lookup", "topic" to it.groupValues[1].replace(WIKI_TAIL_RE, "")) }
+        KNOWLEDGE_RE_5.find(t)?.let { return call("wiki_lookup", "topic" to it.groupValues[1].replace(WIKI_TAIL_RE, "")) }
         KNOWLEDGE_RE_6.find(t)
             ?.let { return call("open_url", "url" to it.groupValues[1].replace(" dot ", ".").replace(KNOWLEDGE_RE_7, ".$1")) }
         return null

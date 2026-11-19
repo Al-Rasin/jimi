@@ -57,6 +57,7 @@ object IntentRouter {
             "who won (?:the |today'?s |yesterday'?s )?(?:match|game|election)|" +
             "weather (?:forecast|today|tomorrow)|(?:today'?s|tomorrow'?s) weather)\\b",
     )
+    private val wikiSource = Regex("\\b(?:wikipedia|wiki)\\b")
     private val question = Regex("^(?:what|what's|whats|who|who's|whos|where|when|why|how|which|is|are|do|does|did|can|could|would|should)\\b")
     private val chatStatement = Regex("^(?:i (?:think|feel|wonder|wish|believe|like|love|hate|am)|i'm|im|let'?s discuss|tell me something)\\b")
     private val deviceQuestion = Regex("\\b(?:my|this|our) (?:phone|device|battery|screen|notifications?|messages?|notes?|reminders?|alarms?|contacts?)\\b")
@@ -96,7 +97,9 @@ object IntentRouter {
         val quoted = raw.firstOrNull() in setOf('"', '“', '\'') && raw.lastOrNull() in setOf('"', '”', '\'')
         if (quoted || spokenQuote.matches(raw) || (negation.matches(normalized) && ruleCall?.tool != "app_questions")) return Decision(Route.CHAT, 0.98f, "quoted or negated request")
         if (nickname.matches(normalized) || metaphor.matches(normalized)) return Decision(Route.CHAT, 0.98f, "conversational expression")
-        if (explanation.matches(normalized) || definition.matches(normalized) || creative.matches(normalized)) return Decision(Route.CHAT, 0.96f, "explanation or creative request")
+        // "tell me about X from wikipedia" names the source, so it keeps the Wikipedia tool.
+        val namesWiki = ruleCall?.tool == "wiki_lookup" && wikiSource.containsMatchIn(normalized)
+        if (!namesWiki && (explanation.matches(normalized) || definition.matches(normalized) || creative.matches(normalized))) return Decision(Route.CHAT, 0.96f, "explanation or creative request")
         if (greeting.matches(normalized)) return Decision(Route.CHAT, 0.98f, "conversation")
         if (capabilityQuestion.containsMatchIn(normalized) && ruleCall?.tool !in CAPABILITY_TOOLS) return Decision(Route.CHAT, 0.98f, "capability question")
 
@@ -120,7 +123,7 @@ object IntentRouter {
         if (ruleCall != null) {
             if (ruleCall.tool in webTools) return Decision(Route.WEB, 0.96f, "web rule: ${ruleCall.tool}")
             // Generic factual questions stay offline; explicit Wikipedia requests retain their tool.
-            if (ruleCall.tool == "wiki_lookup" && question.containsMatchIn(normalized)) {
+            if (ruleCall.tool == "wiki_lookup" && !namesWiki && question.containsMatchIn(normalized)) {
                 return Decision(Route.CHAT, 0.92f, "general knowledge question")
             }
             return Decision(Route.TOOL, 0.97f, "tool rule: ${ruleCall.tool}")
