@@ -19,6 +19,15 @@ class QuickMathTest {
         assertEquals("The square root of 81 is 9.", QuickMath.answer("square root of 81"))
         assertEquals("12 squared is 144.", QuickMath.answer("what is 12 squared"))
     }
+    @Test fun powersAndPicks() {
+        assertEquals("2 to the power of 10 is 1024.", QuickMath.answer("what's 2 to the power of 10"))
+        assertEquals("3 to the power of 4 is 81.", QuickMath.answer("3 raised to 4"))
+        repeat(20) {
+            val n = QuickMath.answer("pick a number between one and ten")!!.removeSuffix(".").toInt()
+            assert(n in 1..10)
+        }
+        assertNull(QuickMath.answer("pick a number between 10 and 1"))
+    }
     @Test fun divideByZero() {
         assertEquals("You can't divide by zero, Boss.", QuickMath.answer("5 divided by 0"))
     }

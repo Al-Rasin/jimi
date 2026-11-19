@@ -3,6 +3,7 @@ package com.alrasin.jimi.brain
 import java.math.BigDecimal
 import java.math.MathContext
 import java.math.RoundingMode
+import kotlin.random.Random
 
 /**
  * "what is 25 times 4", "15 percent of 200", "square root of 81", "12 / 5": answered at once, offline.
@@ -19,12 +20,19 @@ object QuickMath {
     private val PERCENT_OF = Regex("^(\\d+(?:\\.\\d+)?) ?(?:percent|%) of (\\d+(?:\\.\\d+)?)$")
     private val ROOT = Regex("^(?:the )?square root of (\\d+(?:\\.\\d+)?)$")
     private val SQUARED = Regex("^(\\d+(?:\\.\\d+)?) (squared|cubed)$")
+    private val POWER = Regex("^(\\d+(?:\\.\\d+)?) (?:to the power(?: of)?|raised to(?: the power(?: of)?)?|power) (\\d{1,3})$")
+    private val PICK = Regex("^(?:(?:can you |please )?(?:pick|choose|give me|say|tell me) )?(?:a |any )?(?:random )?number (?:between|from) (\\d{1,9}) (?:and|to) (\\d{1,9})$")
     private val TOKEN = Regex("\\d+(?:\\.\\d+)?|[-+*/()]")
     private val EXPR = Regex("^[\\d.+\\-*/() ]+$")
 
     /** The spoken answer, or null when [input] is not a plain sum. */
     fun answer(input: String): String? {
         val t = prepare(input) ?: return null
+        PICK.matchEntire(t)?.let { m ->
+            val a = m.groupValues[1].toLong()
+            val b = m.groupValues[2].toLong()
+            return if (a <= b) "${Random.nextLong(a, b + 1)}." else null
+        }
         PERCENT_OF.matchEntire(t)?.let { m ->
             val v = m.groupValues[1].toBigDecimal() * m.groupValues[2].toBigDecimal() / BigDecimal(100)
             return "${m.groupValues[1]} percent of ${m.groupValues[2]} is ${show(v)}."
@@ -37,6 +45,11 @@ object QuickMath {
             val n = m.groupValues[1].toBigDecimal()
             val v = if (m.groupValues[2] == "squared") n * n else n * n * n
             return "${m.groupValues[1]} ${m.groupValues[2]} is ${show(v)}."
+        }
+        POWER.matchEntire(t)?.let { m ->
+            val v = m.groupValues[1].toBigDecimal().pow(m.groupValues[2].toInt())
+            if (v.precision() - v.scale() > 15) return null
+            return "${m.groupValues[1]} to the power of ${m.groupValues[2]} is ${show(v)}."
         }
         if (!EXPR.matches(t) || t.none { it in "+-*/" } || t.none(Char::isDigit)) return null
         val tokens = TOKEN.findAll(t).map { it.value }.toList()
@@ -59,7 +72,7 @@ object QuickMath {
         t = NumberWords.normalize(t)
         t = LEAD.replace(t, "").let { TAIL.replace(it, "") }.trim()
         if (t.isEmpty() || t.none(Char::isDigit)) return null
-        if (PERCENT_OF.matches(t) || ROOT.matches(t) || SQUARED.matches(t)) return t
+        if (PERCENT_OF.matches(t) || ROOT.matches(t) || SQUARED.matches(t) || POWER.matches(t) || PICK.matches(t)) return t
         for ((w, op) in WORD_OPS) t = t.replace(Regex("(?<=\\d|\\)) $w (?=\\d|\\()"), " $op ")
         // "5x3" typed without spaces
         t = t.replace(Regex("(?<=\\d)x(?=\\d)"), "*")

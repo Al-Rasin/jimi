@@ -127,3 +127,18 @@ class RingerAndStatusTest {
         assertEquals(status("battery"), RuleMatcher.match("is my phone charging"))
     }
 }
+
+class EverydayGapsTest {
+    @Test fun alarmPrayerVolume() {
+        assertEquals("list_alarms", RuleMatcher.match("what's my next alarm")?.tool)
+        assertEquals("prayer_times", RuleMatcher.match("what is the prayer time")?.tool)
+        assertEquals(ToolCall("set_volume", mapOf("level" to "down")), RuleMatcher.match("turn it down"))
+        assertEquals(ToolCall("set_volume", mapOf("level" to "up")), RuleMatcher.match("turn it up"))
+    }
+    @Test fun chanceAndPersonalSmallTalk() {
+        assert(Persona.smallTalk("flip a coin", 10) in setOf("Heads.", "Tails."))
+        assert(Persona.smallTalk("roll a dice", 10)!!.startsWith("You rolled a "))
+        assert(Persona.smallTalk("how old are you", 10)!!.startsWith("I'm new"))
+        assert(Persona.smallTalk("i love you", 10) != null)
+    }
+}

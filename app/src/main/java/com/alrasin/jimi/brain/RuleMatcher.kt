@@ -356,7 +356,7 @@ object RuleMatcher {
     )
     private val prayerName = prayerNames.keys.joinToString("|")
     private val prayerAll = Regex(
-        "^(?:(?:whats|what are|tell me|show me|give me|read|check)(?: me)? )?(?:the )?(?:(todays|tomorrows) )?$prayerWord" +
+        "^(?:(?:whats|what is|what are|tell me|show me|give me|read|check)(?: me)? )?(?:the )?(?:(todays|tomorrows) )?$prayerWord" +
             "(?: (?:times?|schedule|timings?|time table|timetable))(?: (?:for )?(today|tomorrow))?$",
     )
     private val prayerOne = Regex(

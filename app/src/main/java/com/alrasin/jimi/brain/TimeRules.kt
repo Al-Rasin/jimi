@@ -212,7 +212,7 @@ internal object TimeRules {
 }
 
 private val ALARM_QUESTION_RE = Regex(
-    "^(?:(?:check |see |tell me )?(?:how many|what|which|list|show|tell me|read|check)(?: me)?(?: (?:are|is|all|of|the|my))* alarms?\\b.*" +
+    "^(?:(?:check |see |tell me )?(?:how many|whats|what|which|list|show|tell me|read|check)(?: me)?(?: (?:are|is|all|of|the|my|next))* alarms?\\b.*" +
         "|(?:do i have|have i got|have i set|are there|is there|is|are|any) (?:any )?alarms?\\b.*" +
         "|(?:when|what time) (?:is|does) (?:my |the )?next alarm.*|(?:my|all my) alarms(?: please)?)$"
 )

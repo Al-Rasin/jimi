@@ -2,6 +2,7 @@ package com.alrasin.jimi.brain
 
 import com.alrasin.jimi.core.TextNorm
 import com.alrasin.jimi.core.ToolResult
+import kotlin.random.Random
 
 // Regexes built once, not on every call (ROADMAP §L.4).
 private val CLEAN_RE = Regex("[^a-z' ]")
@@ -15,6 +16,10 @@ private val SMALL_TALK_RE_7 = Regex("(bye|goodbye|see you|later|see ya)")
 private val SMALL_TALK_RE_8 = Regex("tell me a joke|say something funny|joke")
 // Banglish small talk; without these the model shortlist sends "bangla" to the translate tool.
 private val BANGLISH_HOW_RE = Regex("(tumi |apni )?(kemon (acho|achen|aco|asen|achis)|ki (khobor|obostha|koro|korcho|korchen|koren))( jimi)?")
+private val AGE_RE = Regex("(how old are you|whats your age|what is your age|when were you born)")
+private val LOVE_RE = Regex("(i love you|love you|i like you)")
+private val COIN_RE = Regex("(flip|toss) (a |the )?coin|heads or tails")
+private val DICE_RE = Regex("roll (a |the )?(dice|die)")
 private val BANGLISH_LANG_RE = Regex("(tumi |apni )?(ki )?bangla (bojho|bujho|bojhen|bujhen|bolte paro|paro|jano)( ki)?( jimi)?")
 
 /** Name, tone and fixed replies (PLAN 5.3 / 10.3). Short replies; calls the user "Boss". */
@@ -90,6 +95,10 @@ object Persona {
             t.matches(SMALL_TALK_RE_6) -> "I'm here, $ADDRESS."
             t.matches(SMALL_TALK_RE_7) -> "Bye, $ADDRESS."
             t.matches(SMALL_TALK_RE_8) -> JOKES.random()
+            t.matches(AGE_RE) -> "I'm new, $ADDRESS. I get a little better every update."
+            t.matches(LOVE_RE) -> "That's kind, $ADDRESS. I'm always here for you."
+            t.matches(COIN_RE) -> if (Random.nextBoolean()) "Heads." else "Tails."
+            t.matches(DICE_RE) -> "You rolled a ${Random.nextInt(1, 7)}."
             t.matches(BANGLISH_HOW_RE) -> "Bhalo achi, $ADDRESS. Ready when you are."
             t.matches(BANGLISH_LANG_RE) -> "A little, $ADDRESS. I can translate Bangla, but commands work best in English."
             else -> null
