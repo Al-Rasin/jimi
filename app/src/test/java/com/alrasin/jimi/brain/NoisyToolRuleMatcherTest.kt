@@ -218,3 +218,22 @@ class AlarmCountdownTipTest {
         assertEquals("20 percent of 50 is 10.", QuickMath.answer("what's 20 percent tip on 50"))
     }
 }
+
+class MathWordsTest {
+    @Test fun fractionsAndDiscounts() {
+        assertEquals("Half of 80 is 40.", QuickMath.answer("what is half of 80"))
+        assertEquals("A third of 90 is 30.", QuickMath.answer("what's a third of 90"))
+        assertEquals("Double 45 is 90.", QuickMath.answer("double 45"))
+        assertEquals("200 with 10 percent off is 180.", QuickMath.answer("what's 10 percent off 200"))
+    }
+
+    @Test fun roundFactorialPrimeAverage() {
+        assertEquals("3.7 rounded is 4.", QuickMath.answer("round 3.7"))
+        assertEquals("7 factorial is 5040.", QuickMath.answer("what's 7 factorial"))
+        assertEquals("Yes, 17 is a prime number.", QuickMath.answer("is 17 a prime number"))
+        assertEquals("No, 21 is not prime. It divides by 3.", QuickMath.answer("is 21 prime"))
+        assertEquals("The average is 6.", QuickMath.answer("average of 4, 6 and 8"))
+        assertEquals("2 to the power of 10 is 1024.", QuickMath.answer("what is 2 to the 10th"))
+        assertEquals(null, QuickMath.answer("21 factorial"))
+    }
+}

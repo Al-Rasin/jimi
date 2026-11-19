@@ -52,6 +52,9 @@ class QuickFactsTest {
         assertEquals("41 days are left in 2026.", QuickFacts.answer("how many days left in the year", now))
         assertEquals("Friday is 27 November.", QuickFacts.answer("what is the date next friday", now))
         assertEquals("90 minutes is 1.5 hours.", QuickFacts.answer("convert 90 minutes to hours", now))
+        assertEquals("Christmas is 25 December, a Friday, in 35 days.", QuickFacts.answer("how many days until christmas", now))
+        assertEquals("New Year's Day is 1 January 2027, a Friday, in 42 days.", QuickFacts.answer("when is new year", now))
+        assertEquals("Yesterday was Thursday, 19 November.", QuickFacts.answer("what day was yesterday", now))
     }
 
     @Test fun units() {

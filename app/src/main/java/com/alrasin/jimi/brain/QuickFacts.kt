@@ -290,7 +290,31 @@ object QuickFacts {
             "|^(?:when is|what date is) (next|this|coming|this coming) (${WEEKDAYS.joinToString("|")})$",
     )
 
+    private val HOLIDAYS = mapOf(
+        "christmas" to (12 to 25), "christmas day" to (12 to 25), "xmas" to (12 to 25),
+        "new year" to (1 to 1), "new years" to (1 to 1), "new years day" to (1 to 1), "new year day" to (1 to 1),
+        "new years eve" to (12 to 31), "valentines day" to (2 to 14), "valentines" to (2 to 14), "halloween" to (10 to 31),
+    )
+    private val HOLIDAY = Regex(
+        "^(?:how many days (?:are )?(?:left )?(?:until|till|til|to|before|for) |when is |what day is |how long (?:until|till|to) )" +
+            "(?:the )?(?:next )?(${HOLIDAYS.keys.sortedByDescending { it.length }.joinToString("|")})(?: this year)?$",
+    )
+    private val YESTERDAY = Regex("^(?:what|which) day (?:was|is) (?:it )?yesterday$|^(?:whats|what is|what was) (?:the )?(?:date )?yesterdays? ?(?:date)?$")
+
     private fun dates(t: String, today: LocalDate): String? {
+        HOLIDAY.matchEntire(t)?.let { m ->
+            val (month, day) = HOLIDAYS.getValue(m.groupValues[1])
+            var d = LocalDate.of(today.year, month, day)
+            if (d.isBefore(today)) d = d.plusYears(1)
+            val n = ChronoUnit.DAYS.between(today, d)
+            val name = when (month to day) { 12 to 25 -> "Christmas"; 1 to 1 -> "New Year's Day"; 12 to 31 -> "New Year's Eve"; 2 to 14 -> "Valentine's Day"; else -> "Halloween" }
+            val when_ = when (n) { 0L -> "today"; 1L -> "tomorrow"; else -> "in $n days" }
+            return "$name is ${spoken(d, today)}, a ${weekday(d)}, $when_."
+        }
+        if (YESTERDAY.matches(t)) {
+            val d = today.minusDays(1)
+            return "Yesterday was ${weekday(d)}, ${spoken(d, today)}."
+        }
         DAYS_IN_MONTH.matchEntire(t)?.let { m ->
             val month = MONTHS.indexOf(m.groupValues[1]).takeIf { it >= 0 }?.plus(1) ?: SHORT[m.groupValues[1]] ?: return null
             val year = m.groupValues[2].toIntOrNull() ?: today.year

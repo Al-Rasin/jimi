@@ -20,7 +20,15 @@ object QuickMath {
     private val PERCENT_OF = Regex("^(?:a )?(\\d+(?:\\.\\d+)?) ?(?:percent|%) (?:tip )?(?:of|on) (\\d+(?:\\.\\d+)?)$")
     private val ROOT = Regex("^(?:the )?square root of (\\d+(?:\\.\\d+)?)$")
     private val SQUARED = Regex("^(\\d+(?:\\.\\d+)?) (squared|cubed)$")
-    private val POWER = Regex("^(\\d+(?:\\.\\d+)?) (?:to the power(?: of)?|raised to(?: the power(?: of)?)?|power) (\\d{1,3})$")
+    private val POWER = Regex("^(\\d+(?:\\.\\d+)?) (?:to the power(?: of)?|raised to(?: the power(?: of)?)?|power|to the) (\\d{1,3})(?:st|nd|rd|th)?(?: power)?$")
+    private val FRACTION = Regex("^(?:a |1 |one )?(half|third|quarter|fourth|fifth|tenth) of (\\d+(?:\\.\\d+)?)$")
+    private val TIMES_WORD = Regex("^(double|triple|half) (?:of )?(\\d+(?:\\.\\d+)?)$")
+    private val PERCENT_OFF = Regex("^(\\d+(?:\\.\\d+)?) ?(?:percent|%) (?:off|discount on|discount off) (?:of )?(\\d+(?:\\.\\d+)?)$")
+    private val ROUND = Regex("^round(?: off)? (\\d+\\.\\d+)$")
+    private val FACTORIAL = Regex("^(\\d{1,2}) factorial$|^(?:the )?factorial (?:of )?(\\d{1,2})$")
+    private val PRIME = Regex("^is (\\d{1,12}) (?:a )?prime(?: number)?$")
+    private val AVERAGE = Regex("^(?:the )?(?:average|mean) of (\\d+(?:\\.\\d+)?(?:(?: and)? \\d+(?:\\.\\d+)?)+)$")
+    private val DIVISOR = mapOf("half" to 2, "third" to 3, "quarter" to 4, "fourth" to 4, "fifth" to 5, "tenth" to 10)
     private val PICK = Regex("^(?:(?:can you |please )?(?:pick|choose|give me|say|tell me) )?(?:a |any )?(?:random )?number (?:between|from) (\\d{1,9}) (?:and|to) (\\d{1,9})$")
     private val TOKEN = Regex("\\d+(?:\\.\\d+)?|[-+*/()]")
     private val EXPR = Regex("^[\\d.+\\-*/() ]+$")
@@ -37,6 +45,7 @@ object QuickMath {
             val v = m.groupValues[1].toBigDecimal() * m.groupValues[2].toBigDecimal() / BigDecimal(100)
             return "${m.groupValues[1]} percent of ${m.groupValues[2]} is ${show(v)}."
         }
+        special(t)?.let { return it }
         ROOT.matchEntire(t)?.let { m ->
             val v = Math.sqrt(m.groupValues[1].toDouble())
             return "The square root of ${m.groupValues[1]} is ${show(BigDecimal(v))}."
@@ -65,6 +74,50 @@ object QuickMath {
         return "${spoken(tokens)} is ${show(value)}."
     }
 
+    /** Fractions, double/half, discounts, rounding, factorial, primes, averages. */
+    private fun special(t: String): String? {
+        FRACTION.matchEntire(t)?.let { m ->
+            val v = m.groupValues[2].toBigDecimal().divide(BigDecimal(DIVISOR.getValue(m.groupValues[1])), MathContext.DECIMAL64)
+            val article = if (m.groupValues[1] == "half") "Half" else "A ${m.groupValues[1]}"
+            return "$article of ${m.groupValues[2]} is ${show(v)}."
+        }
+        TIMES_WORD.matchEntire(t)?.let { m ->
+            val n = m.groupValues[2].toBigDecimal()
+            val v = when (m.groupValues[1]) { "double" -> n * BigDecimal(2); "triple" -> n * BigDecimal(3); else -> n.divide(BigDecimal(2)) }
+            return "${m.groupValues[1].replaceFirstChar(Char::uppercase)} ${m.groupValues[2]} is ${show(v)}."
+        }
+        PERCENT_OFF.matchEntire(t)?.let { m ->
+            val price = m.groupValues[2].toBigDecimal()
+            val v = price - price * m.groupValues[1].toBigDecimal() / BigDecimal(100)
+            return "${m.groupValues[2]} with ${m.groupValues[1]} percent off is ${show(v)}."
+        }
+        ROUND.matchEntire(t)?.let { m ->
+            return "${m.groupValues[1]} rounded is ${m.groupValues[1].toBigDecimal().setScale(0, RoundingMode.HALF_UP).toPlainString()}."
+        }
+        FACTORIAL.matchEntire(t)?.let { m ->
+            val n = m.groupValues[1].ifEmpty { m.groupValues[2] }.toInt()
+            if (n > 20) return null
+            val v = (1..n).fold(1L) { acc, k -> acc * k }
+            return "$n factorial is $v."
+        }
+        PRIME.matchEntire(t)?.let { m ->
+            val n = m.groupValues[1].toLong()
+            if (n < 2) return "No, $n is not a prime number."
+            var d = 2L
+            while (d * d <= n) {
+                if (n % d == 0L) return "No, $n is not prime. It divides by $d."
+                d++
+            }
+            return "Yes, $n is a prime number."
+        }
+        AVERAGE.matchEntire(t)?.let { m ->
+            val nums = m.groupValues[1].split(" ").filter { it != "and" }.map { it.toBigDecimal() }
+            val v = nums.fold(BigDecimal.ZERO, BigDecimal::add).divide(BigDecimal(nums.size), MathContext.DECIMAL64)
+            return "The average is ${show(v)}."
+        }
+        return null
+    }
+
     private fun prepare(input: String): String? {
         var t = input.lowercase().trim().trimEnd('?', '.', '!', '=').trim()
             .replace("×", "*").replace("÷", "/").replace(",", "").replace("'", "").replace("’", "")
@@ -72,7 +125,8 @@ object QuickMath {
         t = NumberWords.normalize(t)
         t = LEAD.replace(t, "").let { TAIL.replace(it, "") }.trim()
         if (t.isEmpty() || t.none(Char::isDigit)) return null
-        if (PERCENT_OF.matches(t) || ROOT.matches(t) || SQUARED.matches(t) || POWER.matches(t) || PICK.matches(t)) return t
+        val whole = listOf(PERCENT_OF, ROOT, SQUARED, POWER, PICK, FRACTION, TIMES_WORD, PERCENT_OFF, ROUND, FACTORIAL, PRIME, AVERAGE)
+        if (whole.any { it.matches(t) }) return t
         for ((w, op) in WORD_OPS) t = t.replace(Regex("(?<=\\d|\\)) $w (?=\\d|\\()"), " $op ")
         // "5x3" typed without spaces
         t = t.replace(Regex("(?<=\\d)x(?=\\d)"), "*")
