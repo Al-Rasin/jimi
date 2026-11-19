@@ -5,7 +5,7 @@
 {"text": "wake me up at 6:30", "tool": "set_alarm", "args": {"time": "06:30"}}
 {"text": "set an alarm for 7 am", "tool": "set_alarm", "args": {"time": "07:00"}}
 {"text": "start a 5 minute timer", "tool": "set_timer", "args": {"seconds": "300"}}
-{"text": "stop the alarm", "tool": "cancel_alarm"}
+{"text": "stop the alarm", "tool": "stop_alarm"}
 {"text": "call mom", "tool": "call", "args": {"contact": "mom"}}
 {"text": "ring rahim on whatsapp", "tool": "call", "args": {"contact": "rahim", "app": "whatsapp"}}
 {"text": "text karim I am coming", "tool": "send_sms", "args": {"contact": "karim"}}

@@ -158,6 +158,14 @@ fun timeTools(context: Context): List<Tool> = listOf(
         if (!alarmsSent && !noNextAlarm) return@clockTool ToolResult.fail("The clock didn't accept the turn-off request. Check the Clock app.")
         cancelAlarmResult(noNextAlarm)
     },
+    SimpleTool("stop_alarm", "Stop the alarm that is ringing now; other alarms stay on") { _, _ ->
+        if (RingingAlarm.press(snooze = false)) ToolResult.ok("Alarm stopped. Your other alarms stay on.")
+        else ToolResult.ok("No alarm is ringing now. To switch alarms off, say turn off all alarms, or say its time, like turn off the 7 AM alarm.")
+    },
+    SimpleTool("snooze_alarm", "Snooze the alarm that is ringing now") { _, _ ->
+        if (RingingAlarm.press(snooze = true)) ToolResult.ok("Snoozed.")
+        else ToolResult.ok("No alarm is ringing now.")
+    },
 )
 
 internal fun Context.launchClock(intent: Intent): Boolean {

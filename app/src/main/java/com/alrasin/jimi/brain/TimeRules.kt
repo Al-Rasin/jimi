@@ -32,6 +32,9 @@ internal object TimeRules {
         TIME_RE_3.find(t)?.let { m ->
             TimeParser.durationOnly(m.groupValues[1])?.let { return call("set_timer", "seconds" to it.toString()) }
         }
+        // A ringing alarm: stop or snooze only that one, never switch off the user's other alarms.
+        if (t.matches(RINGING_STOP_RE)) return call("stop_alarm")
+        if (t.matches(RINGING_SNOOZE_RE)) return call("snooze_alarm")
         val all = "(?:the |my |all )*(?:alarms?|timers?)"
         if (t.matches(re("(?:cancel|stop|delete|turn off|switch off|dismiss|remove|clear) $all(?: and $all)?"))) {
             // "cancel the timer" must never touch the user's alarms.
@@ -222,3 +225,5 @@ private val ALARM_QUESTION_RE = Regex(
 // "which alarms are set" asks, it does not set: drop a trailing "(are) set (now)" before the change check.
 private val ALARM_IS_SET_END_RE = Regex("\\b(?:alarms?|are|is) set(?: (?:right )?now| for (?:today|tomorrow))?$")
 private val ALARM_CHANGE_RE = Regex("\\b(?:set|cancel|delete|remove|stop|turn|switch|dismiss|clear|snooze|change|add|make|create|wake)\\b")
+private val RINGING_STOP_RE = Regex("^(?:stop|dismiss|silence|shut off|shut up|turn off|switch off)(?: (?:the|this|that|my))? alarm(?: now)?$")
+private val RINGING_SNOOZE_RE = Regex("^snooze(?: (?:the|this|that|my))?(?: alarm)?(?: for (?:\\d+|five|ten) minutes?)?$")

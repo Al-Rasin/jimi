@@ -355,6 +355,13 @@ class ComplaintPhrasesTest {
         assertEquals(ToolCall("open_app", mapOf("app" to "whatsapp")), m("No, I mean open WhatsApp."))
     }
 
+    @Test fun ringingAlarmStopsOnlyThatOne() {
+        assertEquals(ToolCall("stop_alarm", emptyMap()), m("Stop the alarm."))
+        assertEquals(ToolCall("snooze_alarm", emptyMap()), m("snooze"))
+        assertEquals(ToolCall("snooze_alarm", emptyMap()), m("Snooze for 10 minutes"))
+        assertEquals(ToolCall("cancel_alarm", emptyMap()), m("Turn off all alarms."))
+    }
+
     @Test fun emailSomeoneAbout() {
         assertEquals(ToolCall("compose_email", mapOf("to" to "boss", "subject" to "the meeting")), m("Email boss about the meeting."))
         assertEquals(ToolCall("compose_email", mapOf("to" to "karim", "subject" to "the bill")), m("mail Karim about the bill"))
