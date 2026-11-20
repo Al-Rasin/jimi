@@ -22,6 +22,7 @@ class ClipCollector(
     private var pendingKind: String? = null
     private var pendingPeak = 0f
     private var pendingChunks = 0
+    private var wakeAudio: ShortArray? = null
     var lastWakeId: Long? = null
         private set
     var lastWakePeak = 0f
@@ -40,6 +41,9 @@ class ClipCollector(
             pendingKind = WakeEvent.VERDICT_NONE
             pendingPeak = score
             pendingChunks = AFTER_CHUNKS
+            // Copied now: the command capture runs next and resets the ring, so a later copy held
+            // only 0.5 s of after-command audio instead of the "Hey Jimi" that woke us.
+            wakeAudio = ring.last(CLIP_SAMPLES)
             lastWakeId = null
             CoreState._wakeId.value = null   // the panel asks "Did you call me?" once this wake is saved
             return true
@@ -61,7 +65,9 @@ class ClipCollector(
         if (--pendingChunks > 0) return false
         pendingKind = null
         if (kind == WakeEvent.VERDICT_NEAR) lastNearMs = now
-        val id = save(kind, pendingPeak, thr, ring.last(CLIP_SAMPLES))
+        val audio = if (kind == WakeEvent.VERDICT_NONE) wakeAudio else null
+        wakeAudio = null
+        val id = save(kind, pendingPeak, thr, audio ?: ring.last(CLIP_SAMPLES))
         if (kind == WakeEvent.VERDICT_NONE) {
             lastWakeId = id
             lastWakePeak = pendingPeak
