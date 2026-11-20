@@ -16,6 +16,7 @@ import com.alrasin.jimi.data.NotificationLog
 import com.alrasin.jimi.data.Settings
 import com.alrasin.jimi.service.CoreState
 import com.alrasin.jimi.service.JimiCoreService
+import com.alrasin.jimi.service.Notifications
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.CancellationException
@@ -48,6 +49,17 @@ class JimiNotificationListener : NotificationListenerService() {
     override fun onListenerConnected() {
         instance = this
         JimiLog.i("notification listener connected")
+        runCatching { activeNotifications.orEmpty().forEach(::hideServiceNotification) }
+    }
+
+    /**
+     * Android needs the "Jimi voice service" notification for background mic use, but the user does not
+     * want it in the shade (D-089). Snoozing keeps the service in the foreground; updates stay snoozed.
+     */
+    private fun hideServiceNotification(sbn: StatusBarNotification) {
+        if (sbn.packageName != packageName || sbn.id != Notifications.ID_SERVICE) return
+        runCatching { snoozeNotification(sbn.key, SERVICE_SNOOZE_MS) }
+            .onFailure { JimiLog.e("could not hide service notification", it) }
     }
 
     override fun onListenerDisconnected() {
@@ -56,7 +68,7 @@ class JimiNotificationListener : NotificationListenerService() {
 
     override fun onNotificationPosted(sbn: StatusBarNotification) {
         val n = sbn.notification
-        if (sbn.packageName == packageName) return
+        if (sbn.packageName == packageName) return hideServiceNotification(sbn)
         announceAppCall(sbn)
         scope.launch {
             try {
@@ -257,6 +269,7 @@ class JimiNotificationListener : NotificationListenerService() {
         @Volatile var instance: JimiNotificationListener? = null
             private set
         private const val MAX_LOGGED_KEYS = 200
+        private const val SERVICE_SNOOZE_MS = 365L * 24 * 60 * 60_000   // re-snoozed on every reconnect
         private const val READ_GAP_MS = 6_000L
         private const val BUSY_WAIT_MS = 60_000L
         const val COMPONENT = "com.alrasin.jimi/com.alrasin.jimi.notify.JimiNotificationListener"
