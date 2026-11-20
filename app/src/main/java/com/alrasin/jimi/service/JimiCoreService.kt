@@ -831,7 +831,7 @@ class JimiCoreService : LifecycleService() {
                 }
                 if (req != null && stt != null) {
                     commandEpoch = captureEpoch
-                    if (req == "tap") WakeFeedbackSignal.signal(this)
+                    if (req == "tap") { WakeFeedbackSignal.signal(this); _wakeId.value = null }   // no "Did you call me?" for a tap
                     _phase.value = if (req == "follow_up") PHASE_FOLLOW_UP else PHASE_HEARING
                     if (req == "tap") showPanel()
                     _heard.value = ""
@@ -915,7 +915,6 @@ class JimiCoreService : LifecycleService() {
     ) {
         JimiLog.i("heard ($source): ${text.length} characters")
         if (source == "voice") _wakeId.value = wakeId
-        if (wakeId != null) Notifications.showWakeCheck(this, wakeId, wakeScore, heard = text.ifEmpty { "(nothing)" })
         if (text.isEmpty() && !(refineEmpty && refine != null)) {
             _heard.value = if (source == "follow_up") "" else AssistantActivity.NOTHING_HEARD
             tone.timeout()

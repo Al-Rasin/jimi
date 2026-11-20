@@ -121,6 +121,8 @@ private fun Panel(vm: PanelViewModel, onClose: () -> Unit) {
     val live by vm.live.collectAsStateWithLifecycle()
     val reported by vm.reported.collectAsStateWithLifecycle()
     val backdrop by Backdrop.image.collectAsStateWithLifecycle()
+    val wake by vm.wakeId.collectAsStateWithLifecycle()
+    var answeredWake by remember { mutableStateOf<Long?>(null) }
     var fixing by remember { mutableStateOf(false) }
     var fixText by remember { mutableStateOf("") }
     var typed by remember { mutableStateOf("") }
@@ -238,14 +240,21 @@ private fun Panel(vm: PanelViewModel, onClose: () -> Unit) {
                     }
                 }
             }
+            if (wake != null && wake != answeredWake) {
+                // asked here after a voice wake, not in the notification shade
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text("Did you call me?", color = PanelColors.Dim)
+                    HudChip("Yes") { touch(); answeredWake = wake; vm.called() }
+                    HudChip("No") { answeredWake = wake; vm.notCalled(); close() }
+                }
+            }
             val last = past.lastOrNull()
             if (last != null && !live && !fixing) {
                 // just right or wrong; wrong answers are saved with the question and log for later diagnosis
                 FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    HudChip(if (rated) "✓ Thanks" else "✓ Right", enabled = !rated && reported != last.id, selected = rated) { touch(); rated = true; vm.right() }
+                    HudChip(if (rated) "✓ Thanks" else "✓ Right", enabled = !rated && reported != last.id, selected = rated) { touch(); rated = true; answeredWake = wake; vm.right() }
                     HudChip(if (reported == last.id) "✗ Saved" else "✗ Wrong", enabled = reported != last.id && !rated, selected = reported == last.id) { touch(); vm.wrongAnswer("") }
                     HudChip("✎ Wrong text") { touch(); fixText = last.heard; fixing = true }
-                    HudChip("I didn't call") { vm.notCalled(); close() }
                 }
             }
             if (fixing) {

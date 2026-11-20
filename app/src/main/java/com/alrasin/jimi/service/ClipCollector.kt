@@ -41,6 +41,7 @@ class ClipCollector(
             pendingPeak = score
             pendingChunks = AFTER_CHUNKS
             lastWakeId = null
+            CoreState._wakeId.value = null   // the panel asks "Did you call me?" once this wake is saved
             return true
         }
         if (pendingKind == null && score >= NEAR_MIN && score < thr &&
@@ -64,7 +65,7 @@ class ClipCollector(
         if (kind == WakeEvent.VERDICT_NONE) {
             lastWakeId = id
             lastWakePeak = pendingPeak
-            Notifications.showWakeCheck(context, id, pendingPeak)
+            CoreState._wakeId.value = id   // asked in the wake panel, not in the notification shade
         }
         return false
     }
@@ -73,6 +74,7 @@ class ClipCollector(
         val time = System.currentTimeMillis()
         val file = WakeFeedback.clipFile(context, time, score, verdict)
         Wav.write(file, audio)
+        CommandAudio.keepNewest(WakeFeedback.clipDir(context), MAX_CLIPS)   // ~40 MB; the folder grew without end
         val id = dao.insert(WakeEvent(timeMs = time, score = score, threshold = thr, clipPath = file.path, verdict = verdict))
         JimiLog.i("wake #$id $verdict score=${"%.2f".format(score)}")
         return id
@@ -81,7 +83,8 @@ class ClipCollector(
     private companion object {
         const val CLIP_SAMPLES = 40_000       // 2.5 s per wake clip
         const val MISSED_SECONDS = 3
-        const val AFTER_CHUNKS = 6           // keep ~0.5 s after the peak in the clip
+        const val MAX_CLIPS = 500
+        const val AFTER_CHUNKS = 6          // keep ~0.5 s after the peak in the clip
         const val WAKE_COOLDOWN_MS = 2_000L
         const val NEAR_MIN = 0.2f
         const val NEAR_COOLDOWN_MS = 30_000L

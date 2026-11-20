@@ -90,6 +90,12 @@ class PanelViewModel @Inject constructor(
         viewModelScope.launch(Dispatchers.IO) { WakeFeedback.setVerdict(app, wakes, id, WakeEvent.VERDICT_NO) }
     }
 
+    /** "Did you call me?" → Yes in the panel: the wake was right. */
+    fun called() {
+        val id = wakeId.value ?: return
+        viewModelScope.launch(Dispatchers.IO) { WakeFeedback.setVerdict(app, wakes, id, WakeEvent.VERDICT_YES) }
+    }
+
     private fun rate(ok: Boolean, correction: String?) {
         val id = turnId.value.takeIf { it > 0 } ?: return
         viewModelScope.launch(Dispatchers.IO) {
