@@ -51,7 +51,13 @@ object RuleMatcher {
     private fun mishears(t: String) = MISHEARS.fold(t) { s, (r, to) -> r.replace(s, to) }
 
     /** Drops "please", "can you", "jarvis" etc. around the command. */
+    private val BODY_START_RE = Regex(" (?:saying|that says)(?= )|(?<=^(?:reply|respond|write back)(?: to)? [a-z]{1,20}(?: [a-z]{1,20})?) with(?= )")
+
     private fun polite(t: String): String {
+        // The words of a message are the user's own: "reply to mom with ok" must keep "ok".
+        BODY_START_RE.find(t)?.let { m ->
+            if (m.range.first > 0) return polite(t.substring(0, m.range.first)) + t.substring(m.range.first)
+        }
         var s = " $t "
         listOf(
             " please ", " pls ", " can you ", " could you ", " would you ", " will you ", " i want you to ",
@@ -145,6 +151,7 @@ object RuleMatcher {
         Regex("^(?:open|start) (?:the |my )?(?:torch )?lights?$") to "turn on flashlight",
         Regex("^(?:close|stop) (?:the |my )?(?:torch )?lights?$") to "turn off flashlight",
         Regex("^give (?:a )?(?:call|ring) to (.+)$") to "call $1",
+        Regex("^(?:call|dial|ring) ([a-z]+(?: [a-z]+)?)s (?:phone |mobile |cell )?number$") to "call $1",
         Regex("^(?:make|place|do) (?:a )?(?:phone )?call to (.+)$") to "call $1",
         Regex("^(?!open settings$)(?:open|show|go to|take me to) (?:the |my )?(?:phone )?settings?(?: app)?$") to "open settings",
         Regex("^(?:any|are there any|do i have any|is there any|got any) (?:new |unread )?(?:messages?|sms|texts?)$") to "read messages",

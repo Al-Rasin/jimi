@@ -438,6 +438,14 @@ class ComplaintPhrasesTest {
         }
     }
 
+    @Test fun messageWordsAreKeptAsSaid() {
+        assertEquals(ToolCall("send_sms", mapOf("contact" to "mom", "text" to "ok")), m("reply to mom with ok"))
+        assertEquals(ToolCall("send_sms", mapOf("contact" to "mom", "text" to "ok")), m("respond to mom saying ok"))
+        assertEquals(ToolCall("send_sms", mapOf("contact" to "dad", "text" to "i am coming now")), m("text dad saying i am coming now"))
+        assertEquals(ToolCall("call", mapOf("contact" to "rahim")), m("call rahim please"))
+        assertEquals(ToolCall("call", mapOf("contact" to "rahim")), m("call rahim's number"))
+    }
+
     @Test fun callOnSpeaker() {
         assertEquals(ToolCall("call", mapOf("contact" to "mom", "speaker" to "true")), m("call mom on speaker"))
         assertEquals(ToolCall("call", mapOf("contact" to "dad", "speaker" to "true")), m("call dad on the speakerphone"))
