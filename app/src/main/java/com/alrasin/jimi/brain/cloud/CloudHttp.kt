@@ -15,10 +15,16 @@ import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
 import okhttp3.Response
 import java.io.IOException
+import java.time.ZonedDateTime
+import java.time.format.DateTimeFormatter
 import java.util.concurrent.TimeUnit
 
-/** A cloud model answered with an HTTP error. 429 = free limit reached (D-063). */
-class CloudHttpException(val provider: String, val code: Int) : IllegalStateException("$provider HTTP $code")
+/**
+ * A cloud model answered with an HTTP error. 429 = free limit reached (D-063).
+ * [retryAfterMs] = wait the server asked for (Retry-After header), null when it gave none.
+ */
+class CloudHttpException(val provider: String, val code: Int, val retryAfterMs: Long? = null) :
+    IllegalStateException("$provider HTTP $code")
 
 /** One HTTP path for every cloud model (D-063 §L.6): JSON post, and server-sent events that hand out text pieces. */
 object CloudHttp {
@@ -34,7 +40,7 @@ object CloudHttp {
     suspend fun call(client: OkHttpClient, request: Request, name: String, parse: (String) -> String): String =
         cancellable(client, request) { r ->
             val body = r.body?.string().orEmpty()
-            if (!r.isSuccessful) throw CloudHttpException(name, r.code)
+            if (!r.isSuccessful) throw httpError(name, r)
             parse(body)
         }
 
@@ -56,7 +62,7 @@ object CloudHttp {
     suspend fun stream(
         client: OkHttpClient, request: Request, name: String, sseText: (String) -> String?, onText: (String) -> Unit,
     ): String = cancellable(client, request) { r ->
-        if (!r.isSuccessful) throw CloudHttpException(name, r.code)
+        if (!r.isSuccessful) throw httpError(name, r)
         val source = r.body?.source() ?: error("$name: empty stream")
         val all = StringBuilder()
         while (true) {
@@ -72,6 +78,18 @@ object CloudHttp {
             sseText(line)?.let { all.append(it); onText(it) }
         }
         all.toString().trim()
+    }
+
+    private fun httpError(name: String, r: Response) =
+        CloudHttpException(name, r.code, retryAfterMs(r.header("Retry-After"), System.currentTimeMillis()))
+
+    /** Retry-After as milliseconds: either whole seconds or an HTTP date. Null when missing or unreadable. */
+    fun retryAfterMs(value: String?, nowMs: Long): Long? {
+        val v = value?.trim()?.takeIf { it.isNotEmpty() } ?: return null
+        v.toLongOrNull()?.let { return (it * 1000).coerceAtLeast(0) }
+        return runCatching {
+            ZonedDateTime.parse(v, DateTimeFormatter.RFC_1123_DATE_TIME).toInstant().toEpochMilli() - nowMs
+        }.getOrNull()?.coerceAtLeast(0)
     }
 
     /** Opens the TLS connection early (on wake) so the first real request skips the handshake. Errors ignored. */
