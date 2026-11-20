@@ -10,6 +10,7 @@ import java.time.temporal.TemporalAdjusters
 
 /** RuleMatcher alarms, timers, notes, reminders and calendar. */
 internal object TimeRules {
+    private val RELATIVE_ALARM = Regex("^(?:for |in |after )?(\\d+ (?:minutes?|mins?|hours?|hrs?))(?: from(?: now)?| later)?$")
     private val ISO = DateTimeFormatter.ofPattern("yyyy-MM-dd'T'HH:mm")
     private val HM = DateTimeFormatter.ofPattern("HH:mm")
 
@@ -53,7 +54,8 @@ internal object TimeRules {
             ?: TIME_RE_5.find(t)
             ?: TIME_RE_6.find(t)
         if (alarm != null) {
-            val rawSpec = alarm.groupValues[1]
+            // "for 30 minutes (from now)", "2 hours later": a delay, not a clock time.
+            val rawSpec = alarm.groupValues[1].replace(RELATIVE_ALARM, "in $1")
             val weekRepeat = TIME_RE_7.find(rawSpec)
             val spec = if (weekRepeat != null) rawSpec.replaceRange(weekRepeat.range, " ").trim() else rawSpec
             val label = TIME_RE_8.find(spec)?.groupValues?.get(1)

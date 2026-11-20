@@ -455,6 +455,15 @@ class ComplaintPhrasesTest {
         assertEquals(ToolCall("set_volume", mapOf("level" to "up")), m("i can't hear"))
     }
 
+    @Test fun alarmInMinutesFromNow() {
+        val at = LocalDateTime.of(2026, 11, 20, 9, 0)
+        assertEquals("09:30", RuleMatcher.match("set alarm for 30 minutes from now", at)?.arg("time"))
+        assertEquals("09:30", RuleMatcher.match("set an alarm for 30 minutes", at)?.arg("time"))
+        assertEquals("09:20", RuleMatcher.match("wake me up 20 minutes from now", at)?.arg("time"))
+        assertEquals("11:00", RuleMatcher.match("alarm 2 hours later", at)?.arg("time"))
+        assertEquals("repeat_last", m("can you read that again")?.tool)
+    }
+
     @Test fun callOnSpeaker() {
         assertEquals(ToolCall("call", mapOf("contact" to "mom", "speaker" to "true")), m("call mom on speaker"))
         assertEquals(ToolCall("call", mapOf("contact" to "dad", "speaker" to "true")), m("call dad on the speakerphone"))
