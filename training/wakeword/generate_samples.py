@@ -26,6 +26,8 @@ def _espeak_dir() -> Path:
     if len(str(ESPEAK_DATA_DIR)) < 100:
         return ESPEAK_DATA_DIR
     short = Path.home() / ".cache/jarvis-espeak-ng-data"
+    if short.is_symlink() and short.resolve() != Path(ESPEAK_DATA_DIR).resolve():
+        short.unlink(missing_ok=True)   # left over from an older venv
     if not short.exists():
         short.parent.mkdir(parents=True, exist_ok=True)
         try:
