@@ -20,6 +20,7 @@ class JimiApp : Application() {
 
     override fun onCreate() {
         super.onCreate()
+        JimiLog.init(this)
         if (applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE != 0) {
             StrictMode.setThreadPolicy(StrictMode.ThreadPolicy.Builder()
                 .detectDiskReads().detectDiskWrites().detectNetwork().detectCustomSlowCalls()
