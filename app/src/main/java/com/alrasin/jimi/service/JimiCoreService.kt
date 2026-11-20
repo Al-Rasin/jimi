@@ -289,7 +289,9 @@ class JimiCoreService : LifecycleService() {
         if (!spokenWake || audio == null) { tone.wake(); return }
         val epoch = speechEpoch
         lifecycleScope.launch(Dispatchers.IO) {
-            TextToSpeech.playPcm(audio.samples, audio.sampleRate) { epoch != speechEpoch }
+            val start = SystemClock.elapsedRealtime()
+            val played = TextToSpeech.playPcm(audio.samples, audio.sampleRate) { epoch != speechEpoch }
+            JimiLog.i("wake reply ${audio.samples.size * 1000L / audio.sampleRate} ms played=$played in ${SystemClock.elapsedRealtime() - start} ms")
         }
     }
 
@@ -602,14 +604,15 @@ class JimiCoreService : LifecycleService() {
             JimiLog.i("STT engine=Phone capture=$source; sherpa microphone released")
             val wokeAt = SystemClock.elapsedRealtime()
             try {
-                // The wake reply plays once Google's mic is open (D-085), so it adds no wait; if Google hears it, it is stripped below.
-                if (source == "voice") warmUpForCommand()
+                // The wake reply plays right at wake, while Google's mic opens (D-086): once the mic is open MIUI
+                // mutes our playback. If Google hears its tail, it is stripped below.
+                if (source == "voice") { warmUpForCommand(); wakeCue(tone) }
                 val raw = coroutineScope {
                     val recognition = async { phone.recognize(snapshot.hotwords, onReady = {
                         if (epoch == speechEpoch) {
                             JimiLog.i("latency: mic ready ${SystemClock.elapsedRealtime() - wokeAt} ms after wake")
                             _phase.value = if (source == "follow_up") PHASE_FOLLOW_UP else PHASE_HEARING
-                            if (source != "voice") tone.listen() else wakeCue(tone)
+                            if (source != "voice") tone.listen()
                         }
                     }) }
                     val cancellation = launch {
