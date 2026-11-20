@@ -18,7 +18,7 @@ internal val MEDIA_WHOLE_RE = Regex("^(?:(?:pause|stop)(?: the)?(?: music| song|
 internal val MEDIA_WHOLE_RE_2 = Regex("^(?:(?:resume|continue|unpause|play)(?: the)?(?: music| song| video| playback)?|play it)$")
 internal val MEDIA_WHOLE_RE_3 = Regex("^(?:(?:next|skip)(?: the)?(?: song| track| video)?|play (?:the )?next(?: song| track)?|skip (?:this|it)(?: one| song| track| video)?)$")
 internal val MEDIA_WHOLE_RE_4 = Regex("^(?:(?:previous|last|go back)(?: song| track)|go back (?:to )?(?:the )?(?:last|previous) (?:song|track)|play (?:the )?previous(?: song| track)?|previous)$")
-internal val MEDIA_WHOLE_RE_5 = Regex("^(?:(?:turn |increase |raise |volume )(?:the |it )?(?:volume )?up|turn up(?: the)? volume|(?:increase|raise|louder)(?: the)?(?: volume)?|make it louder|volume up|louder|(?:i )?(?:cant|can not|cannot) hear (?:you|it|anything)|(?:its |it is |this is )?too (?:quiet|low|soft))$")
+internal val MEDIA_WHOLE_RE_5 = Regex("^(?:(?:turn |increase |raise |volume )(?:the |it )?(?:volume )?up|turn up(?: the)? volume|(?:increase|raise|louder)(?: the)?(?: volume)?|make it louder|volume up|louder|(?:i )?(?:cant|can not|cannot) hear(?: you| it| anything| the phone)?|(?:its |it is |this is )?too (?:quiet|low|soft))$")
 internal val MEDIA_WHOLE_RE_6 = Regex("^(?:(?:turn |decrease |lower |reduce )(?:the |it )?(?:volume )?down|turn down(?: the)? volume|(?:decrease|lower|reduce|quieter)(?: the)?(?: volume)?|make it quieter|volume down|quieter|(?:its |it is |this is )?(?:too|very|way too) loud)$")
 // "unmute" brings sound back to half, a safe level
 internal val SHOW_PHOTOS_RE = Regex("^(?:show|open|see)(?: me)? (?:my |the )?(?:photos|pictures|pics|images)$")

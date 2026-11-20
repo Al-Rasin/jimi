@@ -446,6 +446,15 @@ class ComplaintPhrasesTest {
         assertEquals(ToolCall("call", mapOf("contact" to "rahim")), m("call rahim's number"))
     }
 
+    @Test fun tellAndCallLater() {
+        assertEquals("send_sms", m("tell rahim i'll be late")?.tool)
+        assertEquals("rahim", m("tell rahim that i am coming")?.arg("contact"))
+        assertNotEquals("send_sms", m("tell me a joke")?.tool)
+        val later = RuleMatcher.match("call mom in 10 minutes", LocalDateTime.of(2026, 11, 20, 9, 0))
+        assertEquals(ToolCall("create_reminder", mapOf("text" to "call mom", "time" to "2026-11-20T09:10")), later)
+        assertEquals(ToolCall("set_volume", mapOf("level" to "up")), m("i can't hear"))
+    }
+
     @Test fun callOnSpeaker() {
         assertEquals(ToolCall("call", mapOf("contact" to "mom", "speaker" to "true")), m("call mom on speaker"))
         assertEquals(ToolCall("call", mapOf("contact" to "dad", "speaker" to "true")), m("call dad on the speakerphone"))

@@ -151,6 +151,10 @@ object RuleMatcher {
         Regex("^(?:open|start) (?:the |my )?(?:torch )?lights?$") to "turn on flashlight",
         Regex("^(?:close|stop) (?:the |my )?(?:torch )?lights?$") to "turn off flashlight",
         Regex("^give (?:a )?(?:call|ring) to (.+)$") to "call $1",
+        // "call mom in 10 minutes" is a reminder, not a contact called "mom in 10 minutes".
+        Regex("^(call|text|message) ([a-z]+(?: [a-z]+)?) (in|after) (\\d+ (?:minutes?|mins?|hours?|hrs?))$") to "remind me $3 $4 to $1 $2",
+        // "tell rahim ill be late": a message to rahim. "tell me ..." and "tell him ..." are not.
+        Regex("^tell (?!me\\b|him\\b|her\\b|them\\b|us\\b|you\\b|a\\b|the\\b|my\\b|jimi\\b|about\\b)([a-z]+) (?:that )?((?:i|im|ill|ive|id|we|were|its|i am|i will) .+)$") to "text $1 saying $2",
         Regex("^(?:call|dial|ring) ([a-z]+(?: [a-z]+)?)s (?:phone |mobile |cell )?number$") to "call $1",
         Regex("^(?:make|place|do) (?:a )?(?:phone )?call to (.+)$") to "call $1",
         Regex("^(?!open settings$)(?:open|show|go to|take me to) (?:the |my )?(?:phone )?settings?(?: app)?$") to "open settings",
