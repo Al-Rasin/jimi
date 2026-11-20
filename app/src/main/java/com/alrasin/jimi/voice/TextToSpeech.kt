@@ -209,6 +209,7 @@ class TextToSpeech(
         /** Free the speaker this long after the last piece. */
         private const val IDLE_MS = 2_000L
         private const val STOP_RELEASE_MS = 300L
+        private const val CLIP_TAIL_MS = 60
         private val releaser = Executors.newSingleThreadScheduledExecutor { r ->
             Thread(r, "tts-release").apply { isDaemon = true }
         }
@@ -342,6 +343,55 @@ class TextToSpeech(
                 if (!started) onStarted()
                 releaseWhenIdle()
                 return true
+            }
+        }
+
+        /**
+         * Plays one short clip (the wake reply) on its own one-shot track and waits for its real end, then
+         * frees the track. On the shared stream a clip shorter than the buffer was heard twice on MIUI/MTK
+         * (the ring buffer was played again after it ran dry), or not at all.
+         */
+        fun playClip(pcm: FloatArray, rate: Int, stop: () -> Boolean = { false }): Boolean {
+            if (stop()) return false
+            stopPlayback()
+            val g = gain
+            val shaped = PcmShape.shape(pcm, rate)
+            if (shaped.isEmpty()) return true
+            // a little silence at the end so the speaker does not cut the last sound
+            val samples = FloatArray(shaped.size + rate * CLIP_TAIL_MS / 1000).also { out ->
+                for (i in shaped.indices) out[i] = if (g >= 1f) shaped[i] else shaped[i] * g
+            }
+            val track = runCatching {
+                AudioTrack.Builder()
+                    .setAudioAttributes(
+                        AudioAttributes.Builder()
+                            .setUsage(AudioAttributes.USAGE_ASSISTANT)
+                            .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH)
+                            .build()
+                    )
+                    .setAudioFormat(
+                        AudioFormat.Builder()
+                            .setEncoding(AudioFormat.ENCODING_PCM_FLOAT)
+                            .setSampleRate(rate)
+                            .setChannelMask(AudioFormat.CHANNEL_OUT_MONO)
+                            .build()
+                    )
+                    .setTransferMode(AudioTrack.MODE_STATIC)
+                    .setBufferSizeInBytes(samples.size * 4)
+                    .build()
+            }.getOrElse { JimiLog.e("tts: clip track failed: ${it.message}"); return false }
+            try {
+                if (track.write(samples, 0, samples.size, AudioTrack.WRITE_BLOCKING) != samples.size) return false
+                track.play()
+                val deadline = System.currentTimeMillis() + samples.size * 1000L / rate + 1500
+                while (track.playbackHeadPosition < samples.size) {
+                    if (stop() || System.currentTimeMillis() > deadline) return false
+                    Thread.sleep(10)
+                }
+                return true
+            } finally {
+                runCatching { track.pause(); track.flush(); track.stop() }
+                runCatching { track.release() }
             }
         }
 

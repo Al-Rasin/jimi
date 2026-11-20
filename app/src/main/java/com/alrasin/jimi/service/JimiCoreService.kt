@@ -296,7 +296,7 @@ class JimiCoreService : LifecycleService() {
         val start = SystemClock.elapsedRealtime()
         val deadline = start + WAKE_CUE_MAX_MS
         val played = withContext(Dispatchers.IO) {
-            TextToSpeech.playPcm(audio.samples, audio.sampleRate) { epoch != speechEpoch || SystemClock.elapsedRealtime() > deadline }
+            TextToSpeech.playClip(audio.samples, audio.sampleRate) { epoch != speechEpoch || SystemClock.elapsedRealtime() > deadline }
         }
         JimiLog.i("wake reply ${audio.samples.size * 1000L / audio.sampleRate} ms played=$played in ${SystemClock.elapsedRealtime() - start} ms")
     }
