@@ -69,11 +69,34 @@ object SpeechText {
     /**
      * Text with Bangla, cut into sentences (long ones every [maxWords] words) so the first is heard while the next
      * is made. Each piece keeps its Bangla; [parts] then splits it by voice. Bits with no letters (emoji) are dropped.
+     * Only the start is short, for a fast first sound: [firstWords], then 2x that, then [maxWords]. Growth is
+     * slower than English (3x) because the Bangla voice makes audio closer to real time. Long pieces break
+     * after a comma when one is near the end.
      */
-    fun banglaChunks(text: String, maxWords: Int = 25): List<String> {
+    fun banglaChunks(text: String, maxWords: Int = 25, firstWords: Int = maxWords): List<String> {
         require(maxWords > 0) { "maxWords must be positive" }
+        require(firstWords > 0) { "firstWords must be positive" }
+        var made = 0
         return text.split(BANGLA_SENTENCE_END).flatMap { sentence ->
-            sentence.trim().split(TextNorm.SPACES).chunked(maxWords) { it.joinToString(" ") }
+            val words = sentence.trim().split(TextNorm.SPACES).filter { it.isNotEmpty() }
+            if (words.none { w -> w.any(Char::isLetterOrDigit) }) return@flatMap emptyList()
+            val result = mutableListOf<String>()
+            var start = 0
+            while (start < words.size) {
+                val limit = when (made++) {
+                    0 -> minOf(firstWords, maxWords)
+                    1 -> minOf(firstWords * 2, maxWords)
+                    else -> maxWords
+                }
+                var end = minOf(start + limit, words.size)
+                if (end < words.size) {
+                    val comma = (start + (limit + 1) / 2 until end).lastOrNull { words[it].endsWith(',') || words[it].endsWith(';') }
+                    if (comma != null) end = comma + 1
+                }
+                result += words.subList(start, end).joinToString(" ")
+                start = end
+            }
+            result
         }.filter { it.any(Char::isLetterOrDigit) }
     }
 

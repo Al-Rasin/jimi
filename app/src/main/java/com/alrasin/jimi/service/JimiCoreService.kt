@@ -314,12 +314,12 @@ class JimiCoreService : LifecycleService() {
     private fun say(text: String, epoch: Int = speechEpoch) {
         lifecycleScope.launch(Dispatchers.IO) { AssistantVolume.ensureAudible(this@JimiCoreService) }
         // Bangla (a chat line): sentence pieces, the voice splits Bangla from English itself; chunks() would cut the Bangla out.
-        val chunks = if (SpeechText.hasBangla(text)) SpeechText.banglaChunks(text)
+        // Each piece gets its own tune, so short pieces sound broken. Only the reply's first piece is short (fast start).
+        val replyStart = epoch == timedCommandEpoch && firstAudioEpoch != epoch && speechLeft.get() == 0
+        val chunks = if (SpeechText.hasBangla(text)) SpeechText.banglaChunks(text, firstWords = if (replyStart) BANGLA_FIRST_WORDS else 25)
             else if (voice.isCached(text)) listOf(SpeechText.normalize(text))
             else {
-                // Each piece gets its own tune, so short pieces sound broken. Only the reply's first piece is short (fast start).
                 val max = if (voice.phoneEngine) PHONE_VOICE_WORDS else VOICE_WORDS
-                val replyStart = epoch == timedCommandEpoch && firstAudioEpoch != epoch && speechLeft.get() == 0
                 SpeechText.chunks(text, maxWords = max, firstWords = if (!replyStart) max else if (voice.phoneEngine) 6 else 5)
             }
         synchronized(speechState) {
@@ -993,6 +993,8 @@ class JimiCoreService : LifecycleService() {
         private const val RING_SECONDS = 4
         /** Most words per spoken piece: Google voice makes ~25 words in ~1 s; Piper ~10 words in ~2 s (3 s of speech). */
         private const val PHONE_VOICE_WORDS = 25
+        /** First Bangla piece of a reply: short, so the first sound comes before the whole sentence is made. */
+        private const val BANGLA_FIRST_WORDS = 8
         // 10-word pieces sounded choppy ("broken broken"); longer pieces keep one tune per sentence.
         private const val VOICE_WORDS = 18
         private const val AUDIO_AHEAD = 3

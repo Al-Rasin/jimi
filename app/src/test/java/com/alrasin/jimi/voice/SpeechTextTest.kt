@@ -319,4 +319,20 @@ class SpeechTextTest {
         assertEquals(listOf("প্রথম লাইন", "দ্বিতীয়"), SpeechText.banglaChunks("প্রথম লাইন\n😊\nদ্বিতীয়"))
         assertEquals(SpeechText.SENTENCE_PAUSE_MS, SpeechText.pauseAfterMs("কাজ ছিল।"))
     }
+
+    @Test fun banglaReplyStartsWithAShortPiece() {
+        val words = (1..30).map { "শব্দ$it" }
+        val pieces = SpeechText.banglaChunks(words.joinToString(" ") + "।", maxWords = 25, firstWords = 4)
+        assertEquals(listOf(4, 8, 18), pieces.map { it.split(" ").size })
+        assertEquals(words.joinToString(" ") + "।", pieces.joinToString(" "))
+        // The short start counts across sentences: the second sentence gets the 2x piece.
+        val two = SpeechText.banglaChunks("এক দুই। তিন চার পাঁচ ছয় সাত আট নয়।", maxWords = 25, firstWords = 2)
+        assertEquals(listOf("এক দুই।", "তিন চার পাঁচ ছয়", "সাত আট নয়।"), two)
+    }
+
+    @Test fun banglaPieceBreaksAfterANearbyComma() {
+        val pieces = SpeechText.banglaChunks("আজ আমি বাজারে গেলাম, তারপর বাসায় ফিরলাম আর খেলাম।", maxWords = 25, firstWords = 5)
+        assertEquals("আজ আমি বাজারে গেলাম,", pieces.first())
+        assertEquals(listOf("আজকে কাজ ছিল।"), SpeechText.banglaChunks("😊\nআজকে কাজ ছিল।", firstWords = 3).takeLast(1))
+    }
 }
