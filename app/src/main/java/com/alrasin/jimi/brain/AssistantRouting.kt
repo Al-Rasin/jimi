@@ -16,8 +16,11 @@ internal object AssistantRouting {
         if (intent.isConfident && intent.route == IntentRouter.Route.CHAT) return null
         val plan = TaskChain.plan(text) { RuleMatcher.match(it) }
         if (rule != null && rule.tool !in LOOSE_TOOLS && AgentRouting.acceptsSingleTool(text, rule.tool)) {
-            // "set alarm at 6 and 7" is still two alarms.
-            return plan?.takeIf { p -> rule.tool == "set_alarm" && p.complete && p.steps.all { it.call?.tool == "set_alarm" } }
+            // "set alarm at 6 and 7" is still two alarms; "change my 6 am alarm to 6:30" is cancel + set.
+            return plan?.takeIf { p ->
+                val tools = p.steps.map { it.call?.tool }
+                rule.tool == "set_alarm" && p.complete && (tools.all { it == "set_alarm" } || tools == listOf("cancel_alarm", "set_alarm"))
+            }
         }
         return plan
     }

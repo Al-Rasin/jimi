@@ -27,6 +27,12 @@ object TaskChain {
     private val PLAY = Regex("^play (.+)$", RegexOption.IGNORE_CASE)
     private val NOT_A_STEP = setOf("cancel", "repeat_last")
     private val SHARES_VERB = setOf("toggle", "set_alarm")
+    private const val CLOCK = "(\\d{1,2}(?::\\d{2})?(?: ?[ap]\\.? ?m\\.?)?)"
+    /** "change my 6 am alarm to 6:30", "move the alarm at 7 to 8": the old alarm goes, the new one comes. */
+    private val MOVE_ALARM = listOf(
+        Regex("^(?:change|move|shift|update|push|reset) (?:my |the )?$CLOCK alarm to $CLOCK$", RegexOption.IGNORE_CASE),
+        Regex("^(?:change|move|shift|update|push|reset) (?:my |the )?alarm (?:at |for |from )?$CLOCK to $CLOCK$", RegexOption.IGNORE_CASE),
+    )
 
     /** Parts with the separator text that came before each one (empty for the first). */
     fun split(text: String): List<Pair<String, String>> {
@@ -46,7 +52,10 @@ object TaskChain {
 
     /** A plan of 2..[MAX_STEPS] parts, or null when the sentence is one task (or too long). */
     fun plan(text: String, match: (String) -> ToolCall?): Plan? {
-        val pieces = split(text)
+        val said = text.trim().trimEnd('.', '!', '?')
+        val moved = MOVE_ALARM.firstNotNullOfOrNull { it.matchEntire(said) }
+            ?.let { "cancel alarm at ${it.groupValues[1]} and set alarm at ${it.groupValues[2]}" }
+        val pieces = split(moved ?: text)
         if (pieces.size < 2) return null
         val steps = ArrayList<Step>()
         for ((sep, piece) in pieces) {

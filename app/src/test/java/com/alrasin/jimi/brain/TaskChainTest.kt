@@ -27,6 +27,15 @@ class TaskChainTest {
         return AssistantRouting.chainPlan(text, rule, IntentRouter.classify(text, rule))
     }
 
+    @Test fun changingAnAlarmMovesIt() {
+        val p = route("change my 6 am alarm to 6:30")!!
+        assertEquals(listOf("cancel_alarm", "set_alarm"), p.steps.map { it.call?.tool })
+        assertEquals("06:00", p.steps[0].call!!.args["time"])
+        assertEquals("06:30", p.steps[1].call!!.args["time"])
+        assertEquals("08:00", route("move the alarm at 7 to 8 am")!!.steps[1].call!!.args["time"])
+        assertNull(plan("change my alarm"))
+    }
+
     @Test fun splitsOnAndThenAfterThat() {
         assertEquals(listOf("turn on wifi", "open youtube"), TaskChain.split("turn on wifi and then open youtube").map { it.second })
         assertEquals(listOf("a", "b", "c"), TaskChain.split("first a, then b after that c.").map { it.second })
