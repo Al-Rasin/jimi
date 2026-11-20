@@ -10,7 +10,7 @@ object ChatModels {
     const val QWEN35 = "qwen3.5-0.8b"
     private const val QWEN35_PREFIX = "Qwen3.5-0.8B"
 
-    val ALL = listOf(DEFAULT, LFM, QWEN35)
+    val ALL = listOf(DEFAULT, LFM)   // Qwen3.5 test dropped (D-089)
 
     fun isQwen35(name: String) = name.startsWith("Qwen3.5-", ignoreCase = true)
 

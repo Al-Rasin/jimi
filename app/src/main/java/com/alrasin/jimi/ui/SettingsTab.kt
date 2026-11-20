@@ -102,7 +102,7 @@ internal fun SettingsTab(vm: AppViewModel, home: HomeViewModel, onSetup: () -> U
     var page by rememberSaveable { mutableStateOf("") }
     // pages opened from Advanced go back to Advanced
     val close = { page = if (page in ADVANCED_PAGES) "advanced" else "" }
-    val localLabel = mapOf(ChatModels.DEFAULT to "Qwen3 / Gemma", ChatModels.LFM to "LFM2.5 1.2B", ChatModels.QWEN35 to "Qwen3.5 0.8B (test)")
+    val localLabel = mapOf(ChatModels.DEFAULT to "Qwen3 / Gemma", ChatModels.LFM to "LFM2.5 1.2B")
 
     when (page) {
         "speech" -> SubPage("Speech", close) {
