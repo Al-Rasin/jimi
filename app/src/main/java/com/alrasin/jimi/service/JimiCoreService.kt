@@ -303,8 +303,8 @@ class JimiCoreService : LifecycleService() {
         JimiLog.i("wake reply ${audio.samples.size * 1000L / audio.sampleRate} ms played=$played in ${SystemClock.elapsedRealtime() - start} ms")
     }
 
-    private fun warmUpForCommand() {
-        voice.warmIfCold()
+    private fun warmUpForCommand(voiceToo: Boolean = true) {
+        if (voiceToo) voice.warmIfCold()
         // While the user talks: open the cloud connection, or load the local tool + chat models when the cloud is not usable.
         lifecycleScope.launch(Dispatchers.IO) { if (cloud.enabled()) cloud.warm() else models.preloadForCommand() }
         // Memory/wiki ranking model (small, on-device); loads once, no-op when missing.
@@ -594,6 +594,8 @@ class JimiCoreService : LifecycleService() {
         var corrector = SttCorrector(vocabulary.contacts, vocabulary.apps)
         val engineSettings = SpeechEngineSettings(this)
         val phone = PhoneSpeechRecognizer(this)
+        // Google's recognizer stays bound (not listening) while it is the picked engine: no 4 s cold start.
+        val phoneWarmJob = lifecycleScope.launch { engineSettings.engine.collect { phone.keepWarm(it == SpeechEngine.PHONE_ON_DEVICE) } }
         val capturePolicy = SpeechCapturePolicy()
         val secondPass = SecondPassSpeechToText(this)
         val bangla = BanglaSpeechToText(this)
@@ -640,7 +642,8 @@ class JimiCoreService : LifecycleService() {
             try {
                 // The wake reply plays to the end before Google's mic opens (D-086): MIUI mutes or cuts our
                 // playback while Google records. If Google still hears its tail, it is stripped below.
-                if (source == "voice") { warmUpForCommand(); playWakeCue(tone) }
+                // Voice warm-up waits for the transcript: Google TTS synth competes with Google's listening.
+                if (source == "voice") { warmUpForCommand(voiceToo = false); playWakeCue(tone) }
                 val raw = coroutineScope {
                     val recognition = async { phone.recognize(snapshot.hotwords, onReady = {
                         if (epoch == speechEpoch) {
@@ -677,6 +680,7 @@ class JimiCoreService : LifecycleService() {
                     JimiLog.i("STT engine=Phone unavailable/error/blank; retry Phone when online, offline fallback otherwise")
                     return true
                 }
+                voice.warmIfCold()
                 JimiLog.i("STT engine=Phone transcript received (${heard.length} characters), ${SystemClock.elapsedRealtime() - wokeAt} ms after wake")
                 synchronized(speechState) {
                     if (epoch == speechEpoch) {
@@ -898,6 +902,8 @@ class JimiCoreService : LifecycleService() {
             }
         } finally {
             vocabularyJob.cancel()
+            phoneWarmJob.cancel()
+            phone.keepWarm(false)
             interruption?.close()
             stopListener.close()
             command?.close()

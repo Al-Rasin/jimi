@@ -3,10 +3,12 @@ package com.alrasin.jimi.voice
 import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
+import android.content.ServiceConnection
 import android.net.ConnectivityManager
 import android.net.NetworkCapabilities
 import android.os.Build
 import android.os.Bundle
+import android.os.IBinder
 import android.speech.RecognitionListener
 import android.speech.RecognizerIntent
 import android.speech.SpeechRecognizer
@@ -20,6 +22,35 @@ import kotlin.coroutines.resume
 /** Owns a live microphone session. The caller must hand off its recorder before invoking this. */
 class PhoneSpeechRecognizer(context: Context) {
     private val context = context.applicationContext
+    @Volatile private var warm: ServiceConnection? = null
+
+    /**
+     * Keeps Google's recognition service bound while the Phone engine is picked. Android 11 binds it inside
+     * startListening and unbinds on destroy, so after a quiet spell MIUI has killed it and the next listen
+     * waits ~4 s for the process to start (seen: "ready in 4044 ms", then 180 ms). Binding alone never
+     * starts listening, so the mic stays free for the sherpa wake loop. Safe to call again with the same value.
+     */
+    @Synchronized
+    fun keepWarm(on: Boolean) {
+        if (on == (warm != null)) return
+        if (!on) {
+            warm?.let { runCatching { context.unbindService(it) } }
+            warm = null
+            JimiLog.i("STT engine=Phone keep-warm off")
+            return
+        }
+        val connection = object : ServiceConnection {
+            override fun onServiceConnected(name: ComponentName?, service: IBinder?) =
+                JimiLog.i("STT engine=Phone keep-warm connected")
+            override fun onServiceDisconnected(name: ComponentName?) =
+                JimiLog.i("STT engine=Phone keep-warm lost; Android rebinds when it can")
+        }
+        val bound = runCatching {
+            context.bindService(Intent(RECOGNITION_SERVICE).setComponent(GOOGLE), connection, Context.BIND_AUTO_CREATE)
+        }.onFailure { JimiLog.e("STT engine=Phone keep-warm failed", it) }.getOrDefault(false)
+        if (bound) warm = connection else runCatching { context.unbindService(connection) }
+        JimiLog.i("STT engine=Phone keep-warm on bound=$bound")
+    }
 
     suspend fun recognize(hotwords: List<String> = emptyList(), timeoutMillis: Long = 20_000, onReady: () -> Unit = {}): String? =
         withContext(Dispatchers.Main.immediate) {
@@ -117,12 +148,10 @@ class PhoneSpeechRecognizer(context: Context) {
 
     private fun create(online: Boolean): SpeechRecognizer? {
         // The default recognition service may be Jimi itself; explicitly select Google's provider.
-        val google = ComponentName("com.google.android.googlequicksearchbox",
-            "com.google.android.voicesearch.serviceapi.GoogleRecognitionService")
         @Suppress("DEPRECATION")
-        val providers = context.packageManager.queryIntentServices(Intent("android.speech.RecognitionService"), 0)
-        if (providers.any { ComponentName(it.serviceInfo.packageName, it.serviceInfo.name) == google }) {
-            return SpeechRecognizer.createSpeechRecognizer(context, google)
+        val providers = context.packageManager.queryIntentServices(Intent(RECOGNITION_SERVICE), 0)
+        if (providers.any { ComponentName(it.serviceInfo.packageName, it.serviceInfo.name) == GOOGLE }) {
+            return SpeechRecognizer.createSpeechRecognizer(context, GOOGLE)
         }
         if (!online && Build.VERSION.SDK_INT >= 31 && SpeechRecognizer.isOnDeviceRecognitionAvailable(context)) {
             return SpeechRecognizer.createOnDeviceSpeechRecognizer(context)
@@ -133,6 +162,9 @@ class PhoneSpeechRecognizer(context: Context) {
     private companion object {
         const val LANGUAGE = "en-IN"
         const val BANGLA = "bn-BD"
+        const val RECOGNITION_SERVICE = "android.speech.RecognitionService"
+        val GOOGLE = ComponentName("com.google.android.googlequicksearchbox",
+            "com.google.android.voicesearch.serviceapi.GoogleRecognitionService")
         /** Hidden Google extra (used by Assistant's bilingual mode); ignored by recognizers that don't know it. */
         const val EXTRA_ADDITIONAL_LANGUAGES = "android.speech.extra.EXTRA_ADDITIONAL_LANGUAGES"
     }
