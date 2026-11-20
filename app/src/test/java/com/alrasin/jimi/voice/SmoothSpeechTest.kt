@@ -30,17 +30,24 @@ class SmoothSpeechTest {
         val buf = "There are several ways to answer this question"
         assertEquals(listOf("There are several ways to"), ChatFormat.speechChunks(buf).first)
         assertEquals(emptyList<String>(), ChatFormat.speechChunks(buf.substringBefore(" this"), spoke = true).first)
-        val long = "$buf and many more of them work well today "
-        assertEquals(emptyList<String>(), ChatFormat.speechChunks("$buf and many more ", spoke = true).first)
-        val (done, rest) = ChatFormat.speechChunks(long, spoke = true)
-        assertEquals(listOf("There are several ways to answer this question"), done)
-        assertEquals("and many more of them work well today ", rest)
+        val more = " and many more of them work well today for people who try them at home with friends and family "
+        assertEquals(emptyList<String>(), ChatFormat.speechChunks("$buf and many more of them work well ", spoke = true).first)
+        val (done, rest) = ChatFormat.speechChunks("$buf$more and in the evening too ", spoke = true)
+        assertEquals(listOf("There are several ways to answer this question and many more of them work well today " +
+            "for people who try them at home with friends and family"), done)
+        assertEquals("and in the evening too ", rest)
     }
 
     @Test fun forcedCutWithoutJoiningWordKeepsAllWords() {
-        val buf = List(17) { "go" }.joinToString(" ") + " "
+        val buf = List(29) { "go" }.joinToString(" ") + " "
         val (done, rest) = ChatFormat.speechChunks(buf, spoke = true)
-        assertEquals(listOf(List(16) { "go" }.joinToString(" ")), done)
+        assertEquals(listOf(List(28) { "go" }.joinToString(" ")), done)
         assertEquals("go ", rest)
+    }
+
+    @Test fun cutAnswerEndsOnFullSentence() {
+        assertEquals("Paris is big. It has a river.", ChatFormat.dropCutTail("Paris is big. It has a river. It also has many"))
+        assertEquals("Done!", ChatFormat.dropCutTail("Done!"))
+        assertEquals("no stop at all", ChatFormat.dropCutTail("no stop at all"))
     }
 }

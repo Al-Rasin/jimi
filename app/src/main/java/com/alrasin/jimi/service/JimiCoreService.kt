@@ -288,8 +288,8 @@ class JimiCoreService : LifecycleService() {
 
     private fun warmUpForCommand() {
         voice.warmIfCold()
-        // While the user talks: open the cloud connection, or load the local tool model when the cloud is not usable.
-        lifecycleScope.launch(Dispatchers.IO) { if (cloud.enabled()) cloud.warm() else models.preloadTools() }
+        // While the user talks: open the cloud connection, or load the local tool + chat models when the cloud is not usable.
+        lifecycleScope.launch(Dispatchers.IO) { if (cloud.enabled()) cloud.warm() else models.preloadForCommand() }
         // Memory/wiki ranking model (small, on-device); loads once, no-op when missing.
         lifecycleScope.launch(Dispatchers.IO) { SharedEmbedder.get(this@JimiCoreService) }
     }

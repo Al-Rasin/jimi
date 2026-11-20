@@ -72,7 +72,11 @@ class ModelBrain @Inject constructor(
     fun warmUp() = scope.launch { }
 
     /** Loads the tool model while the user is still talking (wake word, no cloud), hiding the ~3 s load. */
-    fun preloadTools() = scope.launch { withModels { toolModel() } }
+    /** On wake: tool model, then the chat model, load while the user talks, so a question needs no 4–5 s load. */
+    fun preloadForCommand() = scope.launch {
+        withModels { toolModel() }
+        withModels { chatModel(settings.chatModel.first()) }
+    }
 
     /**
      * [force] = Android is about to kill apps (COMPLETE / onLowMemory). Without it, a model used in the last
@@ -234,7 +238,7 @@ class ModelBrain @Inject constructor(
                 var firstAt = 0L
                 var yielded = 0L
                 val out = catching {
-                    m.generate(prompt, null, maxTokens = 120, stop = listOf("<|im_end|>", "<end_of_turn>")) { p ->
+                    m.generate(prompt, null, maxTokens = MAX_CHAT_TOKENS, stop = listOf("<|im_end|>", "<end_of_turn>")) { p ->
                         pieces++
                         if (spoke) yielded += com.alrasin.jimi.voice.SpeechGate.yieldToVoice()
                         if (firstPiece) {
@@ -248,14 +252,17 @@ class ModelBrain @Inject constructor(
                         done.forEach { s -> ChatFormat.clean(s).takeIf { it.isNotBlank() }?.let { JimiLog.i("latency: chat clause ${System.currentTimeMillis() - started} ms")
                             onSentence(it); spoke = true } }
                         buf = rest
-                        ChatFormat.clean(visibleAnswer.toString()).split(TextNorm.SPACES).size < 80
+                        ChatFormat.clean(visibleAnswer.toString()).split(TextNorm.SPACES).size < MAX_CHAT_WORDS
                     }
                 }.onFailure { JimiLog.e("chat model failed", it) }.getOrNull()
                 val genMs = (System.currentTimeMillis() - firstAt - yielded).coerceAtLeast(1)
                 JimiLog.i("llm chat ${System.currentTimeMillis() - started} ms (${m.file.name}), $pieces tokens, " +
                     "${pieces * 1000 / genMs} t/s, waited for voice $yielded ms")
-                ChatFormat.clean(buf).takeIf { spoke && it.isNotBlank() }?.let(onSentence)
-                out?.let { ChatFormat.clean(it) }?.takeIf { it.isNotBlank() }?.let { ChatOut(it, spoke) }
+                // Length limit hit: the last piece is half a sentence, so it is not spoken or shown.
+                val cut = pieces >= MAX_CHAT_TOKENS || ChatFormat.clean(visibleAnswer.toString()).split(TextNorm.SPACES).size >= MAX_CHAT_WORDS
+                ChatFormat.clean(buf).takeIf { spoke && it.isNotBlank() && (!cut || it.last() in ".!?") }?.let(onSentence)
+                out?.let { ChatFormat.clean(it) }?.let { if (cut) ChatFormat.dropCutTail(it) else it }
+                    ?.takeIf { it.isNotBlank() }?.let { ChatOut(it, spoke) }
             }
         }
 
@@ -263,6 +270,8 @@ class ModelBrain @Inject constructor(
         // A cold load costs 4–5 s per question; follow-up questions minutes apart stay fast (D-084).
         private const val IDLE_MS = 600_000L
         private const val KEEP_WARM_MS = 600_000L
+        private const val MAX_CHAT_TOKENS = 120
+        private const val MAX_CHAT_WORDS = 80
     }
 }
 

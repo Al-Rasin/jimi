@@ -63,8 +63,9 @@ object ChatFormat {
      * ("and", "to", "which"...) so each piece ends where a person would breathe, not mid-phrase.
      */
     fun speechChunks(buf: String, spoke: Boolean = false): Pair<List<String>, String> {
-        val clauseWords = if (spoke) 6 else 5
-        val cutWords = if (spoke) 16 else 5
+        // The model writes ~12 words/s, speech says ~2.5: once talking, wait for whole sentences (no time lost).
+        val clauseWords = if (spoke) 14 else 5
+        val cutWords = if (spoke) 28 else 5
         val visible = buf.replace(SPEECH_CHUNKS_RE, "")
         if (visible.contains("<think>") || SPEECH_CHUNKS_RE_2.containsMatchIn(visible)) {
             return emptyList<String>() to visible
@@ -111,4 +112,12 @@ object ChatFormat {
         .replace(CLEAN_RE_2, " ")
         .replace(CLEAN_RE_3, " ")
         .replace(CLEAN_RE_4, "").replace(TextNorm.SPACES, " ").trim()
+
+    /** An answer that hit the length limit ends mid-sentence; keep it up to its last full sentence, if it has one. */
+    fun dropCutTail(text: String): String {
+        val t = text.trimEnd()
+        if (t.isEmpty() || t.last() in ".!?") return t
+        val end = t.indexOfLast { it in ".!?" }
+        return if (end > 0) t.substring(0, end + 1) else t
+    }
 }
