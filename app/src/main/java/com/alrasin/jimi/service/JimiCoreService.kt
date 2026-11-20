@@ -67,6 +67,7 @@ import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.isActive
+import kotlinx.coroutines.job
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.NonCancellable
@@ -505,9 +506,12 @@ class JimiCoreService : LifecycleService() {
             lifecycleScope.launch { settings.sttBangla.collect { banglaOn = it } },
             lifecycleScope.launch { settings.sttDenoise.collect { denoiseOn = it } },
         )
-        wakeLock = getSystemService(PowerManager::class.java)
+        wakeLock?.takeIf { it.isHeld }?.release()
+        // Each loop releases its own lock: an old loop still closing must not free the new loop's lock.
+        val lock = getSystemService(PowerManager::class.java)
             .newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "jimi:listen")
             .apply { acquire() }
+        wakeLock = lock
         listenJob = lifecycleScope.launch(Dispatchers.Default) {
             try {
                 listenLoop()
@@ -517,8 +521,8 @@ class JimiCoreService : LifecycleService() {
                 JimiLog.e("listening stopped", t)
                 Notifications.showResumeListening(this@JimiCoreService)
             } finally {
-                _running.value = false
-                wakeLock?.takeIf { it.isHeld }?.release()
+                if (listenJob === coroutineContext.job) _running.value = false
+                if (lock.isHeld) lock.release()
             }
         }
     }
@@ -737,7 +741,7 @@ class JimiCoreService : LifecycleService() {
                         JimiLog.i("capture ended ($commandSource): ${cmd.finishReason}")
                         cmd.close()
                         val audio = CommandAudio.join(commandAudio)
-                        val path = CommandAudio.save(this, audio, cmd.raw)
+                        val path = CommandAudio.save(this, audio, cmd.raw, lifecycleScope)
                         val wakeId = if (commandSource == "voice") clips.lastWakeId else null
                         val source = commandSource
                         synchronized(speechState) {
@@ -861,12 +865,15 @@ class JimiCoreService : LifecycleService() {
             if (replyDone) {
                 secondPass.close()
                 bangla.close()
-            } else JimiLog.i("reply still busy; second-pass models left open")
+            } else {
+                JimiLog.i("reply still busy; second-pass models close when it ends")
+                replyJob?.invokeOnCompletion { secondPass.close(); bangla.close() }
+            }
             cleaner.close()
             rec.close()
             tone.close()
             detector.close()
-            _running.value = false
+            if (listenJob === currentCoroutineContext().job) _running.value = false
             _microphoneAvailable.value = false
             _phase.value = PHASE_WAKE
         }

@@ -13,6 +13,7 @@ private val PARSE_RE = Regex("<start_function_call>call:([a-z_]+)\\{(.*?)\\}(?:<
  */
 object FunctionGemma {
     private const val ESC = "<escape>"
+    private val ARGS_RE = Regex("([a-z_]+):(?:$ESC(.*?)$ESC|([^,}]*))", RegexOption.DOT_MATCHES_ALL)
 
     fun declarations(tools: List<Tool>): String = tools.joinToString("") { t ->
         val props = t.args.joinToString(",") { a ->
@@ -34,7 +35,7 @@ object FunctionGemma {
     fun parse(out: String): ToolCall? {
         val m = PARSE_RE.find(out)
             ?: return null
-        val args = Regex("([a-z_]+):(?:$ESC(.*?)$ESC|([^,}]*))", RegexOption.DOT_MATCHES_ALL).findAll(m.groupValues[2])
+        val args = ARGS_RE.findAll(m.groupValues[2])
             .associate { it.groupValues[1] to (it.groupValues[2].ifEmpty { it.groupValues[3] }).trim() }
             .filterValues { it.isNotEmpty() }
         return ToolCall(m.groupValues[1], args)

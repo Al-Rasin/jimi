@@ -19,11 +19,11 @@ object SpeechGate {
     }
 
     /** Called by the LLM between tokens. Never waits longer than [MAX_WAIT_MS] for one phrase. */
-    fun yieldToVoice(): Long {
+    fun yieldToVoice(alive: () -> Boolean = { true }): Long {
         var waited = 0L
         while (true) {
             val since = busySince
-            if (since == 0L || System.currentTimeMillis() - since > MAX_WAIT_MS) return waited
+            if (since == 0L || System.currentTimeMillis() - since > MAX_WAIT_MS || !alive()) return waited
             Thread.sleep(STEP_MS)
             waited += STEP_MS
         }

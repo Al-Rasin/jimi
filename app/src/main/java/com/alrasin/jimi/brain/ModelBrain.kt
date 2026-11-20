@@ -19,8 +19,10 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.currentCoroutineContext
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.job
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -237,10 +239,13 @@ class ModelBrain @Inject constructor(
                 var pieces = 0
                 var firstAt = 0L
                 var yielded = 0L
+                // Barge-in/stop cancels this job; check it every token so the model frees the CPU at once.
+                val job = currentCoroutineContext().job
                 val out = catching {
                     m.generate(prompt, null, maxTokens = MAX_CHAT_TOKENS, stop = listOf("<|im_end|>", "<end_of_turn>")) { p ->
+                        if (!job.isActive) return@generate false
                         pieces++
-                        if (spoke) yielded += com.alrasin.jimi.voice.SpeechGate.yieldToVoice()
+                        if (spoke) yielded += com.alrasin.jimi.voice.SpeechGate.yieldToVoice { job.isActive }
                         if (firstPiece) {
                             firstAt = System.currentTimeMillis()
                             firstPiece = false

@@ -7,6 +7,7 @@ import android.provider.Settings
 import com.alrasin.jimi.core.JimiLog
 import com.topjohnwu.superuser.Shell
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.runInterruptible
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeoutOrNull
 
@@ -23,7 +24,9 @@ object RootShell {
 
     /** [log] false: command output holds private data; only ok/fail is logged. */
     suspend fun run(vararg cmds: String, timeoutMs: Long = 8_000, log: Boolean = true): Result = withContext(Dispatchers.IO) {
-        val r = withTimeoutOrNull(timeoutMs) { Shell.cmd(*cmds).exec() }
+        // exec() blocks and ignores cancel, so the timeout never fired; wait on the queued result instead.
+        val pending = Shell.cmd(*cmds).enqueue()
+        val r = withTimeoutOrNull(timeoutMs) { runInterruptible { pending.get() } }
         val res = if (r == null) Result(false, "timeout") else Result(r.isSuccess, (r.out + r.err).joinToString("\n"))
         val shown = if (log) cmds.joinToString("; ").take(120) else cmds.joinToString("; ") { it.substringBefore(' ') + " <hidden>" }
         JimiLog.i("root: $shown → ${if (res.ok) "ok" else if (log) "fail ${res.out.take(80)}" else "fail"}")
