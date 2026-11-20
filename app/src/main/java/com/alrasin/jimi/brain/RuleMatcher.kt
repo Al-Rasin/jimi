@@ -100,6 +100,7 @@ object RuleMatcher {
         }
         if (SHOPPING_READ_RE.matches(t)) return call("read_notes", "about" to "shopping list")
         if (MY_NUMBER_RE.matches(t)) return call("device_status", "what" to "number")
+        if (EMAIL_READ_RE.matches(t)) return call("read_notifications", "app" to "gmail")
         if (WHO_CALLING_RE.matches(t)) return call("missed_calls", "now" to "yes")
         if (CALL_LAST_CALLER_RE.matches(t)) return call("call_back")
         REMINDER_NAMED_DELETE_RE.matchEntire(t)?.let { if (it.groupValues[1] != "all") return call("delete_reminder", "text" to it.groupValues[1]) }

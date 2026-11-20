@@ -77,6 +77,7 @@ internal val CALL_LAST_CALLER_RE = Regex("^call (?:the )?(?:last (?:person|one|g
 internal val REMINDER_NAMED_DELETE_RE = Regex("^(?:delete|remove|cancel|clear|stop) (?:the |my )([a-z][a-z ]{1,30}?) reminders?$")
 internal val FORGET_WIFI_RE = Regex("^forget (?:this |the |that |my )?(?:wifi|wi fi|network|wifi network|wi fi network)$")
 internal val NOTES_ABOUT_RE = Regex("^(?:what (?:did|have) i (?:note|noted|write|written|save|saved|jot|jotted)(?: down)? about|(?:read|show|find)(?: me)? (?:my )?notes? (?:about|on)) (?:the |my )?([a-z0-9][a-z0-9 ]{1,30})$")
+internal val EMAIL_READ_RE = Regex("^(?:(?:any|do i have any|did i get any|check|read|show)(?: me)?(?: my)?(?: new| unread| latest)? (?:e ?mails?|mails?|gmail)|(?:my )?(?:new|unread) (?:e ?mails?|mails?)|check (?:my )?(?:inbox|gmail))$")
 internal val MY_NUMBER_RE = Regex("^(?:what(?:s| is) |tell me |show me |say )?my (?:own )?(?:phone |mobile |sim |cell )?number(?: is)?$|^what(?:s| is) (?:the )?number (?:of )?(?:this|my) (?:phone|sim)$")
 internal val CHARGE_ETA_RE = Regex("^(?!.*\\b(?:remind|notify|alert|let me know|tell me when)\\b).*\\b(?:how long|how much time|when)\\b.*\\b(?:fully? charged?|(?:battery|phone) (?:be |is )?full|full charge|charged fully|charge (?:fully|completely|to 100))")
 internal val NOISY_TOOL_RE_3 = Regex("\\b(?:dont|do not|never|not|cancel|stop|delete|remove|dismiss|check|list|show)\\b")

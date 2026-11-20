@@ -421,6 +421,12 @@ class ComplaintPhrasesTest {
         assertEquals(ToolCall("toggle", mapOf("target" to "flashlight", "state" to "on", "minutes" to "1084")), RuleMatcher.match("turn on flashlight until midnight", at))
     }
 
+    @Test fun checkEmailReadsGmailNotifications() {
+        for (s in listOf("any new emails", "check my email", "do i have any new mail", "check my inbox")) {
+            assertEquals(s, ToolCall("read_notifications", mapOf("app" to "gmail")), m(s))
+        }
+    }
+
     @Test fun callOnSpeaker() {
         assertEquals(ToolCall("call", mapOf("contact" to "mom", "speaker" to "true")), m("call mom on speaker"))
         assertEquals(ToolCall("call", mapOf("contact" to "dad", "speaker" to "true")), m("call dad on the speakerphone"))
