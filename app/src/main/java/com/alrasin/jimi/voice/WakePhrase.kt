@@ -14,6 +14,14 @@ object WakePhrase {
         RegexOption.IGNORE_CASE,
     )
 
+    private val ack = Regex(
+        "^[\\s\\p{P}]*(?:uh$SEPARATOR?huh|uhuh|mm+$SEPARATOR?hmm+|mhm+|m+hm+|um$SEPARATOR?hum|hmm+)(?![\\p{L}\\p{N}])[\\s\\p{P}]*",
+        RegexOption.IGNORE_CASE,
+    )
+
+    /** Google may hear Jimi's own "mm-hmm" wake reply (D-085) before the command; drop it. */
+    fun stripAck(text: String): String = text.replaceFirst(ack, "").trim()
+
     fun strip(text: String): String {
         // Consume one exact prefix: later words may be a contact name or part of the command.
         return text.replaceFirst(prefix, "").trim()

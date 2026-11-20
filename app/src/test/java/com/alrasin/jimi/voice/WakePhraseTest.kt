@@ -4,6 +4,14 @@ import org.junit.Assert.assertEquals
 import org.junit.Test
 
 class WakePhraseTest {
+    @Test fun stripsHeardWakeReply() {
+        assertEquals("what time is it", WakePhrase.stripAck("uh-huh what time is it"))
+        assertEquals("call mom", WakePhrase.stripAck("Mm hmm, call mom"))
+        assertEquals("open youtube", WakePhrase.stripAck("mhm open youtube"))
+        assertEquals("hummus recipe", WakePhrase.stripAck("hummus recipe"))
+        assertEquals("", WakePhrase.stripAck("uh huh"))
+    }
+
     @Test fun stripsHeyJimmy() = assertEquals("turn on the flashlight", WakePhrase.strip("hey jimmy turn on the flashlight"))
     @Test fun keepsLoneMe() = assertEquals("me turn on", WakePhrase.strip("me turn on"))
     @Test fun stripsHayGym() = assertEquals("what time is it", WakePhrase.strip("hay gymmy what time is it"))

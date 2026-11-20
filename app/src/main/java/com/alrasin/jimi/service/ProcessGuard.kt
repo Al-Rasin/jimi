@@ -33,9 +33,22 @@ object ProcessGuard {
      * wake panel from opening in the background. Root turns it back on.
      */
     private suspend fun keepOverlayAllowed(context: Context) {
+        keepMiuiPopupsAllowed(context.packageName)
         if (android.provider.Settings.canDrawOverlays(context)) return
         JimiLog.i("overlay permission lost; granting again")
         val pkg = context.packageName
         RootShell.run("appops set $pkg SYSTEM_ALERT_WINDOW allow", "appops set --uid $pkg SYSTEM_ALERT_WINDOW allow")
+    }
+
+    /**
+     * MIUI's own ops 10021 ("pop-up windows while running in background") and 10020 ("show on lock screen") were
+     * "ignore" on 2026-11-20: the wake panel START was logged but MIUI dropped it, so "Hey Jimi" showed nothing.
+     */
+    private suspend fun keepMiuiPopupsAllowed(pkg: String) {
+        val fixed = RootShell.run(
+            "for op in 10020 10021; do appops get $pkg \$op 2>/dev/null | grep -q ignore && appops set $pkg \$op allow && echo \$op; done; true",
+            log = false,
+        ).out.trim()
+        if (fixed.isNotEmpty()) JimiLog.i("MIUI pop-up permission was off (op ${fixed.replace("\n", ",")}); allowed again")
     }
 }

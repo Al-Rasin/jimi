@@ -280,6 +280,11 @@ class JimiCoreService : LifecycleService() {
 
     private fun acknowledgeWake(tone: Chimes) {
         warmUpForCommand()
+        wakeCue(tone)
+    }
+
+    /** The user's "mm-hmm" clip (D-052) when spoken wake is on, else the chime. */
+    private fun wakeCue(tone: Chimes) {
         val audio = voice.wakeAudio()
         if (!spokenWake || audio == null) { tone.wake(); return }
         val epoch = speechEpoch
@@ -597,14 +602,14 @@ class JimiCoreService : LifecycleService() {
             JimiLog.i("STT engine=Phone capture=$source; sherpa microphone released")
             val wokeAt = SystemClock.elapsedRealtime()
             try {
-                // No spoken wake reply here: it had to finish before Google could listen (+1–2 s each wake). Chime when ready.
+                // The wake reply plays once Google's mic is open (D-085), so it adds no wait; if Google hears it, it is stripped below.
                 if (source == "voice") warmUpForCommand()
                 val raw = coroutineScope {
                     val recognition = async { phone.recognize(snapshot.hotwords, onReady = {
                         if (epoch == speechEpoch) {
                             JimiLog.i("latency: mic ready ${SystemClock.elapsedRealtime() - wokeAt} ms after wake")
                             _phase.value = if (source == "follow_up") PHASE_FOLLOW_UP else PHASE_HEARING
-                            if (source != "voice") tone.listen() else tone.wake()
+                            if (source != "voice") tone.listen() else wakeCue(tone)
                         }
                     }) }
                     val cancellation = launch {
@@ -621,7 +626,7 @@ class JimiCoreService : LifecycleService() {
                 }
                 if (epoch != speechEpoch) return true
                 val normalized = raw?.let(SpeechToText::normalize).orEmpty()
-                val stripped = WakePhrase.strip(normalized)
+                val stripped = WakePhrase.strip(if (source == "voice") WakePhrase.stripAck(normalized) else normalized)
                 val heard = if (source == "barge_in") BargeIn.stripInterruption(stripped) else stripped
                 if (heard.isBlank() && source == "follow_up" && WakePhrase.isOnlyWake(normalized)) {
                     JimiLog.i("follow-up heard only the wake phrase; listening for the command")
