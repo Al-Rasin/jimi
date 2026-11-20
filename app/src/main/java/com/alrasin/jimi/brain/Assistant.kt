@@ -172,7 +172,7 @@ class Assistant @Inject constructor(
             return screenReply(screenAgent.answer(text, input.locked, input.voiceOk))
         }
         if (smoke == null && screenAgent.hasPendingConfirmation) {
-            if (Persona.isYes(text)) {
+            if (Persona.isConfirmYes(text)) {
                 val voice = input.source in setOf("voice", "follow_up") && input.voiceOk != false
                 if (!voice) return Reply("Please confirm this screen action by voice.", tool = "screen_agent", expectAnswer = true)
                 return screenReply(screenAgent.confirm(true, input.locked, input.voiceOk))
@@ -225,7 +225,8 @@ class Assistant @Inject constructor(
             PendingContactChoice.Reply.NoPending -> Unit
         }
         state.pending?.let { (call, at) ->
-            if (followUp != null && monotonicMillis() - at in 0 until PENDING_MS) {
+            val yes = Persona.isConfirmYes(text)
+            if (followUp != null && !yes && monotonicMillis() - at in 0 until PENDING_MS) {
                 trace("confirm", call)
                 return Reply("Please confirm the pending request with yes, or cancel it with no first.", expectAnswer = true)
             }
@@ -235,13 +236,13 @@ class Assistant @Inject constructor(
                 MessageDraft.correctedContact(text)?.takeIf { call.arg("contact") != null }?.let { who ->
                     return tools.run(call.copy(args = call.args - "contact_name" + ("contact" to who)), input, "correction")
                 }
-                if (Persona.isYes(text)) return tools.run(call, input, "confirm", confirmed = true)
+                if (yes) return tools.run(call, input, "confirm", confirmed = true)
                 if (Persona.isNo(text)) {
                     trace("confirm", call)
                     state.clear()
                     return Reply("Okay, cancelled.", tool = call.tool, endConversation = true)
                 }
-            } else if (Persona.isYes(text)) {
+            } else if (Persona.isYes(text)) {   // expired: only a plain "yes" asks again
                 trace("confirm", call, false)
                 // A late "yes" (dialog still on screen) asks again instead of dropping the request.
                 val question = state.pendingQuestion

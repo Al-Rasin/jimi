@@ -79,8 +79,17 @@ object Persona {
     private val YES = Regex("^(yes|yeah|yep|yup|sure|ok|okay|do it|go ahead|confirm|right|correct|send it|send|call|please do|of course|ya|ha|hmm yes)( please)?$")
     private val NO = Regex("^(no|nope|nah|don't|dont|cancel|stop|never ?mind|wait|not now|leave it)( please| it)?$")
 
+    private val LEADING_YES = Regex("^(yes|yeah|yep|yup|ok|okay|sure|ha|haan|hae)\\b")
+    private val NEGATION = Regex("\\b(no|not|don't|dont|cancel|stop)\\b")
+
     fun isYes(t: String) = YES.matches(clean(t))
     fun isNo(t: String) = NO.matches(clean(t))
+
+    /** Only while a confirm is pending: "yes turn it off", "yes do it" also confirm, unless they say no/cancel. */
+    fun isConfirmYes(t: String): Boolean {
+        val c = clean(t)
+        return YES.matches(c) || (LEADING_YES.containsMatchIn(c) && !NEGATION.containsMatchIn(c))
+    }
 
     /** Lower case, letters only. Not RuleMatcher.normalize: that drops "hey", "ok", "please". */
     fun clean(t: String) = t.lowercase().replace(CLEAN_RE, " ").replace(TextNorm.SPACES, " ").trim()

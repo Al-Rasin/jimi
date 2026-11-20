@@ -16,6 +16,17 @@ class PersonaTest {
         assertFalse(Persona.isYes("yes call mom later"))
     }
 
+    @Test fun pendingConfirmTakesYesWithExtraWords() {
+        listOf("yes", "Yes please", "go ahead", "yes turn it off", "yes do it", "Yeah, go on.", "yep send it now",
+            "ok do it", "okay fine", "sure thing", "ha", "haan koro", "hae").forEach {
+            assertTrue(it, Persona.isConfirmYes(it))
+        }
+        listOf("yes don't", "yes but not now", "okay cancel", "yeah stop", "yes no", "no", "turn it off yes",
+            "yesterday", "okay do not send", "", "hello").forEach {
+            assertFalse(it, Persona.isConfirmYes(it))
+        }
+    }
+
     @Test fun greetings() {
         assertEquals("Hello Boss. What can I do?", Persona.smallTalk("Hey Jimi", 10))
         assertEquals("Good evening, Boss.", Persona.smallTalk("good evening", 20))

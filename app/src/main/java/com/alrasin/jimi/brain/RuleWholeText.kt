@@ -1,7 +1,7 @@
 package com.alrasin.jimi.brain
 
 // Whole-text commands for RuleMatcher (each matches the full normalized text).
-internal val TALK_WHOLE_RE = Regex("^(?:cancel|stop|never ?mind|forget it|nothing|shut up|be quiet|quiet|stop talking)$")
+internal val TALK_WHOLE_RE = Regex("^(?:cancel|stop|never ?mind|forget it|nothing|shut up|be quiet|quiet|stop talking|stop (?:it|that|this)(?: now)?)$")
 internal val TALK_WHOLE_RE_2 = Regex("^(?:(?:go to |go back to )?sleep(?: now)?|go quiet|take a (?:rest|break)|you can (?:sleep|rest)(?: now)?)$")
 internal val TALK_WHOLE_RE_3 = Regex("^(?:(?:(?:say|read|tell me) (?:that|it) again|repeat(?: that| it)?|what did you say|come again|pardon))$")
 internal val TIME_WHOLE_RE = Regex("^(?:(?:set |start |put )?(?:a |an |the |new )*(?:timer|countdown))$")

@@ -13,13 +13,17 @@ class Fix8CaptureTest {
         }
     }
 
-    @Test fun onlinePhoneNeverAlternatesToSherpaAfterFailure() {
+    @Test fun onlinePhoneFailureUsesSherpaForOnlyTheNextCapture() {
         val policy = SpeechCapturePolicy()
-        repeat(4) {
+        repeat(3) {
             assertEquals(SpeechEngine.PHONE_ON_DEVICE,
                 policy.select(SpeechEngine.PHONE_ON_DEVICE, online = true))
             policy.phoneFailed()
+            assertEquals(SpeechEngine.JIMI_OFFLINE,
+                policy.select(SpeechEngine.PHONE_ON_DEVICE, online = true))
         }
+        assertEquals(SpeechEngine.PHONE_ON_DEVICE,
+            policy.select(SpeechEngine.PHONE_ON_DEVICE, online = true))
         assertEquals(SpeechEngine.JIMI_OFFLINE,
             policy.select(SpeechEngine.JIMI_OFFLINE, online = true))
     }

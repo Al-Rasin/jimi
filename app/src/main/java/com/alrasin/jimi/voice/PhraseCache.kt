@@ -178,8 +178,12 @@ class PhraseCache(
         private val ENTRY = Regex("[0-9a-f]{64}\\.pcmcache")
         private val states = ConcurrentHashMap<String, State>()
 
+        /** Said once when the phone recognizer heard nothing after a wake. */
+        const val SAY_AGAIN = "Sorry, say again?"
+
         val COMMON: List<String> = listOf(
             "Uh-huh.",
+            SAY_AGAIN,
             "Let me check.",
             "On it.",
             "Hmm, one sec.",

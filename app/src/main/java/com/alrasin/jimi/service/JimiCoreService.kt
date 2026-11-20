@@ -379,6 +379,26 @@ class JimiCoreService : LifecycleService() {
         }
     }
 
+    /** The phone recognizer heard nothing after a wake: ask once, then reopen the mic as a follow-up capture. */
+    private fun askAgain(epoch: Int) {
+        lifecycleScope.launch {
+            synchronized(speechState) {
+                if (epoch != speechEpoch) return@launch
+                speaking = true
+                _phase.value = PHASE_SPEAKING
+                say(SAY_AGAIN, epoch)
+            }
+            awaitSpeech()
+            delay(TAIL_MS)   // let the speaker go quiet before the mic listens again
+            synchronized(speechState) {
+                if (epoch == speechEpoch) {
+                    listenRequest = "follow_up"
+                    speaking = false
+                }
+            }
+        }
+    }
+
     /** Runs one command through the assistant and speaks the answer. Then maybe listens for a follow-up. */
     private fun ask(text: String, raw: String, source: String, wakeId: Long?, audioPath: String?, audio: ShortArray?, refine: (suspend () -> String)? = null) = synchronized(speechState) {
         voice.stopWarming()
@@ -683,7 +703,10 @@ class JimiCoreService : LifecycleService() {
                     capturePolicy.phoneFailed()
                     _heard.value = ""
                     _phase.value = PHASE_WAKE
-                    JimiLog.i("STT engine=Phone unavailable/error/blank; retry Phone when online, offline fallback otherwise")
+                    // A fresh command (wake or tap) gets one "say again" retry, heard offline; a blank retry ends quietly.
+                    val retry = source == "voice" || source == "tap"
+                    JimiLog.i("STT engine=Phone unavailable/error/blank ($source); next capture offline, retry=$retry")
+                    if (retry) askAgain(epoch)
                     return true
                 }
                 voice.warmIfCold()
@@ -982,6 +1005,7 @@ class JimiCoreService : LifecycleService() {
 
     companion object {
         private val FILLERS = VoiceBox.FILLERS
+        private const val SAY_AGAIN = PhraseCache.SAY_AGAIN
         private const val REFINE_WAIT_MS = 5_000L
         const val ACTION_STOP = "com.alrasin.jimi.STOP"
         const val ACTION_MISSED = "com.alrasin.jimi.MISSED"
