@@ -36,10 +36,23 @@ internal object CommandAudio {
                     dir.mkdirs()
                     Wav.write(wav, audio)
                     File(dir, "$name.txt").writeText(rawText + "\n")
+                    keepNewest(dir, MAX_COMMAND_FILES)
                 }.onFailure { JimiLog.e("could not save command audio", it) }
             }
             wav.path
         }.onFailure { JimiLog.e("could not save command audio", it) }.getOrNull()
+
+    /** wav + txt per command: ~300 commands (~30 MB). Older ones were never used and filled the phone. */
+    private const val MAX_COMMAND_FILES = 600
+
+    /**
+     * Deletes the oldest files so [dir] keeps at most [max]. Names start with a yyyyMMdd_HHmmss stamp,
+     * so name order is time order.
+     */
+    fun keepNewest(dir: File, max: Int) {
+        val files = dir.listFiles().orEmpty().filter { it.isFile }.sortedByDescending { it.name }
+        files.drop(max).forEach { it.delete() }
+    }
 
     fun join(parts: List<ShortArray>): ShortArray {
         val audio = ShortArray(parts.sumOf { it.size })
