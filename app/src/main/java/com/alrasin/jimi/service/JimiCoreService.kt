@@ -18,6 +18,7 @@ import com.alrasin.jimi.actions.MlKitTranslate
 import com.alrasin.jimi.actions.NetBlock
 import com.alrasin.jimi.actions.ToolRegistry
 import com.alrasin.jimi.brain.Assistant
+import com.alrasin.jimi.brain.BanglaBridge
 import com.alrasin.jimi.brain.CloudBrain
 import com.alrasin.jimi.brain.ModelBrain
 import com.alrasin.jimi.brain.TranslateText
@@ -414,13 +415,16 @@ class JimiCoreService : LifecycleService() {
                 val locked = isLocked()
                 // D-093: Bangla in → Bangla out. The brain and rules work in English, so translate in and out.
                 val bangla = TranslateText.hasBengali(text)
-                val brainText = if (bangla) {
+                val brainText = if (bangla) BanglaBridge.quickEnglish(text) ?: run {
                     val t0 = SystemClock.elapsedRealtime()
                     MlKitTranslate.run(text, TranslateText.BN, TranslateText.EN).also {
                         JimiLog.i("bangla: to English ${if (it == null) "failed" else "ok"} in ${SystemClock.elapsedRealtime() - t0} ms")
                     }?.let { SpeechToText.normalize(it) } ?: text
                 } else text
-                val input = Assistant.Input(brainText, raw, source, locked, voiceOk(locked, audio), wakeId = wakeId, audioPath = audioPath)
+                // History keeps the English the brain saw as "heard"; the user's own Bangla words go in raw text
+                // (the English engine's raw is noise when Whisper heard Bangla).
+                val brainRaw = if (bangla && !TranslateText.hasBengali(raw)) text else raw
+                val input = Assistant.Input(brainText, brainRaw, source, locked, voiceOk(locked, audio), wakeId = wakeId, audioPath = audioPath)
                 // car / headphones mode: speak only the first sentences; the full answer stays in the notification
                 val short = ContextNow.mode.shortAnswers
                 var spokenSentences = 0
@@ -453,9 +457,6 @@ class JimiCoreService : LifecycleService() {
                     banglaOut?.close()
                 }
                 banglaSpeaker?.join()
-                if (bangla && r.text.isNotBlank()) {
-                    MlKitTranslate.run(r.text, TranslateText.EN, TranslateText.BN)?.let { r = r.copy(text = it) }
-                }
                 val interrupted = synchronized(speechState) {
                     val interruption = agentInterrupt.getAndSet(null)
                     if (interruption != null && speechEpoch == epoch + 1) epoch = speechEpoch
@@ -466,6 +467,11 @@ class JimiCoreService : LifecycleService() {
                     r = assistant.handle(input.copy(heard = "panic", raw = "panic", source = "voice", audioPath = null))
                 } else if (interrupted != null) {
                     r = r.copy(text = "Screen task stopped.", endConversation = true, expectAnswer = false)
+                }
+                // After the interrupt swap, so "Screen task stopped." is Bangla too. Panic speaks at once, in English.
+                // A failed translation keeps the English text: never silent.
+                if (bangla && r.text.isNotBlank() && r.tool != "panic") {
+                    MlKitTranslate.run(r.text, TranslateText.EN, TranslateText.BN)?.let { r = r.copy(text = it) }
                 }
                 if (r.tool == "screen_agent" || interrupted != null) showPanel()
                 synchronized(speechState) {
