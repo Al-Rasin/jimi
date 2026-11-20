@@ -79,6 +79,17 @@ class PhoneSpeechRecognizer(context: Context) {
                             putExtra(RecognizerIntent.EXTRA_PREFER_OFFLINE, !online)
                             putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 1)
                             putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, true)
+                            // D-093: Bangla too, so "tumi ki bangla bujho" comes back in Bangla script, like Assistant's
+                            // "additional languages". Google's offline pack is English only, so this only works online.
+                            if (online) {
+                                putStringArrayListExtra(EXTRA_ADDITIONAL_LANGUAGES, arrayListOf(BANGLA))
+                                if (Build.VERSION.SDK_INT >= 34) {
+                                    putExtra(RecognizerIntent.EXTRA_ENABLE_LANGUAGE_DETECTION, true)
+                                    putExtra(RecognizerIntent.EXTRA_ENABLE_LANGUAGE_SWITCH, RecognizerIntent.LANGUAGE_SWITCH_QUICK_RESPONSE)
+                                    putStringArrayListExtra(RecognizerIntent.EXTRA_LANGUAGE_DETECTION_ALLOWED_LANGUAGES, arrayListOf(LANGUAGE, BANGLA))
+                                    putStringArrayListExtra(RecognizerIntent.EXTRA_LANGUAGE_SWITCH_ALLOWED_LANGUAGES, arrayListOf(LANGUAGE, BANGLA))
+                                }
+                            }
                             if (Build.VERSION.SDK_INT >= 33) {
                                 putStringArrayListExtra(RecognizerIntent.EXTRA_BIASING_STRINGS,
                                     ArrayList(hotwords.take(SttHotwords.MAX_PHRASES)))
@@ -121,5 +132,8 @@ class PhoneSpeechRecognizer(context: Context) {
 
     private companion object {
         const val LANGUAGE = "en-IN"
+        const val BANGLA = "bn-BD"
+        /** Hidden Google extra (used by Assistant's bilingual mode); ignored by recognizers that don't know it. */
+        const val EXTRA_ADDITIONAL_LANGUAGES = "android.speech.extra.EXTRA_ADDITIONAL_LANGUAGES"
     }
 }

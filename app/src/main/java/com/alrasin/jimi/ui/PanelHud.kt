@@ -44,6 +44,7 @@ import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
@@ -156,14 +157,15 @@ fun HudChip(text: String, enabled: Boolean = true, selected: Boolean = false, on
 
 /** Glass text field; glowing mic button (send arrow when text is typed). */
 @Composable
-fun HudInput(text: String, onText: (String) -> Unit, onGo: () -> Unit) {
+fun HudInput(field: TextFieldValue, onText: (TextFieldValue) -> Unit, onGo: () -> Unit) {
+    val text = field.text
     Row(
         Modifier.fillMaxWidth().clip(CircleShape).background(Hud.Glass).border(1.dp, Hud.Hairline, CircleShape)
             .padding(start = 20.dp, end = 6.dp, top = 6.dp, bottom = 6.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         BasicTextField(
-            value = text, onValueChange = onText, singleLine = true,
+            value = field, onValueChange = onText, singleLine = true,
             textStyle = MaterialTheme.typography.bodyLarge.copy(color = PanelColors.Text),
             cursorBrush = SolidColor(PanelColors.Accent),
             modifier = Modifier.weight(1f).padding(vertical = 10.dp),

@@ -13,7 +13,7 @@ import java.io.File
 
 // Regexes built once, not on every call (ROADMAP §L.4).
 private val CLOSE_RE = Regex("(?<!\\d):|:(?!\\d)")
-private val CLOSE_RE_2 = Regex("[^a-z0-9': ]")
+private val CLOSE_RE_2 = Regex("[^a-z0-9'\\u0980-\\u09FF: ]")
 
 /**
  * Streaming speech-to-text (PLAN 3.2, D-026): sherpa-onnx transducer (Kroko zipformer en) from APK assets `stt/`.

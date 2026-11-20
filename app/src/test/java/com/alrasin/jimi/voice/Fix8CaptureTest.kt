@@ -45,4 +45,9 @@ class Fix8CaptureTest {
         assertEquals("wake me at 6:30", SpeechToText.normalize("Wake me at 6:30."))
         assertEquals("alarm 7 am", SpeechToText.normalize("Alarm: 7 AM!"))
     }
+
+    @Test fun banglaScriptSurvivesSpeechNormalization() {
+        assertEquals("তুমি কি বাংলা বুঝো", SpeechToText.normalize("তুমি কি বাংলা বুঝো?"))
+        assertEquals("open youtube", SpeechToText.normalize("Open YouTube."))
+    }
 }

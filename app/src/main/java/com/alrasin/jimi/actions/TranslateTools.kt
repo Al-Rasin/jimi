@@ -35,20 +35,24 @@ fun translateTool(): Tool = SimpleTool(
     ToolResult.ok("In ${TranslateText.name(to)}: $out", out)
 }
 
-private object MlKitTranslate {
+internal object MlKitTranslate {
     private const val DOWNLOAD_MS = 120_000L
     private const val TRANSLATE_MS = 15_000L
+    // One client per direction, kept open: making a new one each call cost a model load every time (D-093).
+    private val clients = java.util.concurrent.ConcurrentHashMap<String, com.google.mlkit.nl.translate.Translator>()
+    private val ready = java.util.concurrent.ConcurrentHashMap.newKeySet<String>()
 
     suspend fun run(text: String, from: String, to: String): String? {
-        val options = TranslatorOptions.Builder().setSourceLanguage(code(from)).setTargetLanguage(code(to)).build()
-        val translator = Translation.getClient(options)
-        return try {
-            val ready = withTimeoutOrNull(DOWNLOAD_MS) { await(translator.downloadModelIfNeeded(DownloadConditions.Builder().build())) != null }
-            if (ready != true) return null.also { JimiLog.i("translate: model not ready ($from→$to)") }
-            (withTimeoutOrNull(TRANSLATE_MS) { await(translator.translate(text)) } as? String)?.trim()?.takeIf { it.isNotEmpty() }
-        } finally {
-            translator.close()
+        val key = "$from>$to"
+        val translator = clients.getOrPut(key) {
+            Translation.getClient(TranslatorOptions.Builder().setSourceLanguage(code(from)).setTargetLanguage(code(to)).build())
         }
+        if (key !in ready) {
+            val ok = withTimeoutOrNull(DOWNLOAD_MS) { await(translator.downloadModelIfNeeded(DownloadConditions.Builder().build())) != null }
+            if (ok != true) return null.also { JimiLog.i("translate: model not ready ($from→$to)") }
+            ready += key
+        }
+        return (withTimeoutOrNull(TRANSLATE_MS) { await(translator.translate(text)) } as? String)?.trim()?.takeIf { it.isNotEmpty() }
     }
 
     private fun code(lang: String) = if (lang == TranslateText.BN) TranslateLanguage.BENGALI else TranslateLanguage.ENGLISH

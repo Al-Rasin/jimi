@@ -14,11 +14,13 @@ import android.os.SystemClock
 import androidx.lifecycle.LifecycleService
 import androidx.lifecycle.lifecycleScope
 import com.alrasin.jimi.agent.ScreenAgentSession
+import com.alrasin.jimi.actions.MlKitTranslate
 import com.alrasin.jimi.actions.NetBlock
 import com.alrasin.jimi.actions.ToolRegistry
 import com.alrasin.jimi.brain.Assistant
 import com.alrasin.jimi.brain.CloudBrain
 import com.alrasin.jimi.brain.ModelBrain
+import com.alrasin.jimi.brain.TranslateText
 import com.alrasin.jimi.core.JimiLog
 import com.alrasin.jimi.core.isLocked
 import com.alrasin.jimi.data.Settings
@@ -410,10 +412,30 @@ class JimiCoreService : LifecycleService() {
                     _heard.value = text
                 }
                 val locked = isLocked()
-                val input = Assistant.Input(text, raw, source, locked, voiceOk(locked, audio), wakeId = wakeId, audioPath = audioPath)
+                // D-093: Bangla in → Bangla out. The brain and rules work in English, so translate in and out.
+                val bangla = TranslateText.hasBengali(text)
+                val brainText = if (bangla) {
+                    val t0 = SystemClock.elapsedRealtime()
+                    MlKitTranslate.run(text, TranslateText.BN, TranslateText.EN).also {
+                        JimiLog.i("bangla: to English ${if (it == null) "failed" else "ok"} in ${SystemClock.elapsedRealtime() - t0} ms")
+                    }?.let { SpeechToText.normalize(it) } ?: text
+                } else text
+                val input = Assistant.Input(brainText, raw, source, locked, voiceOk(locked, audio), wakeId = wakeId, audioPath = audioPath)
                 // car / headphones mode: speak only the first sentences; the full answer stays in the notification
                 val short = ContextNow.mode.shortAnswers
                 var spokenSentences = 0
+                // Bangla replies: sentences are translated one by one, in order, while the brain keeps going.
+                val banglaOut = if (bangla) Channel<String>(Channel.UNLIMITED) else null
+                val banglaSpeaker = banglaOut?.let { sentences ->
+                    launch {
+                        for (sentence in sentences) {
+                            val spoken = MlKitTranslate.run(sentence, TranslateText.EN, TranslateText.BN) ?: sentence
+                            synchronized(speechState) {
+                                if (epoch == speechEpoch && (!short || spokenSentences++ < ContextModes.SHORT_SENTENCES)) say(spoken, epoch)
+                            }
+                        }
+                    }
+                }
                 var r = try {
                     // adb test hook: source "offline_test" times the on-phone path with the cloud skipped
                     withContext(if (source == "offline_test") CloudBrain.Offline else EmptyCoroutineContext) { assistant.handle(input) { sentence ->
@@ -422,11 +444,17 @@ class JimiCoreService : LifecycleService() {
                             thinkingCue.finish(epoch)
                             if (firstReplyReadyAt == 0L) firstReplyReadyAt = SystemClock.elapsedRealtime()
                             _phase.value = PHASE_SPEAKING
-                            if (!short || spokenSentences++ < ContextModes.SHORT_SENTENCES) say(sentence, epoch)
+                            if (banglaOut != null) banglaOut.trySend(sentence)
+                            else if (!short || spokenSentences++ < ContextModes.SHORT_SENTENCES) say(sentence, epoch)
                         }
                     } }
                 } finally {
                     synchronized(speechState) { thinkingCue.finish(epoch) }
+                    banglaOut?.close()
+                }
+                banglaSpeaker?.join()
+                if (bangla && r.text.isNotBlank()) {
+                    MlKitTranslate.run(r.text, TranslateText.EN, TranslateText.BN)?.let { r = r.copy(text = it) }
                 }
                 val interrupted = synchronized(speechState) {
                     val interruption = agentInterrupt.getAndSet(null)

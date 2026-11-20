@@ -60,6 +60,12 @@ class PersonaTest {
 }
 
 class BanglishSmallTalkTest {
+    @Test fun askingAboutBanglaGetsYes() {
+        for (t in listOf("do you understand bengali", "do you know bangla", "can you speak bangla", "tumi ki bangla bujho")) {
+            assertTrue(t, Persona.smallTalk(t, 10)!!.startsWith("Yes"))
+        }
+    }
+
     @Test fun banglishSmallTalkNeedsNoModel() {
         for (t in listOf("tumi ki bangla bojho", "bangla bujho", "kemon acho", "apni kemon achen", "ki koro jimi")) {
             assertNotNull(t, Persona.smallTalk(t, 10))

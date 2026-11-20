@@ -14,6 +14,7 @@ import androidx.compose.animation.core.tween
 import androidx.compose.ui.graphics.FilterQuality
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.foundation.background
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.sp
@@ -125,7 +126,8 @@ private fun Panel(vm: PanelViewModel, onClose: () -> Unit) {
     var answeredWake by remember { mutableStateOf<Long?>(null) }
     var fixing by remember { mutableStateOf(false) }
     var fixText by remember { mutableStateOf("") }
-    var typed by remember { mutableStateOf("") }
+    // TextFieldValue keeps the keyboard's composing span; a plain String made Gboard voice typing repeat words.
+    var typed by remember { mutableStateOf(TextFieldValue("")) }
     var rated by remember { mutableStateOf(false) }
     var touched by remember { mutableLongStateOf(System.currentTimeMillis()) }
     var shown by remember { mutableStateOf(false) }
@@ -272,7 +274,7 @@ private fun Panel(vm: PanelViewModel, onClose: () -> Unit) {
             }
             HudInput(typed, { touch(); typed = it }) {
                 touch()
-                if (typed.isBlank()) vm.listen() else { vm.ask(typed.trim()); typed = "" }
+                if (typed.text.isBlank()) vm.listen() else { vm.ask(typed.text.trim()); typed = TextFieldValue("") }
             }
         }
     }

@@ -22,6 +22,8 @@ private val LOVE_RE = Regex("(i love you|love you|i like you)")
 private val COIN_RE = Regex("(flip|toss) (a |the )?coin|heads or tails")
 private val DICE_RE = Regex("roll (a |the )?(dice|die)")
 private val BANGLISH_LANG_RE = Regex("(tumi |apni )?(ki )?bangla (bojho|bujho|bojhen|bujhen|bolte paro|paro|jano)( ki)?( jimi)?")
+// Also what ML Kit makes of Bangla-script "তুমি কি বাংলা বুঝো" (D-093).
+private val BANGLA_LANG_EN_RE = Regex("(do|can) you (understand|know|speak)( in)? (bangla|bengali)( language)?( jimi)?")
 
 /** Name, tone and fixed replies (PLAN 5.3 / 10.3). Short replies; calls the user "Boss". */
 object Persona {
@@ -102,7 +104,7 @@ object Persona {
             t.matches(COIN_RE) -> if (Random.nextBoolean()) "Heads." else "Tails."
             t.matches(DICE_RE) -> "You rolled a ${Random.nextInt(1, 7)}."
             t.matches(BANGLISH_HOW_RE) -> "Bhalo achi, $ADDRESS. Ready when you are."
-            t.matches(BANGLISH_LANG_RE) -> "A little, $ADDRESS. I can translate Bangla, but commands work best in English."
+            t.matches(BANGLISH_LANG_RE) || t.matches(BANGLA_LANG_EN_RE) -> "Yes, $ADDRESS. Speak Bangla and I will answer in Bangla."
             else -> null
         }
     }

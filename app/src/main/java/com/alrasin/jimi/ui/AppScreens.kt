@@ -26,6 +26,7 @@ import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.List
 import androidx.compose.material.icons.automirrored.filled.Send
@@ -148,7 +149,8 @@ private fun TabList(content: androidx.compose.foundation.lazy.LazyListScope.() -
 @Composable
 private fun ChatTab(vm: AppViewModel) {
     val turns by vm.turnList.collectAsStateWithLifecycle()
-    var text by remember { mutableStateOf("") }
+    // TextFieldValue keeps the keyboard's composing span; a plain String made Gboard voice typing repeat words.
+    var text by remember { mutableStateOf(TextFieldValue("")) }
     Column(Modifier.fillMaxSize().padding(horizontal = 20.dp).imePadding()) {
         if (turns.isEmpty()) {
             // home like a real assistant app: orb, small greeting, one big line, soft blue light from below (D-067)
@@ -201,7 +203,7 @@ private fun ChatTab(vm: AppViewModel) {
             }
         }
         InputPill(text, { text = it }, Modifier.padding(top = 4.dp, bottom = 8.dp)) {
-            if (text.isBlank()) vm.listen() else { vm.ask(text.trim()); text = "" }
+            if (text.text.isBlank()) vm.listen() else { vm.ask(text.text.trim()); text = TextFieldValue("") }
         }
     }
 }
@@ -235,7 +237,8 @@ fun Bubble(text: String, mine: Boolean, mark: Boolean = false) {
 
 /** Rounded text field with the mic / send button. */
 @Composable
-fun InputPill(text: String, onText: (String) -> Unit, modifier: Modifier = Modifier, onGo: () -> Unit) {
+fun InputPill(field: TextFieldValue, onText: (TextFieldValue) -> Unit, modifier: Modifier = Modifier, onGo: () -> Unit) {
+    val text = field.text
     Row(
         modifier.fillMaxWidth()
             .background(JimiColors.Surface2.copy(alpha = 0.85f), RoundedCornerShape(28.dp))
@@ -243,7 +246,7 @@ fun InputPill(text: String, onText: (String) -> Unit, modifier: Modifier = Modif
         verticalAlignment = Alignment.CenterVertically,
     ) {
         BasicTextField(
-            value = text, onValueChange = onText, singleLine = true,
+            value = field, onValueChange = onText, singleLine = true,
             textStyle = MaterialTheme.typography.bodyLarge.copy(color = PanelColors.Text),
             cursorBrush = SolidColor(PanelColors.Accent),
             modifier = Modifier.weight(1f).padding(vertical = 16.dp),
