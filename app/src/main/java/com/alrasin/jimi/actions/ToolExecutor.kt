@@ -195,6 +195,7 @@ internal class ToolSafetyGate {
             "read_messages" -> "Read your latest messages"
             "read_chat" -> "Read $contact's last messages$app"
             "read_notes" -> "Read your latest notes"
+            "remove_from_list" -> "Remove ${arg("item")} from your ${arg("list") ?: "shopping list"}"
             "list_reminders" -> "Read your pending reminders"
             "recall_facts" -> "Read what I remember about you"
             "read_screen" -> "Read your screen"

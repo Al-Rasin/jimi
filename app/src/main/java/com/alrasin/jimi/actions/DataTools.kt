@@ -49,6 +49,14 @@ fun dataTools(
             if (list.isEmpty()) return@SimpleTool ToolResult.ok("You have no notes.")
             ToolResult.ok("Your last notes: " + list.joinToString(". ") { it.text } + ".", list.joinToString("\n") { "• ${it.text}" })
         },
+        SimpleTool("remove_from_list", "Take an item off a list", listOf(arg("item", "item, like milk"), arg("list", "list name, like shopping list", required = false))) { c, _ ->
+            val item = c.require("item", "Remove what?")
+            val list = c.arg("list") ?: "shopping list"
+            val ids = listItemIds(notes.last(200), list, item)
+            if (ids.isEmpty()) return@SimpleTool ToolResult.ok("$item isn't on your $list.")
+            ids.forEach { notes.delete(it) }
+            ToolResult.ok("Removed $item from your $list.")
+        },
         SimpleTool(
             "create_reminder", "Remind at a time",
             listOf(arg("text", "what to remind"), arg("time", "yyyy-MM-ddTHH:mm"), arg("repeat", "none, daily or weekly", false, listOf("none", "daily", "weekly"))),
@@ -143,6 +151,12 @@ private suspend fun tidyFacts(memory: MemoryDao): List<MemoryFact> {
         }
     }
     return out
+}
+
+/** Notes saved as "shopping list milk" for [item] on [list]. */
+internal fun listItemIds(all: List<Note>, list: String, item: String): List<Long> {
+    val want = "${list.lowercase().trim()} ${item.lowercase().trim()}".replace(Regex("\\s+"), " ")
+    return all.filter { it.text.lowercase().trim().replace(Regex("[:,-]"), " ").replace(Regex("\\s+"), " ") == want }.map { it.id }
 }
 
 /** "what's on my shopping list": the items saved as "shopping list milk", or notes that mention [about]. */

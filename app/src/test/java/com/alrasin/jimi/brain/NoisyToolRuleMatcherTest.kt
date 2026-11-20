@@ -464,6 +464,12 @@ class ComplaintPhrasesTest {
         assertEquals("repeat_last", m("can you read that again")?.tool)
     }
 
+    @Test fun removeFromShoppingList() {
+        assertEquals("milk", m("remove milk from my shopping list")?.args?.get("item"))
+        assertEquals("remove_from_list", m("take eggs off the grocery list")?.tool)
+        assertEquals("bread", m("cross off bread from shopping list")?.args?.get("item"))
+    }
+
     @Test fun callOnSpeaker() {
         assertEquals(ToolCall("call", mapOf("contact" to "mom", "speaker" to "true")), m("call mom on speaker"))
         assertEquals(ToolCall("call", mapOf("contact" to "dad", "speaker" to "true")), m("call dad on the speakerphone"))

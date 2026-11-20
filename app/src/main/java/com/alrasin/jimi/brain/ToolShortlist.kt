@@ -51,7 +51,7 @@ object ToolShortlist {
         "rain" to listOf("weather"), "umbrella" to listOf("weather"), "hot" to listOf("weather"), "cold" to listOf("weather"),
         "temperature" to listOf("weather"), "outside" to listOf("weather"),
         "where" to listOf("my_location"), "location" to listOf("my_location", "toggle"),
-        "note" to listOf("create_note", "read_notes"), "notes" to listOf("read_notes", "create_note"),
+        "note" to listOf("create_note", "read_notes"), "list" to listOf("read_notes", "remove_from_list", "create_note"), "notes" to listOf("read_notes", "create_note"),
         "write" to listOf("create_note", "type_text", "compose_email"), "jot" to listOf("create_note"),
         "email" to listOf("compose_email", "add_contact_email"), "mail" to listOf("compose_email"),
         "notification" to listOf("read_notifications", "notification_summary", "clear_notifications"),

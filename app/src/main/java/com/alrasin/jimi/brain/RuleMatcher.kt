@@ -51,6 +51,7 @@ object RuleMatcher {
     private fun mishears(t: String) = MISHEARS.fold(t) { s, (r, to) -> r.replace(s, to) }
 
     /** Drops "please", "can you", "jarvis" etc. around the command. */
+    private val LIST_REMOVE_RE = Regex("^(?:remove|delete|take|cross|strike) (?:off )?(.+?) (?:off|from|out of) (?:my |the )?(?:shopping|grocery|groceries) list$")
     private val BODY_START_RE = Regex(" (?:saying|that says)(?= )|(?<=^(?:reply|respond|write back)(?: to)? [a-z]{1,20}(?: [a-z]{1,20})?) with(?= )")
 
     private fun polite(t: String): String {
@@ -105,6 +106,7 @@ object RuleMatcher {
             if (out != t) return match(out, now)
         }
         if (SHOPPING_READ_RE.matches(t)) return call("read_notes", "about" to "shopping list")
+        LIST_REMOVE_RE.matchEntire(t)?.let { return call("remove_from_list", "item" to it.groupValues[1], "list" to "shopping list") }
         if (MY_NUMBER_RE.matches(t)) return call("device_status", "what" to "number")
         CONTACT_NUMBER_RE.matchEntire(t)?.let {
             val who = it.groupValues[1]
