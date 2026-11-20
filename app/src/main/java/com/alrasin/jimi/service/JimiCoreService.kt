@@ -27,6 +27,7 @@ import com.alrasin.jimi.data.WakeEventDao
 import com.alrasin.jimi.ui.AssistantActivity
 import com.alrasin.jimi.ui.Backdrop
 import com.alrasin.jimi.voice.AudioRing
+import com.alrasin.jimi.voice.AssistantVolume
 import com.alrasin.jimi.voice.BanglaSpeech
 import com.alrasin.jimi.voice.BanglaSpeechToText
 import com.alrasin.jimi.voice.NoiseCleaner
@@ -296,6 +297,7 @@ class JimiCoreService : LifecycleService() {
     }
 
     private fun say(text: String, epoch: Int = speechEpoch) {
+        lifecycleScope.launch(Dispatchers.IO) { AssistantVolume.ensureAudible(this@JimiCoreService) }
         // Bangla (a chat line): sentence pieces, the voice splits Bangla from English itself; chunks() would cut the Bangla out.
         val chunks = if (SpeechText.hasBangla(text)) SpeechText.banglaChunks(text)
             else if (voice.isCached(text)) listOf(SpeechText.normalize(text))
