@@ -260,8 +260,9 @@ class ModelBrain @Inject constructor(
         }
 
     companion object {
-        private const val IDLE_MS = 120_000L
-        private const val KEEP_WARM_MS = 60_000L
+        // A cold load costs 4–5 s per question; follow-up questions minutes apart stay fast (D-084).
+        private const val IDLE_MS = 600_000L
+        private const val KEEP_WARM_MS = 600_000L
     }
 }
 

@@ -7,7 +7,7 @@ import kotlinx.coroutines.flow.StateFlow
 @Suppress("ObjectPropertyName")
 object CoreState {
     const val PHASE_WAKE = "Say \"Hey Jimi\""
-    const val PHASE_PREPARING = "Getting ready…"
+    const val PHASE_PREPARING = "Listening…"
     const val PHASE_HEARING = "Listening to you…"
     const val PHASE_SPEAKING = "Speaking…"
     const val PHASE_THINKING = "Thinking…"
