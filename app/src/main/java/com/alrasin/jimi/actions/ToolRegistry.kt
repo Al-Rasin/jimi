@@ -84,6 +84,7 @@ class ToolRegistry @Inject constructor(
         add(myLocationTool(location))
         add(phoneProfileTool(profile) { all.size })
         add(settingTool(SettingsPages(context)))
+        add(netBlockTool(context, apps, { settings.netBlocked.first() }, settings::setNetBlocked))
         addAll(mapTools(planner, apps))
         addAll(skillTools(context, planner, apps))
         addAll(recipeTools(context, planner, apps, recipes))

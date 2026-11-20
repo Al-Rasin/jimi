@@ -43,6 +43,7 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.alrasin.jimi.actions.NetBlock
 import com.alrasin.jimi.agent.appmap.AppAskQueue
 import com.alrasin.jimi.core.Secrets
 import com.alrasin.jimi.llm.ChatModels
@@ -62,6 +63,7 @@ internal fun SettingsTab(vm: AppViewModel, home: HomeViewModel, onSetup: () -> U
     val autoClear by vm.autoClear.collectAsStateWithLifecycle()
     val nightExplore by vm.nightExplore.collectAsStateWithLifecycle()
     val carMode by vm.carMode.collectAsStateWithLifecycle()
+    val netBlocked by vm.netBlocked.collectAsStateWithLifecycle()
     val headphonesMode by vm.headphonesMode.collectAsStateWithLifecycle()
     val modeNow by vm.modeNow.collectAsStateWithLifecycle()
     val readWhen by vm.readWhen.collectAsStateWithLifecycle()
@@ -282,6 +284,11 @@ internal fun SettingsTab(vm: AppViewModel, home: HomeViewModel, onSetup: () -> U
                 ToggleRow("Headphones mode", headphonesMode, if (modeNow.headphones) "On now: headphones connected" else "Auto when headphones connect. Short answers") { vm.setHeadphonesMode(it) }
                 ToggleRow("Bedtime mode", bedtimeMode, "Quiet voice and Do Not Disturb") { vm.setBedtimeMode(it) }
                 if (bedtimeMode) BedtimeHours(bedtimeHours, vm::setBedtimeHours)
+            }
+            RowsCard("Block internet") {
+                // Wi-Fi + mobile data; also by voice: "stop messenger internet".
+                ToggleRow("WhatsApp", NetBlock.WHATSAPP.any { it in netBlocked }, "No Wi-Fi or data") { vm.setAppNetOff(NetBlock.WHATSAPP, it) }
+                ToggleRow("Messenger", NetBlock.MESSENGER.any { it in netBlocked }, "No Wi-Fi or data") { vm.setAppNetOff(NetBlock.MESSENGER, it) }
             }
             RowsCard("Safety") {
                 NavRow("Voice ID", if (voiceId) "On" else "Off") { page = "voiceid" }

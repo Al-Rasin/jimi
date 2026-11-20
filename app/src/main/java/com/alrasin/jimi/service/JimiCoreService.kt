@@ -14,6 +14,7 @@ import android.os.SystemClock
 import androidx.lifecycle.LifecycleService
 import androidx.lifecycle.lifecycleScope
 import com.alrasin.jimi.agent.ScreenAgentSession
+import com.alrasin.jimi.actions.NetBlock
 import com.alrasin.jimi.actions.ToolRegistry
 import com.alrasin.jimi.brain.Assistant
 import com.alrasin.jimi.brain.CloudBrain
@@ -267,6 +268,8 @@ class JimiCoreService : LifecycleService() {
         lifecycleScope.launch { settings.showPanel.collect { showPanel = it } }
         lifecycleScope.launch { settings.voiceId.collect { voiceId = it } }
         lifecycleScope.launch { settings.speakerThreshold.collect { speakerThreshold = it } }
+        // Firewall rules die on reboot; also follows the Settings switches (D-084).
+        lifecycleScope.launch(Dispatchers.IO) { settings.netBlocked.distinctUntilChanged().collect { NetBlock.apply(this@JimiCoreService, it) } }
         alerts.register()
         contextWatch.start()
         mapFreshness.start()
@@ -291,19 +294,6 @@ class JimiCoreService : LifecycleService() {
         lifecycleScope.launch(Dispatchers.IO) { SharedEmbedder.get(this@JimiCoreService) }
     }
 
-    /**
-     * Spoken wake reply played to the end before Google's recognizer starts. Played while Google listens, the reply is
-     * taken as the user's speech: the echo canceler wipes it, Google ends with "no match" before the real command.
-     */
-    private suspend fun playWakeReplyFirst(): Boolean {
-        val audio = voice.wakeAudio()
-        if (!spokenWake || audio == null) return false
-        warmUpForCommand()
-        val epoch = speechEpoch
-        withContext(Dispatchers.IO) { TextToSpeech.playPcm(audio.samples, audio.sampleRate) { epoch != speechEpoch } }
-        return true
-    }
-
     private fun say(text: String, epoch: Int = speechEpoch) {
         // Bangla (a chat line): sentence pieces, the voice splits Bangla from English itself; chunks() would cut the Bangla out.
         val chunks = if (SpeechText.hasBangla(text)) SpeechText.banglaChunks(text)
@@ -312,7 +302,7 @@ class JimiCoreService : LifecycleService() {
                 // Each piece gets its own tune, so short pieces sound broken. Only the reply's first piece is short (fast start).
                 val max = if (voice.phoneEngine) PHONE_VOICE_WORDS else VOICE_WORDS
                 val replyStart = epoch == timedCommandEpoch && firstAudioEpoch != epoch && speechLeft.get() == 0
-                SpeechText.chunks(text, maxWords = max, firstWords = if (!replyStart) max else if (voice.phoneEngine) 3 else 2)
+                SpeechText.chunks(text, maxWords = max, firstWords = if (!replyStart) max else if (voice.phoneEngine) 6 else 5)
             }
         synchronized(speechState) {
             if (epoch != speechEpoch) return
@@ -601,15 +591,14 @@ class JimiCoreService : LifecycleService() {
             JimiLog.i("STT engine=Phone capture=$source; sherpa microphone released")
             val wokeAt = SystemClock.elapsedRealtime()
             try {
-                val replied = source == "voice" && playWakeReplyFirst()
-                if (replied) JimiLog.i("latency: wake reply done ${SystemClock.elapsedRealtime() - wokeAt} ms after wake")
-                if (epoch != speechEpoch) return true
+                // No spoken wake reply here: it had to finish before Google could listen (+1–2 s each wake). Chime when ready.
+                if (source == "voice") warmUpForCommand()
                 val raw = coroutineScope {
                     val recognition = async { phone.recognize(snapshot.hotwords, onReady = {
                         if (epoch == speechEpoch) {
                             JimiLog.i("latency: mic ready ${SystemClock.elapsedRealtime() - wokeAt} ms after wake")
                             _phase.value = if (source == "follow_up") PHASE_FOLLOW_UP else PHASE_HEARING
-                            if (source != "voice") tone.listen() else if (!replied) acknowledgeWake(tone)
+                            if (source != "voice") tone.listen() else tone.wake()
                         }
                     }) }
                     val cancellation = launch {
@@ -947,7 +936,8 @@ class JimiCoreService : LifecycleService() {
         private const val RING_SECONDS = 4
         /** Most words per spoken piece: Google voice makes ~25 words in ~1 s; Piper ~10 words in ~2 s (3 s of speech). */
         private const val PHONE_VOICE_WORDS = 25
-        private const val VOICE_WORDS = 10
+        // 10-word pieces sounded choppy ("broken broken"); longer pieces keep one tune per sentence.
+        private const val VOICE_WORDS = 18
         private const val AUDIO_AHEAD = 3
         private const val PRE_ROLL_SAMPLES = 16_000   // 1 s before the wake: "…jimi turn" → "turn" is kept
         private const val ENROLL_SECONDS = 8

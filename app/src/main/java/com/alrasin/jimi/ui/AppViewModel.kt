@@ -167,6 +167,7 @@ class AppViewModel @Inject constructor(
     val readLockedFull = settings.readLockedFull.state(false)
     val bedtimeMode = settings.bedtimeMode.state(false)
     val proactive = settings.proactive.state(true)
+    val netBlocked = settings.netBlocked.state(emptySet())
     val bedtimeHours = settings.bedtimeHours.state(ContextModes.DEFAULT_HOURS)
     val voiceId = settings.voiceId.state(false)
     val speakerThreshold = settings.speakerThreshold.state(Settings.DEFAULT_SPEAKER_THRESHOLD)
@@ -315,6 +316,11 @@ class AppViewModel @Inject constructor(
 
     fun setSpokenWake(v: Boolean) = viewModelScope.launch { settings.setSpokenWake(v) }
     fun setFollowUp(v: Boolean) = viewModelScope.launch { settings.setFollowUp(v) }
+    /** The core service applies the firewall when this list changes (D-084). */
+    fun setAppNetOff(pkgs: List<String>, off: Boolean) = viewModelScope.launch {
+        val now = settings.netBlocked.first()
+        settings.setNetBlocked(if (off) now + pkgs else now - pkgs.toSet())
+    }
     fun setCarMode(v: Boolean) = viewModelScope.launch { settings.setCarMode(v) }
     fun setHeadphonesMode(v: Boolean) = viewModelScope.launch { settings.setHeadphonesMode(v) }
     fun setReadWhen(v: com.alrasin.jimi.notify.ReadOut.When) = viewModelScope.launch { settings.setReadWhen(v) }

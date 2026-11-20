@@ -7,6 +7,7 @@ import androidx.datastore.preferences.core.Preferences
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.floatPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
+import androidx.datastore.preferences.core.stringSetPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import com.alrasin.jimi.voice.Voices
 import com.alrasin.jimi.llm.ChatModels
@@ -25,6 +26,7 @@ class Settings @Inject constructor(@ApplicationContext private val context: Cont
     private val enabledKey = booleanPreferencesKey("listening_enabled")
     private val spokenWakeKey = booleanPreferencesKey("spoken_wake")
     private val followUpKey = booleanPreferencesKey("follow_up")
+    private val netBlockedKey = stringSetPreferencesKey("net_blocked")
     private val sttSecondPassKey = booleanPreferencesKey("stt_second_pass")
     private val sttBanglaKey = booleanPreferencesKey("stt_bangla")
     private val sttDenoiseKey = booleanPreferencesKey("stt_denoise")
@@ -147,6 +149,10 @@ class Settings @Inject constructor(@ApplicationContext private val context: Cont
     /** Jimi speaks on its own (ROADMAP #44): late-night nudge and "while you were away". */
     val proactive: Flow<Boolean> = read(proactiveKey, true)
     suspend fun setProactive(v: Boolean) = write(proactiveKey, v)
+
+    /** Packages whose internet Jimi has cut (D-084). */
+    val netBlocked: Flow<Set<String>> = read(netBlockedKey, emptySet())
+    suspend fun setNetBlocked(v: Set<String>) = write(netBlockedKey, v)
     suspend fun setSttSecondPass(v: Boolean) = write(sttSecondPassKey, v)
     suspend fun setSttBangla(v: Boolean) = write(sttBanglaKey, v)
     suspend fun setSttDenoise(v: Boolean) = write(sttDenoiseKey, v)

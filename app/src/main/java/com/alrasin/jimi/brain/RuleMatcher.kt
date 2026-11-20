@@ -118,6 +118,7 @@ object RuleMatcher {
         if (WHO_CALLING_RE.matches(t)) return call("missed_calls", "now" to "yes")
         if (CALL_LAST_CALLER_RE.matches(t)) return call("call_back")
         REMINDER_NAMED_DELETE_RE.matchEntire(t)?.let { if (it.groupValues[1] != "all") return call("delete_reminder", "text" to it.groupValues[1]) }
+        NetRules.net(t)?.let { return it }
         if (FORGET_WIFI_RE.matches(t)) return call("setting", "name" to "wifi", "state" to "open")
         NOTES_ABOUT_RE.matchEntire(t)?.let { return call("read_notes", "about" to it.groupValues[1].trim()) }
         if (t.matches(SYSTEM_NETWORK_RE)) return call("device_status", "what" to "network")
