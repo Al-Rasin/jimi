@@ -136,7 +136,12 @@ private fun Panel(vm: PanelViewModel, onClose: () -> Unit) {
     val fade by animateFloatAsState(if (shown) 1f else 0f, tween(if (motion) 250 else 0), label = "panel fade")
     val stripSize by animateDpAsState(if (talking) 72.dp else 140.dp, tween(if (motion) 450 else 0), label = "strip size")
 
-    fun close() { shown = false; closing = true }
+    fun close() {
+        // Closing while Jimi still listens: stop that listen now, so the wake word works again at once
+        // (Google keeps the mic for ~5 s otherwise and the next "Hey Jimi" is missed).
+        if (phase == CoreState.PHASE_PREPARING || phase == CoreState.PHASE_HEARING || phase == CoreState.PHASE_FOLLOW_UP) vm.shutUp()
+        shown = false; closing = true
+    }
     fun touch() { touched = System.currentTimeMillis() }
 
     LaunchedEffect(Unit) { shown = true }
