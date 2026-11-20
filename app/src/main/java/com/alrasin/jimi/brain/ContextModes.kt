@@ -36,7 +36,8 @@ object ContextModes {
     fun inWindow(minute: Int, start: Int, end: Int): Boolean =
         if (start <= end) minute in start until end else minute >= start || minute < end
 
-    private val SENTENCE_END = Regex("(?<=[.!?])\\s+")
+    // । and ॥ end Bangla sentences (translated replies, D-093).
+    private val SENTENCE_END = Regex("(?<=[.!?\\u0964\\u0965])\\s+")
 
     /** First [maxSentences] sentences, for short spoken answers. */
     fun shorten(text: String, maxSentences: Int = 2): String {

@@ -44,7 +44,8 @@ internal object MlKitTranslate {
 
     suspend fun run(text: String, from: String, to: String): String? {
         val key = "$from>$to"
-        val translator = clients.getOrPut(key) {
+        // computeIfAbsent, not getOrPut: two first calls at once (reply sentences + final text) must not open two clients.
+        val translator = clients.computeIfAbsent(key) {
             Translation.getClient(TranslatorOptions.Builder().setSourceLanguage(code(from)).setTargetLanguage(code(to)).build())
         }
         if (key !in ready) {

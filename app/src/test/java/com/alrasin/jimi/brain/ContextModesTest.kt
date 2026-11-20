@@ -66,6 +66,8 @@ class ContextModesTest {
     @Test fun shortenKeepsTwoSentences() {
         assertEquals("One. Two!", ContextModes.shorten("One. Two! Three? Four."))
         assertEquals("Only one.", ContextModes.shorten("  Only one.  "))
+        // translated Bangla replies end sentences with the danda
+        assertEquals("এক। দুই।", ContextModes.shorten("এক। দুই। তিন। চার।"))
     }
 
     @Test fun messageLineNewestShort() {
