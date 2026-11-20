@@ -1,5 +1,6 @@
 package com.alrasin.jimi.brain
 
+import com.alrasin.jimi.brain.cloud.CloudHttp
 import com.alrasin.jimi.brain.cloud.CloudHttpException
 import com.alrasin.jimi.brain.cloud.OpenAiProvider
 import com.alrasin.jimi.brain.cloud.Preset
@@ -81,10 +82,10 @@ class OpenAiCloudTest {
 
     private class Fake(
         override val name: String, private val fail: Boolean, private val pieces: List<String> = listOf("ok"),
-        private val code: Int? = null,
+        private val code: Int? = null, private val retryAfterMs: Long? = null,
     ) : CloudProvider {
         var calls = 0
-        private fun boom(): Nothing = if (code != null) throw CloudHttpException(name, code) else error("$name down")
+        private fun boom(): Nothing = if (code != null) throw CloudHttpException(name, code, retryAfterMs) else error("$name down")
         override suspend fun chat(system: String, history: List<Exchange>, text: String): String {
             calls++
             return if (fail) boom() else pieces.joinToString("")
@@ -126,6 +127,44 @@ class OpenAiCloudTest {
         clock = 2000
         p.quick("s", emptyList(), "t", 10)
         assertEquals(2, a.calls)
+    }
+
+    @Test fun retryAfterHeaderSetsRestCappedAt300s() = runBlocking {
+        var clock = 0L
+        val a = Fake("A", fail = true, code = 429, retryAfterMs = 120_000)
+        val b = Fake("B", fail = false)
+        val p = ProviderChain(listOf(a, b), now = { clock })
+        p.quick("s", emptyList(), "t", 10)
+        clock = 119_000
+        p.quick("s", emptyList(), "t", 10)
+        assertEquals(1, a.calls)
+        clock = 120_000
+        p.quick("s", emptyList(), "t", 10)
+        assertEquals(2, a.calls)
+        assertEquals(300_000L, ProviderChain.restFor(3_600_000, 60_000))
+        assertEquals(60_000L, ProviderChain.restFor(null, 60_000))
+        assertEquals(5_000L, ProviderChain.restFor(5_000, 60_000))
+    }
+
+    @Test fun loneRestingModelFailsFastSoLocalAnswers() = runBlocking {
+        var clock = 0L
+        val a = Fake("Groq", fail = true, code = 429)
+        val p = ProviderChain(listOf(a), now = { clock })
+        repeat(2) { runCatching { p.quick("s", emptyList(), "t", 10) } }
+        assertEquals(1, a.calls)   // second call never reached Groq
+        clock = 60_000
+        runCatching { p.quick("s", emptyList(), "t", 10) }
+        assertEquals(2, a.calls)
+        assertEquals("Groq", CloudBrain.chain(CloudKeys(groq = "gsk_x"))?.name)
+    }
+
+    @Test fun retryAfterParsing() {
+        assertEquals(30_000L, CloudHttp.retryAfterMs(" 30 ", 0))
+        assertNull(CloudHttp.retryAfterMs(null, 0))
+        assertNull(CloudHttp.retryAfterMs("soon", 0))
+        val now = java.time.ZonedDateTime.parse("Wed, 21 Oct 2026 07:28:00 GMT", java.time.format.DateTimeFormatter.RFC_1123_DATE_TIME)
+            .toInstant().toEpochMilli()
+        assertEquals(90_000L, CloudHttp.retryAfterMs("Wed, 21 Oct 2026 07:29:30 GMT", now))
     }
 
     @Test(expected = IllegalStateException::class)

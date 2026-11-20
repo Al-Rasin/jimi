@@ -28,7 +28,8 @@ internal class SharedMicrophone(
     private val retry = MicrophoneRetry()
     @Volatile private var silenced = false
     private var available: Boolean? = null
-    private var silencedSince = 0L
+    private val reopen = SilencedReopenBackoff()
+    private var loggedEcho: Boolean? = null
     private val callback = object : AudioManager.AudioRecordingCallback() {
         override fun onRecordingConfigChanged(configs: MutableList<AudioRecordingConfiguration>) {
             val session = recorder?.audioSessionId ?: return
@@ -56,7 +57,10 @@ internal class SharedMicrophone(
             echoCanceler?.enabled = true
             echoCanceler?.enabled == true
         }.onFailure { JimiLog.e("echo canceler unavailable", it) }.getOrDefault(false)
-        JimiLog.i("barge-in echo canceler: $echoCanceled")
+        if (loggedEcho != echoCanceled) {   // once per change, not on every reopen
+            loggedEcho = echoCanceled
+            JimiLog.i("barge-in echo canceler: $echoCanceled")
+        }
         rec.registerAudioRecordingCallback(context.mainExecutor, callback)
         rec.startRecording()
         check(rec.recordingState == AudioRecord.RECORDSTATE_RECORDING) { "Microphone did not start" }
@@ -89,7 +93,8 @@ internal class SharedMicrophone(
                 return false
             }
             retry.recovered()
-            silencedSince = 0L
+            if (reopen.waiting) JimiLog.i("Microphone back")
+            reopen.recovered()
             setAvailable(true)
             return true
         } catch (cancelled: CancellationException) {
@@ -103,14 +108,13 @@ internal class SharedMicrophone(
         }
     }
 
-    /** MIUI can keep a recorder silenced after the other app frees the mic; a fresh recorder gets it back. */
+    /**
+     * MIUI can keep a recorder silenced after the other app frees the mic; a fresh recorder gets it back.
+     * Reopens back off (3 s up to 30 s) so a long hold by another app does not churn the mic.
+     */
     private fun reopenIfSilencedLong() {
-        val now = SystemClock.elapsedRealtime()
-        if (silencedSince == 0L) silencedSince = now
-        else if (now - silencedSince >= REOPEN_SILENCED_MS) {
-            silencedSince = now
-            close()
-        }
+        if (!reopen.waiting) JimiLog.i("Microphone held by another app; retrying with backoff")
+        if (reopen.shouldReopen(SystemClock.elapsedRealtime())) close()
     }
 
     private fun setAvailable(value: Boolean) {
@@ -122,6 +126,7 @@ internal class SharedMicrophone(
 
     fun releaseForPhone() {
         close()
+        reopen.recovered()
         available = null
     }
 
@@ -137,5 +142,3 @@ internal class SharedMicrophone(
         silenced = false
     }
 }
-
-private const val REOPEN_SILENCED_MS = 3_000L

@@ -351,7 +351,8 @@ class CloudBrain @Inject constructor(
                 if (k.cloudflare != null && k.cloudflareAccount != null) OpenAiProvider(Preset.cloudflare(k.cloudflareAccount), k.cloudflare) else null,
                 k.openAi?.let { OpenAiProvider(Preset.OPENAI, it) },
             )
-            return if (list.size > 1) ProviderChain(list) else list.firstOrNull()
+            // Always a chain, even for one model, so a 429 rest also skips a lone Groq key (local answers instead).
+            return if (list.isEmpty()) null else ProviderChain(list)
         }
 
         fun toolPrompt(tools: List<Tool>): String = buildString {

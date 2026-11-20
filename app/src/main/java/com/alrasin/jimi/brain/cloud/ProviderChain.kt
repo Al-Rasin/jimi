@@ -9,8 +9,10 @@ import kotlinx.coroutines.ensureActive
 
 /**
  * Cloud models tried in order (D-063, replaces the 2-step fallback of D-055). On an error the next one answers.
- * A model that hit its free limit (HTTP 429) is skipped for [restMs]. A stream that already gave text is not
- * retried, so nothing is spoken twice.
+ * A model that hit its free limit (HTTP 429) is skipped for [restMs], or for the server's Retry-After (max
+ * [MAX_REST_MS]), so the next model answers at once instead of paying for another 429. When every model is resting
+ * the chain fails fast and the local model answers. A stream that already gave text is not retried, so nothing is
+ * spoken twice.
  */
 class ProviderChain(
     val providers: List<CloudProvider>,
@@ -31,8 +33,8 @@ class ProviderChain(
 
     override fun warm() { order().firstOrNull()?.let { providers[it].warm() } }
 
-    /** Indices of models not resting; all of them if every one is resting. */
-    private fun order(): List<Int> = providers.indices.filter { restUntil[it] <= now() }.ifEmpty { providers.indices.toList() }
+    /** Indices of models not resting. */
+    private fun order(): List<Int> = providers.indices.filter { restUntil[it] <= now() }
 
     /** [call] gets the model and a "text was given" marker; once text was given, an error is not retried. */
     private suspend fun each(call: suspend (CloudProvider, () -> Unit) -> String): String {
@@ -48,10 +50,17 @@ class ProviderChain(
                 currentCoroutineContext().ensureActive()
                 if (e is CancellationException || gave) throw e
                 last = e
-                if (e is CloudHttpException && e.code == 429) restUntil[i] = now() + restMs
+                if (e is CloudHttpException && e.code == 429) restUntil[i] = now() + restFor(e.retryAfterMs, restMs)
                 JimiLog.e("cloud ${providers[i].name} failed, trying next", e)
             }
         }
-        throw last ?: IllegalStateException("no cloud model")
+        throw last ?: IllegalStateException("cloud models resting after their limit")
+    }
+
+    companion object {
+        const val MAX_REST_MS = 300_000L
+
+        /** How long a model rests after a 429: the server's Retry-After if given, else [defaultMs]; never above [MAX_REST_MS]. */
+        fun restFor(retryAfterMs: Long?, defaultMs: Long): Long = (retryAfterMs ?: defaultMs).coerceIn(0, MAX_REST_MS)
     }
 }
