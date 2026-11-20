@@ -285,14 +285,20 @@ class JimiCoreService : LifecycleService() {
 
     /** The user's "mm-hmm" clip (D-052) when spoken wake is on, else the chime. */
     private fun wakeCue(tone: Chimes) {
+        lifecycleScope.launch(Dispatchers.IO) { playWakeCue(tone) }
+    }
+
+    /** Returns when the cue has played (at most [WAKE_CUE_MAX_MS]). */
+    private suspend fun playWakeCue(tone: Chimes) {
         val audio = voice.wakeAudio()
         if (!spokenWake || audio == null) { tone.wake(); return }
         val epoch = speechEpoch
-        lifecycleScope.launch(Dispatchers.IO) {
-            val start = SystemClock.elapsedRealtime()
-            val played = TextToSpeech.playPcm(audio.samples, audio.sampleRate) { epoch != speechEpoch }
-            JimiLog.i("wake reply ${audio.samples.size * 1000L / audio.sampleRate} ms played=$played in ${SystemClock.elapsedRealtime() - start} ms")
+        val start = SystemClock.elapsedRealtime()
+        val deadline = start + WAKE_CUE_MAX_MS
+        val played = withContext(Dispatchers.IO) {
+            TextToSpeech.playPcm(audio.samples, audio.sampleRate) { epoch != speechEpoch || SystemClock.elapsedRealtime() > deadline }
         }
+        JimiLog.i("wake reply ${audio.samples.size * 1000L / audio.sampleRate} ms played=$played in ${SystemClock.elapsedRealtime() - start} ms")
     }
 
     private fun warmUpForCommand() {
@@ -604,9 +610,9 @@ class JimiCoreService : LifecycleService() {
             JimiLog.i("STT engine=Phone capture=$source; sherpa microphone released")
             val wokeAt = SystemClock.elapsedRealtime()
             try {
-                // The wake reply plays right at wake, while Google's mic opens (D-086): once the mic is open MIUI
-                // mutes our playback. If Google hears its tail, it is stripped below.
-                if (source == "voice") { warmUpForCommand(); wakeCue(tone) }
+                // The wake reply plays to the end before Google's mic opens (D-086): MIUI mutes or cuts our
+                // playback while Google records. If Google still hears its tail, it is stripped below.
+                if (source == "voice") { warmUpForCommand(); playWakeCue(tone) }
                 val raw = coroutineScope {
                     val recognition = async { phone.recognize(snapshot.hotwords, onReady = {
                         if (epoch == speechEpoch) {
@@ -950,6 +956,7 @@ class JimiCoreService : LifecycleService() {
         private val QUIET_ACTIONS = setOf(ACTION_SAY, ACTION_ASK, ACTION_SHUT_UP)
         private const val FOLLOW_UP_WAIT = 6f     // seconds to start talking after an answer
         private const val TAIL_MS = 350L
+        private const val WAKE_CUE_MAX_MS = 1_200L
         private const val RING_SECONDS = 4
         /** Most words per spoken piece: Google voice makes ~25 words in ~1 s; Piper ~10 words in ~2 s (3 s of speech). */
         private const val PHONE_VOICE_WORDS = 25

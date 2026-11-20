@@ -28,6 +28,7 @@ internal class SharedMicrophone(
     private val retry = MicrophoneRetry()
     @Volatile private var silenced = false
     private var available: Boolean? = null
+    private var silencedSince = 0L
     private val callback = object : AudioManager.AudioRecordingCallback() {
         override fun onRecordingConfigChanged(configs: MutableList<AudioRecordingConfiguration>) {
             val session = recorder?.audioSessionId ?: return
@@ -72,6 +73,7 @@ internal class SharedMicrophone(
                 currentCoroutineContext().ensureActive()
                 if (rec.activeRecordingConfiguration?.isClientSilenced ?: silenced) {
                     setAvailable(false)
+                    reopenIfSilencedLong()
                     delay(250)
                     return false
                 }
@@ -87,6 +89,7 @@ internal class SharedMicrophone(
                 return false
             }
             retry.recovered()
+            silencedSince = 0L
             setAvailable(true)
             return true
         } catch (cancelled: CancellationException) {
@@ -97,6 +100,16 @@ internal class SharedMicrophone(
             close()
             delay(retry.nextDelayMillis())
             return false
+        }
+    }
+
+    /** MIUI can keep a recorder silenced after the other app frees the mic; a fresh recorder gets it back. */
+    private fun reopenIfSilencedLong() {
+        val now = SystemClock.elapsedRealtime()
+        if (silencedSince == 0L) silencedSince = now
+        else if (now - silencedSince >= REOPEN_SILENCED_MS) {
+            silencedSince = now
+            close()
         }
     }
 
@@ -124,3 +137,5 @@ internal class SharedMicrophone(
         silenced = false
     }
 }
+
+private const val REOPEN_SILENCED_MS = 3_000L
