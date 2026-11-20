@@ -35,6 +35,11 @@ class AndroidTts(context: Context, private val voiceName: String?) : AutoCloseab
     private val langVoices = HashMap<String, SystemVoice?>()
     /** Use the online version of the voice when the internet works (setting, off by default). */
     @Volatile var online = false
+    /**
+     * Voice (or Locale.US) the engine is set to now. Switching costs a voice load in Google's engine, so it is only
+     * switched when the next piece needs another voice: a Bangla reply no longer swaps bn -> en -> bn per piece.
+     */
+    private var current: Any? = null
     @Volatile private var tts: SystemTts = connect()
 
     private fun connect(): SystemTts {
@@ -57,6 +62,7 @@ class AndroidTts(context: Context, private val voiceName: String?) : AutoCloseab
         netVoice = voiceName?.let { n -> voices.firstOrNull { it.name == networkName(n) } }
         JimiLog.i("phone voice $voiceName: online version ${if (netVoice != null) "found" else "missing"}")
         if (voice != null) t.voice = voice else t.language = Locale.US
+        current = voice ?: Locale.US
         return t
     }
 
@@ -66,7 +72,7 @@ class AndroidTts(context: Context, private val voiceName: String?) : AutoCloseab
      */
     @Synchronized
     fun generate(text: String, speed: Float): GeneratedAudio = try {
-        synthOnline(text, speed) ?: synth(text, speed)
+        synthOnline(text, speed) ?: run { use(localVoice); synth(text, speed) }
     } catch (e: IllegalStateException) {
         JimiLog.e("phone speech failed, reconnecting", e)
         runCatching { tts.shutdown() }
@@ -74,8 +80,15 @@ class AndroidTts(context: Context, private val voiceName: String?) : AutoCloseab
         synth(text, speed)
     }
 
+    private fun use(voice: SystemVoice?) {
+        val want: Any = voice ?: Locale.US
+        if (want == current) return
+        if (voice != null) tts.voice = voice else tts.language = Locale.US
+        current = want
+    }
+
     /**
-     * [text] said by an offline voice of [language] ("bn" = Bangla), then the normal voice is set back.
+     * [text] said by an offline voice of [language] ("bn" = Bangla). It stays set until a piece needs another voice.
      * Null when the phone has no such voice installed (Google: Settings > Speech > install voice data).
      */
     @Synchronized
@@ -83,15 +96,13 @@ class AndroidTts(context: Context, private val voiceName: String?) : AutoCloseab
         val voice = (if (language in langVoices) langVoices[language] else findVoice(language).also { langVoices[language] = it })
             ?: return null
         return try {
-            tts.voice = voice
+            use(voice)
             synth(text, speed)
         } catch (e: IllegalStateException) {
             JimiLog.e("phone $language speech failed, reconnecting", e)
             runCatching { tts.shutdown() }
             tts = connect()
             null
-        } finally {
-            localVoice?.let { tts.voice = it } ?: run { tts.language = Locale.US }
         }
     }
 
@@ -110,17 +121,15 @@ class AndroidTts(context: Context, private val voiceName: String?) : AutoCloseab
     /** Online voice when allowed and working, else null (caller makes it offline). */
     private fun synthOnline(text: String, speed: Float): GeneratedAudio? {
         val net = netVoice ?: return null
-        val local = localVoice ?: return null
+        if (localVoice == null) return null
         if (!online || System.currentTimeMillis() < netBlockedUntil || !internet()) return null
-        tts.voice = net
+        use(net)
         return try {
             synth(text, speed, NET_S)
         } catch (e: IllegalStateException) {
             JimiLog.i("online voice failed, offline for ${NET_BLOCK_MS / 1000} s: ${e.message}")
             netBlockedUntil = System.currentTimeMillis() + NET_BLOCK_MS
             null
-        } finally {
-            tts.voice = local
         }
     }
 

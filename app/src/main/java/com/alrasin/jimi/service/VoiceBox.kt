@@ -48,6 +48,8 @@ class VoiceBox(
     @Volatile private var wakeClip: PhraseCache.Audio? = null
     /** Last time the voice made audio; the Google engine (online voice most of all) is slow again after a quiet spell. */
     @Volatile private var lastSynthAt = 0L
+    /** Last time Bangla was spoken (made through the phone's Bangla voice). */
+    @Volatile private var lastBanglaAt = 0L
 
     /** Google phone voice loaded: it is fast enough to speak whole phrases, which sounds more natural (D-054). */
     @Volatile var phoneEngine = false
@@ -127,12 +129,17 @@ class VoiceBox(
      * Pay that while the reply is being worked out, not after it.
      */
     fun warmIfCold() {
-        if (!phoneEngine || System.currentTimeMillis() - lastSynthAt < COLD_MS) return
-        lastSynthAt = System.currentTimeMillis()
+        val now = System.currentTimeMillis()
+        // Talking Bangla lately: the next reply is likely Bangla too, and the phone's Bangla voice has the same cold
+        // start (also with sherpa English voices). Warming it also leaves the engine on the Bangla voice.
+        val bangla = now - lastBanglaAt in COLD_MS until BANGLA_RECENT_MS
+        if (!bangla && (!phoneEngine || now - lastSynthAt < COLD_MS)) return
+        lastSynthAt = now
+        if (bangla) lastBanglaAt = now
         scope.launch(Dispatchers.IO) {
             val start = System.currentTimeMillis()
-            ttsLock.withLock { runCatching { tts?.await()?.generate(WARM_TEXT) } }
-            JimiLog.i("voice warm-up ${System.currentTimeMillis() - start} ms")
+            ttsLock.withLock { runCatching { tts?.await()?.generate(if (bangla) BANGLA_WARM_TEXT else WARM_TEXT) } }
+            JimiLog.i("voice warm-up${if (bangla) " (Bangla)" else ""} ${System.currentTimeMillis() - start} ms")
         }
     }
 
@@ -156,7 +163,7 @@ class VoiceBox(
     /** Common short replies come from [PhraseCache] (made once per voice + speed), the rest is made now. */
     private fun audioFor(v: TextToSpeech, text: String): PhraseCache.Audio {
         // Bangla is cut out by normalize; the voice splits it off itself. Chat lines, never cached.
-        if (SpeechText.hasBangla(text)) lastSynthAt = System.currentTimeMillis()
+        if (SpeechText.hasBangla(text)) { lastSynthAt = System.currentTimeMillis(); lastBanglaAt = lastSynthAt }
         if (SpeechText.hasBangla(text)) return SpeechGate.synth { v.generate(text) }.let { PhraseCache.Audio(it.samples, it.sampleRate) }
         val spoken = SpeechText.normalize(text)
         val common = spoken in COMMON_PHRASES
@@ -231,6 +238,8 @@ class VoiceBox(
         private const val WAKE_REPLY = "Uh-huh."
         private const val COLD_MS = 30_000L
         private const val WARM_TEXT = "Okay."
+        private const val BANGLA_WARM_TEXT = "ঠিক আছে।"
+        private const val BANGLA_RECENT_MS = 10 * 60_000L
         private val FEEDBACK_PHRASES = FILLERS + WAKE_REPLY
         private val COMMON_PHRASES = PhraseCache.COMMON.map(SpeechText::normalize).toSet()
     }
