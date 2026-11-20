@@ -66,7 +66,9 @@ internal object TimeRules {
                 val hour = bareClock.groupValues[1].toInt() % 12
                 val minute = bareClock.groupValues[2].ifEmpty { "0" }.toInt()
                 var next = now.toLocalDate().atTime(hour, minute)
-                while (!next.isAfter(now)) next = next.plusHours(12)
+                // "wake me up at 6" means the morning, even when said at 6:30 am.
+                val step = if (Regex("\\bwake\\b").containsMatchIn(t)) 24L else 12L
+                while (!next.isAfter(now)) next = next.plusHours(step)
                 m = m.copy(at = next)
             }
             if (specNoLabel.startsWith("in ") || specNoLabel.startsWith("after ")) {

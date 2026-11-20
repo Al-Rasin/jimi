@@ -65,7 +65,7 @@ object ToolShortlist {
         "camera" to listOf("take_photo", "scan_qr"), "recording" to listOf("take_photo"),
         "qr" to listOf("scan_qr", "open_qr_link"), "barcode" to listOf("scan_qr"), "scan" to listOf("scan_qr"), "link" to listOf("open_qr_link", "open_url"),
         "copy" to listOf("copy_text"), "clipboard" to listOf("read_clipboard", "copy_text"), "copied" to listOf("read_clipboard"),
-        "contact" to listOf("save_contact", "share_contact", "add_contact_email"), "contacts" to listOf("save_contact"),
+        "contact" to listOf("save_contact", "share_contact", "add_contact_email", "contact_number"), "contacts" to listOf("save_contact"),
         "open" to listOf("open_app", "open_url", "open_result"), "launch" to listOf("open_app"), "start" to listOf("open_app"),
         "app" to listOf("open_app", "close_app"), "close" to listOf("close_app"), "kill" to listOf("close_app"),
         "website" to listOf("open_url"), "site" to listOf("open_url"), "search" to listOf("web_search", "search_in_app"), "find" to listOf("find_in_app", "search_in_app"), "google" to listOf("web_search"),

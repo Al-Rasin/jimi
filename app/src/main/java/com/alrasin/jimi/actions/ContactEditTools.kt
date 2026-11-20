@@ -142,6 +142,15 @@ fun contactEditTools(context: Context, contacts: Contacts): List<Tool> {
             if (ok) ToolResult.ok("Added $email to ${p.name}.") else ToolResult.fail("I couldn't add that email.")
         },
         SimpleTool(
+            "contact_number",
+            "Say a saved contact's phone number out loud",
+            listOf(arg("contact", "contact name")),
+        ) { c, _ ->
+            val (p, fail) = find(c.require("contact", "Whose number?"))
+            if (p == null) return@SimpleTool fail!!
+            ToolResult.ok("${p.name}'s number is ${p.number}.")
+        },
+        SimpleTool(
             "share_contact",
             "Share a contact's name and number: to a person (to) by WhatsApp, Messenger or SMS, or open the app's share screen",
             listOf(

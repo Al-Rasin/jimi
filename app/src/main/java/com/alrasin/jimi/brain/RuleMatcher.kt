@@ -100,6 +100,12 @@ object RuleMatcher {
         }
         if (SHOPPING_READ_RE.matches(t)) return call("read_notes", "about" to "shopping list")
         if (MY_NUMBER_RE.matches(t)) return call("device_status", "what" to "number")
+        CONTACT_NUMBER_RE.matchEntire(t)?.let {
+            val who = it.groupValues[1]
+            if (!who.contains(CONTACT_NOT_NAME_RE) && !who.contains(Regex("\\b(?:your|the|their|his|her|our|which|what|lucky|serial|model|imei|account|room|flight|tracking|emergency|police|fire|ambulance|helpline|hotline|customer|support|service)\\b"))) {
+                return call("contact_number", "contact" to who)
+            }
+        }
         if (EMAIL_READ_RE.matches(t)) return call("read_notifications", "app" to "gmail")
         if (WHO_CALLING_RE.matches(t)) return call("missed_calls", "now" to "yes")
         if (CALL_LAST_CALLER_RE.matches(t)) return call("call_back")

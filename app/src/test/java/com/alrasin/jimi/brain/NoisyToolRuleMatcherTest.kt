@@ -281,7 +281,9 @@ class ComplaintPhrasesTest {
         assertEquals(ToolCall("set_brightness", mapOf("level" to "manual")), m("turn off auto brightness"))
         assertNotEquals("set_alarm", m("alarm volume 50")?.tool)
         assertEquals("remember_fact", m("i want you to remember my wife is sara")?.tool)
-        assertEquals(ToolCall("set_alarm", mapOf("time" to "06:00")), m("i need to wake up at 6"))
+        assertEquals(ToolCall("set_alarm", mapOf("time" to "06:00")), RuleMatcher.match("i need to wake up at 6", LocalDateTime.of(2026, 11, 20, 1, 0)))
+        assertEquals(ToolCall("set_alarm", mapOf("time" to "06:00", "date" to "2026-11-21")), RuleMatcher.match("wake me up at 6", LocalDateTime.of(2026, 11, 20, 6, 30)))
+        assertEquals(ToolCall("set_alarm", mapOf("time" to "18:00")), RuleMatcher.match("set alarm at 6", LocalDateTime.of(2026, 11, 20, 6, 30)))
         assertEquals(ToolCall("set_volume", mapOf("level" to "down")), m("media volume low"))
         assertNull(m("lets play a game"))
         assertEquals("play_media", m("listen to quran")?.tool)
@@ -424,6 +426,15 @@ class ComplaintPhrasesTest {
     @Test fun checkEmailReadsGmailNotifications() {
         for (s in listOf("any new emails", "check my email", "do i have any new mail", "check my inbox")) {
             assertEquals(s, ToolCall("read_notifications", mapOf("app" to "gmail")), m(s))
+        }
+    }
+
+    @Test fun askForAContactsNumber() {
+        assertEquals(ToolCall("contact_number", mapOf("contact" to "rahims")), m("what's rahim's number"))
+        assertEquals(ToolCall("contact_number", mapOf("contact" to "moms")), m("what is mom's phone number"))
+        assertEquals(ToolCall("device_status", mapOf("what" to "number")), m("what's my number"))
+        for (s in listOf("what is your number", "what's the emergency number", "what's my lucky number")) {
+            assertNotEquals(s, "contact_number", m(s)?.tool)
         }
     }
 

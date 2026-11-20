@@ -85,7 +85,8 @@ object TaskChain {
     /** "turn on wifi and bluetooth", "alarm at 6 and 7": the bare part reuses the verb of the step before it. */
     private fun shared(prev: Step, piece: String, match: (String) -> ToolCall?): Step? {
         val tool = prev.call?.tool?.takeIf { it in SHARES_VERB } ?: return null
-        val words = prev.text.split(" ")
+        // "6 am" is one value: glue it so dropping the last word drops the whole time.
+        val words = prev.text.replace(Regex("(\\d) ([ap]m)$"), "$1$2").split(" ")
         for (drop in 1..minOf(3, words.size - 1)) {
             val text = words.dropLast(drop).joinToString(" ") + " " + piece
             val call = match(text) ?: continue

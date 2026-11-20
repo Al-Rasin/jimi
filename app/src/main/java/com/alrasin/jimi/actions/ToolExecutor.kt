@@ -143,7 +143,7 @@ internal class ToolSafetyGate {
                 Skills.isRisky(call.arg("name") ?: call.arg("query").orEmpty()) -> Risk.CONFIRM
             (locked || lockdown) && call.tool in setOf(
                 "read_messages", "read_chat", "read_notes", "list_reminders", "recall_facts",
-                "read_screen", "ask_screen", "read_list", "read_notifications", "notification_summary", "daily_summary", "read_clipboard", "calendar_read", "share_contact",
+                "read_screen", "ask_screen", "read_list", "read_notifications", "notification_summary", "daily_summary", "read_clipboard", "calendar_read", "share_contact", "contact_number",
                 "find_photos", "find_file",
             ) -> Risk.VOICE_ID
             else -> Risk.SAFE

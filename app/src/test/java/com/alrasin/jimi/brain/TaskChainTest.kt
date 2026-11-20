@@ -58,7 +58,7 @@ class TaskChainTest {
         assertEquals(listOf("bluetooth", "wifi", "flashlight"), p.steps.map { it.call!!.arg("target") })
         assertTrue(p.steps.all { it.call!!.arg("state") == "off" })
         assertEquals("on", route("turn on wifi and bluetooth")!!.steps[1].call!!.arg("state"))
-        val a = route("set alarm at 6 and 7")!!
+        val a = route("set alarm at 6 am and 7 am")!!
         assertEquals(listOf("06:00", "07:00"), a.steps.map { it.call!!.arg("time") })
         assertEquals("off", route("turn on wifi then turn off bluetooth")!!.steps[1].call!!.arg("state"))
         assertTrue(route("turn on wifi and order a pizza")!!.unknown.isNotEmpty())
