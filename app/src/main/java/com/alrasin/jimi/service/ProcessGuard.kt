@@ -19,10 +19,12 @@ object ProcessGuard {
     suspend fun run(context: Context) {
         if (!RootShell.available) return
         val path = "/proc/${android.os.Process.myPid()}/oom_score_adj"
+        // The Google voice runs in its own process; when MIUI killed it mid-answer, phrases timed out and were lost.
+        // One quiet shell call every 30 s (it used to log 2-3 lines each time and hide real errors in the log).
+        val cmd = "for f in $path \$(for p in \$(pidof com.google.android.tts); do echo /proc/\$p/oom_score_adj; done); do " +
+            "[ \$(cat \$f) -gt $OOM_ADJ ] && echo $OOM_ADJ > \$f && echo \$f; done; true"
         while (currentCoroutineContext().isActive) {
-            RootShell.run("[ \$(cat $path) -gt $OOM_ADJ ] && echo $OOM_ADJ > $path || true")
-            // The Google voice runs in its own process; when MIUI killed it mid-answer, phrases timed out and were lost.
-            RootShell.run("for p in \$(pidof com.google.android.tts); do f=/proc/\$p/oom_score_adj; [ \$(cat \$f) -gt $OOM_ADJ ] && echo $OOM_ADJ > \$f; done; true")
+            RootShell.run(cmd, log = false, quiet = true)
             keepOverlayAllowed(context)
             delay(30_000)
         }
@@ -48,6 +50,7 @@ object ProcessGuard {
         val fixed = RootShell.run(
             "for op in 10020 10021; do appops get $pkg \$op 2>/dev/null | grep -q ignore && appops set $pkg \$op allow && echo \$op; done; true",
             log = false,
+            quiet = true,
         ).out.trim()
         if (fixed.isNotEmpty()) JimiLog.i("MIUI pop-up permission was off (op ${fixed.replace("\n", ",")}); allowed again")
     }

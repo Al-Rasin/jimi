@@ -22,14 +22,14 @@ object RootShell {
 
     val available: Boolean get() = runCatching { Shell.getShell().isRoot }.getOrDefault(false)
 
-    /** [log] false: command output holds private data; only ok/fail is logged. */
-    suspend fun run(vararg cmds: String, timeoutMs: Long = 8_000, log: Boolean = true): Result = withContext(Dispatchers.IO) {
+    /** [log] false: command output holds private data; only ok/fail is logged. [quiet]: log nothing when it works. */
+    suspend fun run(vararg cmds: String, timeoutMs: Long = 8_000, log: Boolean = true, quiet: Boolean = false): Result = withContext(Dispatchers.IO) {
         // exec() blocks and ignores cancel, so the timeout never fired; wait on the queued result instead.
         val pending = Shell.cmd(*cmds).enqueue()
         val r = withTimeoutOrNull(timeoutMs) { runInterruptible { pending.get() } }
         val res = if (r == null) Result(false, "timeout") else Result(r.isSuccess, (r.out + r.err).joinToString("\n"))
         val shown = if (log) cmds.joinToString("; ").take(120) else cmds.joinToString("; ") { it.substringBefore(' ') + " <hidden>" }
-        JimiLog.i("root: $shown → ${if (res.ok) "ok" else if (log) "fail ${res.out.take(80)}" else "fail"}")
+        if (!(quiet && res.ok)) JimiLog.i("root: $shown → ${if (res.ok) "ok" else if (log) "fail ${res.out.take(80)}" else "fail"}")
         res
     }
 
