@@ -8,7 +8,7 @@ import com.alrasin.jimi.core.ToolResult
 
 /**
  * Cuts Wi-Fi + mobile data for chosen apps (D-084): root iptables/ip6tables REJECT by app UID in our own
- * chain. Rules are lost on reboot, so the core service re-applies the saved list on start.
+ * chain. Rules are lost on reboot, so the boot receiver and the core service re-apply the saved list (D-101).
  */
 object NetBlock {
     const val CHAIN = "jimi_netblock"
@@ -16,6 +16,13 @@ object NetBlock {
     /** Settings toggles: one switch can cover the normal + lite/business app. */
     val WHATSAPP = listOf("com.whatsapp", "com.whatsapp.w4b")
     val MESSENGER = listOf("com.facebook.orca", "com.facebook.mlite")
+
+    /** Owner (0), MIUI Second Space (10, 11) and MIUI Dual apps (999): each copy of an app has its own UID. */
+    private val USERS = listOf(0, 10, 11, 999)
+    private const val PER_USER = 100_000
+
+    /** Every UID the app can run as on this phone; unused UIDs in a rule do no harm. */
+    fun allUserUids(uid: Int): List<Int> = USERS.map { it * PER_USER + uid % PER_USER }
 
     /** Shell lines that make the chain hold exactly [uids] (pure, unit-tested). */
     fun commands(uids: Collection<Int>): List<String> = listOf("iptables", "ip6tables").flatMap { t ->
@@ -30,7 +37,7 @@ object NetBlock {
 
     /** Make the firewall match [pkgs]; apps not installed are skipped. */
     suspend fun apply(context: Context, pkgs: Set<String>): Boolean {
-        val uids = pkgs.mapNotNull { uidOf(context, it) }
+        val uids = pkgs.mapNotNull { uidOf(context, it) }.flatMap(::allUserUids)
         val r = RootShell.run(*commands(uids).toTypedArray(), timeoutMs = 10_000)
         JimiLog.i("net block: ${pkgs.size} apps, ${uids.size} uids → ${if (r.ok) "ok" else "fail"}")
         return r.ok

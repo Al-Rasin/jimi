@@ -7,6 +7,7 @@ import android.content.Context
 import android.content.Intent
 import android.os.Build
 import android.os.SystemClock
+import com.alrasin.jimi.actions.NetBlock
 import com.alrasin.jimi.actions.PlaceReminders
 import com.alrasin.jimi.actions.ReminderScheduler
 import com.alrasin.jimi.core.JimiLog
@@ -33,6 +34,8 @@ class BootReceiver : BroadcastReceiver() {
             try {
                 when (intent.action) {
                     Intent.ACTION_BOOT_COMPLETED -> {
+                        // D-101: block apps first, even when listening is off, so they get no window online.
+                        settings.netBlocked.first().takeIf { it.isNotEmpty() }?.let { NetBlock.apply(context, it) }
                         reminders.rescheduleAll()
                         PlaceReminders(context).restoreAll()
                         if (settings.setupComplete.first() && settings.listeningEnabled.first()) {

@@ -43,6 +43,7 @@ import com.alrasin.jimi.voice.Voice
 import com.alrasin.jimi.voice.VoicePack
 import com.alrasin.jimi.voice.Voices
 import dagger.hilt.android.lifecycle.HiltViewModel
+import com.alrasin.jimi.actions.NetBlock
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.Flow
@@ -316,10 +317,11 @@ class AppViewModel @Inject constructor(
 
     fun setSpokenWake(v: Boolean) = viewModelScope.launch { settings.setSpokenWake(v) }
     fun setFollowUp(v: Boolean) = viewModelScope.launch { settings.setFollowUp(v) }
-    /** The core service applies the firewall when this list changes (D-084). */
+    /** Applied here too, so the switch works while the core service is off (D-101). */
     fun setAppNetOff(pkgs: List<String>, off: Boolean) = viewModelScope.launch {
-        val now = settings.netBlocked.first()
-        settings.setNetBlocked(if (off) now + pkgs else now - pkgs.toSet())
+        val now = settings.netBlocked.first().let { if (off) it + pkgs else it - pkgs.toSet() }
+        settings.setNetBlocked(now)
+        withContext(Dispatchers.IO) { NetBlock.apply(app, now) }
     }
     fun setCarMode(v: Boolean) = viewModelScope.launch { settings.setCarMode(v) }
     fun setHeadphonesMode(v: Boolean) = viewModelScope.launch { settings.setHeadphonesMode(v) }

@@ -52,4 +52,10 @@ class NetRuleTest {
         assertTrue(cmds.any { it.startsWith("ip6tables -w -C OUTPUT -j ${NetBlock.CHAIN}") })
         assertEquals(4, NetBlock.commands(emptyList()).size)
     }
+
+    @Test fun dualAppsAndSecondSpaceCopiesAreBlockedToo() {
+        // D-101: MIUI Dual apps run as user 999, Second Space as user 10/11; same app id, other UID.
+        assertEquals(listOf(10123, 1010123, 1110123, 99910123), NetBlock.allUserUids(10123))
+        assertEquals(NetBlock.allUserUids(10123), NetBlock.allUserUids(99910123))
+    }
 }
