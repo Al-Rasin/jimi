@@ -184,19 +184,22 @@ class CloudBrain @Inject constructor(
      */
     suspend fun chat(
         text: String, history: List<Exchange>, facts: List<String>, forced: Boolean, onSentence: (String) -> Unit = {},
-        backup: Boolean = false,
+        backup: Boolean = false, voice: Boolean = false,
     ): ModelBrain.ChatOut? {
         if (!enabled() || !mayAsk(settings.cloudForChat.first(), forced, backup)) return null
         val p = provider() ?: return null
         val sendFacts = settings.cloudSendFacts.first()
         val query = ASK.replace(text, "").trim().ifEmpty { text }
-        val system = Persona.chatPrompt(query, settings.personaNotes.first()) + if (Persona.isMemoryQuestion(query) && sendFacts && facts.isNotEmpty()) "\nFacts about the user: " + relevantFacts(query, facts).joinToString("; ") else ""
+        val factLine = if (Persona.isMemoryQuestion(query) && sendFacts && facts.isNotEmpty()) "\nFacts about the user: " + relevantFacts(query, facts).joinToString("; ") else ""
+        val system = Persona.chatPrompt(query, settings.personaNotes.first()) + factLine + if (voice) HeardFix.CHAT_HINT else ""
+        val prefix = HeardFix.StreamPrefix()
         val t0 = System.currentTimeMillis()
         var buf = ""
         var spoke = false
         var first = true
         val out = catching {
-            p.stream(system, history.takeLast(HISTORY), query, CHAT_TOKENS) { piece ->
+            p.stream(system, history.takeLast(HISTORY), query, CHAT_TOKENS) { raw ->
+                val piece = prefix.feed(raw)
                 if (first) { first = false; JimiLog.i("latency: cloud first text ${System.currentTimeMillis() - t0} ms") }
                 val (done, rest) = ChatFormat.speechChunks(buf + piece, spoke)
                 done.forEach { s -> ChatFormat.clean(s).takeIf { it.isNotBlank() }?.let { onSentence(it); spoke = true } }
@@ -205,9 +208,10 @@ class CloudBrain @Inject constructor(
         }
             .onSuccess { JimiLog.i("cloud (${p.name}) answered in ${System.currentTimeMillis() - t0} ms") }
             .onFailure { JimiLog.e("cloud failed, using local", it) }
-            .getOrNull()?.let(ChatFormat::clean)?.takeIf { it.isNotBlank() } ?: return null
-        if (spoke) ChatFormat.clean(buf).takeIf { it.isNotBlank() }?.let(onSentence)
-        return ModelBrain.ChatOut(out, spoke)
+            .getOrNull()?.let { HeardFix.split(it) } ?: return null
+        val answer = ChatFormat.clean(out.second).takeIf { it.isNotBlank() } ?: return null
+        if (spoke) ChatFormat.clean(buf + prefix.flush()).takeIf { it.isNotBlank() }?.let(onSentence)
+        return ModelBrain.ChatOut(answer, spoke, heard = out.first ?: prefix.heard)
     }
 
     /** Opens the cloud connection early (wake word heard) so the first answer is faster. */
@@ -360,7 +364,8 @@ class CloudBrain @Inject constructor(
             append("{\"tool\":\"<name>\",\"args\":{\"<arg>\":\"<value>\"}}. All values are strings. ")
             append("If the command is a question, chat, or no tool fits, reply {\"tool\":\"none\",\"say\":\"<answer>\"} where ")
             append("<answer> is what ${Persona.NAME} says aloud: 1-3 short spoken sentences, no markdown, no lists. ")
-            append("If you need live data you don't have (news, prices, scores), reply {\"tool\":\"none\"} with no say.\nTools:\n")
+            append("If you need live data you don't have (news, prices, scores), reply {\"tool\":\"none\"} with no say. ")
+            append(HeardFix.TOOL_HINT).append("\nTools:\n")
             tools.forEach { t ->
                 append("- ").append(t.name).append(": ").append(t.description)
                 if (t.args.isNotEmpty()) append(" Args: ").append(
@@ -379,7 +384,9 @@ class CloudBrain @Inject constructor(
             val call = ToolCall.fromJson(Json.write(obj)) ?: return null
             if (call.tool == NONE.tool) {
                 val say = obj.asObj().str("say")?.let(ChatFormat::clean)?.takeIf { it.isNotBlank() }
-                return if (say == null) NONE else ToolCall(NONE.tool, mapOf("say" to say))
+                if (say == null) return NONE
+                val heard = obj.asObj().str("heard")?.trim()?.takeIf { it.isNotEmpty() }
+                return ToolCall(NONE.tool, if (heard == null) mapOf("say" to say) else mapOf("say" to say, "heard" to heard))
             }
             val tool = tools.firstOrNull { it.name == call.tool } ?: return null
             val ok = tool.args.filter { it.required }.all { call.arg(it.name) != null } &&

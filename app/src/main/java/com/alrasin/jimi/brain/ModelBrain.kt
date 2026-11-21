@@ -45,7 +45,7 @@ class ModelBrain @Inject constructor(
     private val notes: NoteDao,
     private val settings: Settings,
 ) {
-    data class ChatOut(val text: String, val streamed: Boolean)
+    data class ChatOut(val text: String, val streamed: Boolean, val heard: String? = null)
 
     private val dir get() = com.alrasin.jimi.voice.PortableModels.dir(context, "llm")
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)

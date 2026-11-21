@@ -66,6 +66,8 @@ class Assistant @Inject constructor(
         val endConversation: Boolean = false,
         val expectAnswer: Boolean = false,
         val spokenAlready: Boolean = false,
+        /** What the cloud thinks the user really said, when speech-to-text slipped (D-097). */
+        val heard: String? = null,
     )
 
     private val lock = Mutex()
@@ -136,20 +138,24 @@ class Assistant @Inject constructor(
         val r = if (text.isEmpty()) Reply(Persona.DIDNT_GET) else runCatching { route(text, input, speak) }
             .onFailure { if (it is CancellationException) throw it; JimiLog.e("assistant failed", it) }
             .getOrElse { smoke?.ok = false; smoke?.route = "error"; Reply(ReplyText.routeFailed(state.stage)) }
+        // Only spoken input is fixed: typed text is exactly what the user meant.
+        val fixed = if (HeardFix.isVoice(input.source)) HeardFix.accept(text, r.heard) else null
+        if (fixed != null) JimiLog.i("heard fix: \"$text\" -> \"$fixed\"")
+        val shown = fixed ?: text
         val id = if (smoke != null) 0L else turns.insert(
             ConversationTurn(
-                timeMs = System.currentTimeMillis(), source = input.source, heard = text, rawText = input.raw,
+                timeMs = System.currentTimeMillis(), source = input.source, heard = shown, rawText = input.raw,
                 audioPath = input.audioPath, reply = r.text, tool = r.tool, wakeId = input.wakeId,
             ),
         )
         if (r.text.isNotBlank()) {
             if (r.endConversation) state.clear()
-            else if (r.tool in setOf("chat", "cloud")) state.conversation.remember(text, null, r.text)
+            else if (r.tool in setOf("chat", "cloud")) state.conversation.remember(shown, null, r.text)
             state.lastReply = r.text
-            state.history.addLast(Exchange(text, r.text))
+            state.history.addLast(Exchange(shown, r.text))
             while (state.history.size > 6) state.history.removeFirst()
             if (r.tool == "cloud") {
-                state.cloudHistory.addLast(Exchange(text, r.text))
+                state.cloudHistory.addLast(Exchange(shown, r.text))
                 while (state.cloudHistory.size > 4) state.cloudHistory.removeFirst()
             }
         }
@@ -315,13 +321,13 @@ class Assistant @Inject constructor(
                     // Cloud picks in ~1 s when allowed (D-045); NONE means plain talk, null means ask the local model.
                     val picked = if (smoke == null) cloud.toolCall(text, state.cloudHistory.toList()) else null
                     val said = picked?.takeIf { it.tool == CloudBrain.NONE.tool }?.arg("say")
-                    if (said != null && !Persona.isMemoryQuestion(text)) return Reply(said, tool = "cloud", expectAnswer = said.trimEnd().endsWith('?'))
+                    if (said != null && !Persona.isMemoryQuestion(text)) return Reply(said, tool = "cloud", expectAnswer = said.trimEnd().endsWith('?'), heard = picked.arg("heard"))
                     if (picked != null && picked.tool != CloudBrain.NONE.tool) return tools.run(picked, input, "cloud")
                     if (picked == null) models.toolCall(text, contextLine())?.let { return tools.run(it, input, "llm") }
                     // Local model unsure or missing and the router was unsure too: one cloud try if cloud is on (§K 14.2).
                     val backup = if (picked == null && smoke == null && !intent.isConfident) cloud.toolCall(text, state.cloudHistory.toList(), backup = true) else null
                     val backupSaid = backup?.takeIf { it.tool == CloudBrain.NONE.tool }?.arg("say")
-                    if (backupSaid != null && !Persona.isMemoryQuestion(text)) return Reply(backupSaid, tool = "cloud", expectAnswer = backupSaid.trimEnd().endsWith('?'))
+                    if (backupSaid != null && !Persona.isMemoryQuestion(text)) return Reply(backupSaid, tool = "cloud", expectAnswer = backupSaid.trimEnd().endsWith('?'), heard = backup.arg("heard"))
                     if (backup != null && backup.tool != CloudBrain.NONE.tool) return tools.run(backup, input, "cloud")
                 }
                 if (AgentRouting.needsScreen(text)) {
@@ -337,14 +343,14 @@ class Assistant @Inject constructor(
         }
         val facts = memory.all().map { it.text }
         // Local replies can contain private notes, notifications or screen text (D-035).
-        if (smoke == null) cloud.chat(query, state.cloudHistory.toList(), facts, forced, speak)?.let {
-            return Reply(it.text, tool = "cloud", spokenAlready = it.streamed, expectAnswer = it.text.trimEnd().endsWith('?'))
+        if (smoke == null) cloud.chat(query, state.cloudHistory.toList(), facts, forced, speak, voice = HeardFix.isVoice(input.source))?.let {
+            return Reply(it.text, tool = "cloud", spokenAlready = it.streamed, expectAnswer = it.text.trimEnd().endsWith('?'), heard = it.heard)
         }
         trace("chat", ToolCall("chat"))
         models.chat(query, state.history.toList(), facts, speak)?.let { return Reply(it.text, tool = "chat", spokenAlready = it.streamed, expectAnswer = it.text.trimEnd().endsWith('?')) }
         // No local chat model (or it failed): cloud as backup when it is on (§K 14.2).
-        if (smoke == null) cloud.chat(query, state.cloudHistory.toList(), facts, forced, speak, backup = true)?.let {
-            return Reply(it.text, tool = "cloud", spokenAlready = it.streamed, expectAnswer = it.text.trimEnd().endsWith('?'))
+        if (smoke == null) cloud.chat(query, state.cloudHistory.toList(), facts, forced, speak, backup = true, voice = HeardFix.isVoice(input.source))?.let {
+            return Reply(it.text, tool = "cloud", spokenAlready = it.streamed, expectAnswer = it.text.trimEnd().endsWith('?'), heard = it.heard)
         }
         trace("fallback", ok = false)
         return Reply(Persona.CANT)
