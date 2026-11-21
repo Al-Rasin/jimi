@@ -32,6 +32,8 @@ class ClipCollector(
      * Returns true when the wake word was just heard.
      * [confirm]: checks a near miss scoring >= [CHECK_MIN] for the name with speech-to-text (D-098): real
      * "Hey Jimi" calls often scored 0.78–0.91, below the bar. Null when a wake must not start now.
+     * With a check available, a low slider wakes at once only from [SURE_SCORE]; scores between the slider and it
+     * must say the name too (D-099): at 0.66, TV talk scored 0.66–0.81, as high as the user's real calls.
      */
     suspend fun onChunk(
         score: Float, thr: Float, ring: AudioRing, tone: Chimes,
@@ -42,13 +44,15 @@ class ClipCollector(
             save(WakeEvent.VERDICT_MISSED, 0f, thr, ring.last(WakeWordDetector.SAMPLE_RATE * MISSED_SECONDS))
             return false
         }
-        if (score >= thr && now - lastWakeMs > WAKE_COOLDOWN_MS) {
+        val instant = instantBar(thr, canCheck = confirm != null)
+        val checkFrom = checkBar(thr)
+        if (score >= instant && now - lastWakeMs > WAKE_COOLDOWN_MS) {
             startWake(now, score, ring.last(CLIP_SAMPLES))
             return true
         }
         // A near miss worth checking skips the save cooldown: a retry right after a miss must get its chance too.
-        if (pendingKind == null && score >= NEAR_MIN && score < thr && now - lastWakeMs > WAKE_COOLDOWN_MS &&
-            (now - lastNearMs > NEAR_COOLDOWN_MS || score >= CHECK_MIN)
+        if (pendingKind == null && score >= NEAR_MIN && score < instant && now - lastWakeMs > WAKE_COOLDOWN_MS &&
+            (now - lastNearMs > NEAR_COOLDOWN_MS || score >= checkFrom)
         ) {
             pendingKind = WakeEvent.VERDICT_NEAR
             pendingPeak = score
@@ -58,13 +62,13 @@ class ClipCollector(
         val kind = pendingKind ?: return false
         if (kind == WakeEvent.VERDICT_NEAR && score > pendingPeak) pendingChunks = AFTER_CHUNKS   // keep ~0.5 s after the peak
         pendingPeak = maxOf(pendingPeak, score)
-        if (kind == WakeEvent.VERDICT_NEAR && pendingPeak >= thr) {
+        if (kind == WakeEvent.VERDICT_NEAR && pendingPeak >= instant) {
             pendingKind = null   // turned into a real wake; next chunk handles it
             return false
         }
         if (--pendingChunks > 0) return false
         pendingKind = null
-        if (kind == WakeEvent.VERDICT_NEAR && confirm != null && pendingPeak >= CHECK_MIN) {
+        if (kind == WakeEvent.VERDICT_NEAR && confirm != null && pendingPeak >= checkFrom) {
             val heard = ring.last(CLIP_SAMPLES)
             if (confirm(heard)) {
                 JimiLog.i("wake by name check, score=${"%.2f".format(pendingPeak)}")
@@ -72,6 +76,7 @@ class ClipCollector(
                 pendingChunks = 1   // clip already holds the name; save it on the next chunk
                 return true
             }
+            if (pendingPeak >= thr) JimiLog.i("wake skipped, no name heard, score=${"%.2f".format(pendingPeak)}")
         }
         if (kind == WakeEvent.VERDICT_NEAR) lastNearMs = now
         val audio = if (kind == WakeEvent.VERDICT_NONE) wakeAudio else null
@@ -108,14 +113,18 @@ class ClipCollector(
         return id
     }
 
-    private companion object {
-        const val CLIP_SAMPLES = 40_000       // 2.5 s per wake clip
-        const val MISSED_SECONDS = 3
-        const val MAX_CLIPS = 500
-        const val AFTER_CHUNKS = 6          // keep ~0.5 s after the peak in the clip
-        const val WAKE_COOLDOWN_MS = 2_000L
-        const val NEAR_MIN = 0.2f
-        const val CHECK_MIN = 0.7f
-        const val NEAR_COOLDOWN_MS = 30_000L
+    internal companion object {
+        fun instantBar(thr: Float, canCheck: Boolean): Float = if (canCheck) maxOf(thr, SURE_SCORE) else thr
+        fun checkBar(thr: Float): Float = minOf(thr, CHECK_MIN)
+
+        private const val CLIP_SAMPLES = 40_000       // 2.5 s per wake clip
+        private const val MISSED_SECONDS = 3
+        private const val MAX_CLIPS = 500
+        private const val AFTER_CHUNKS = 6          // keep ~0.5 s after the peak in the clip
+        private const val WAKE_COOLDOWN_MS = 2_000L
+        private const val NEAR_MIN = 0.2f
+        private const val CHECK_MIN = 0.7f
+        private const val SURE_SCORE = 0.88f        // D-096 default bar
+        private const val NEAR_COOLDOWN_MS = 30_000L
     }
 }
