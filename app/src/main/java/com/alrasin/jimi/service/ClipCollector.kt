@@ -28,28 +28,27 @@ class ClipCollector(
     var lastWakePeak = 0f
         private set
 
-    /** Returns true when the wake word was just heard. */
-    suspend fun onChunk(score: Float, thr: Float, ring: AudioRing, tone: Chimes): Boolean {
+    /**
+     * Returns true when the wake word was just heard.
+     * [confirm]: checks a near miss scoring >= [CHECK_MIN] for the name with speech-to-text (D-098): real
+     * "Hey Jimi" calls often scored 0.78–0.91, below the bar. Null when a wake must not start now.
+     */
+    suspend fun onChunk(
+        score: Float, thr: Float, ring: AudioRing, tone: Chimes,
+        confirm: (suspend (ShortArray) -> Boolean)? = null,
+    ): Boolean {
         val now = System.currentTimeMillis()
         if (takeMissed()) {
             save(WakeEvent.VERDICT_MISSED, 0f, thr, ring.last(WakeWordDetector.SAMPLE_RATE * MISSED_SECONDS))
             return false
         }
         if (score >= thr && now - lastWakeMs > WAKE_COOLDOWN_MS) {
-            lastWakeMs = now
-            WakeFeedbackSignal.signal(context)
-            pendingKind = WakeEvent.VERDICT_NONE
-            pendingPeak = score
-            pendingChunks = AFTER_CHUNKS
-            // Copied now: the command capture runs next and resets the ring, so a later copy held
-            // only 0.5 s of after-command audio instead of the "Hey Jimi" that woke us.
-            wakeAudio = ring.last(CLIP_SAMPLES)
-            lastWakeId = null
-            CoreState._wakeId.value = null   // the panel asks "Did you call me?" once this wake is saved
+            startWake(now, score, ring.last(CLIP_SAMPLES))
             return true
         }
-        if (pendingKind == null && score >= NEAR_MIN && score < thr &&
-            now - lastNearMs > NEAR_COOLDOWN_MS && now - lastWakeMs > WAKE_COOLDOWN_MS
+        // A near miss worth checking skips the save cooldown: a retry right after a miss must get its chance too.
+        if (pendingKind == null && score >= NEAR_MIN && score < thr && now - lastWakeMs > WAKE_COOLDOWN_MS &&
+            (now - lastNearMs > NEAR_COOLDOWN_MS || score >= CHECK_MIN)
         ) {
             pendingKind = WakeEvent.VERDICT_NEAR
             pendingPeak = score
@@ -57,6 +56,7 @@ class ClipCollector(
             return false
         }
         val kind = pendingKind ?: return false
+        if (kind == WakeEvent.VERDICT_NEAR && score > pendingPeak) pendingChunks = AFTER_CHUNKS   // keep ~0.5 s after the peak
         pendingPeak = maxOf(pendingPeak, score)
         if (kind == WakeEvent.VERDICT_NEAR && pendingPeak >= thr) {
             pendingKind = null   // turned into a real wake; next chunk handles it
@@ -64,6 +64,15 @@ class ClipCollector(
         }
         if (--pendingChunks > 0) return false
         pendingKind = null
+        if (kind == WakeEvent.VERDICT_NEAR && confirm != null && pendingPeak >= CHECK_MIN) {
+            val heard = ring.last(CLIP_SAMPLES)
+            if (confirm(heard)) {
+                JimiLog.i("wake by name check, score=${"%.2f".format(pendingPeak)}")
+                startWake(now, pendingPeak, heard)
+                pendingChunks = 1   // clip already holds the name; save it on the next chunk
+                return true
+            }
+        }
         if (kind == WakeEvent.VERDICT_NEAR) lastNearMs = now
         val audio = if (kind == WakeEvent.VERDICT_NONE) wakeAudio else null
         wakeAudio = null
@@ -74,6 +83,19 @@ class ClipCollector(
             CoreState._wakeId.value = id   // asked in the wake panel, not in the notification shade
         }
         return false
+    }
+
+    private fun startWake(now: Long, score: Float, audio: ShortArray) {
+        lastWakeMs = now
+        WakeFeedbackSignal.signal(context)
+        pendingKind = WakeEvent.VERDICT_NONE
+        pendingPeak = score
+        pendingChunks = AFTER_CHUNKS
+        // Copied now: the command capture runs next and resets the ring, so a later copy held
+        // only 0.5 s of after-command audio instead of the "Hey Jimi" that woke us.
+        wakeAudio = audio
+        lastWakeId = null
+        CoreState._wakeId.value = null   // the panel asks "Did you call me?" once this wake is saved
     }
 
     private suspend fun save(verdict: String, score: Float, thr: Float, audio: ShortArray): Long {
@@ -93,6 +115,7 @@ class ClipCollector(
         const val AFTER_CHUNKS = 6          // keep ~0.5 s after the peak in the clip
         const val WAKE_COOLDOWN_MS = 2_000L
         const val NEAR_MIN = 0.2f
+        const val CHECK_MIN = 0.7f
         const val NEAR_COOLDOWN_MS = 30_000L
     }
 }

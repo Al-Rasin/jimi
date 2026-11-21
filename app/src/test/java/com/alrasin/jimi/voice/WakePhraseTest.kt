@@ -1,9 +1,16 @@
 package com.alrasin.jimi.voice
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class WakePhraseTest {
+    @Test fun findsTheNameAnywhereForNearMissChecks() {
+        listOf("Hey Jimmy.", "hey, jimi", "okay hey jimmy what time", "jarvis").forEach { assertTrue(it, WakePhrase.hasName(it)) }
+        listOf("", "Cheers!", "paper orchestra on GitHub", "gymnastics", "jimmying").forEach { assertFalse(it, WakePhrase.hasName(it)) }
+    }
+
     @Test fun stripsHeardWakeReply() {
         assertEquals("what time is it", WakePhrase.stripAck("uh-huh what time is it"))
         assertEquals("call mom", WakePhrase.stripAck("Mm hmm, call mom"))

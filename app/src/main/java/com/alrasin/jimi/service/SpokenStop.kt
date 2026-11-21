@@ -1,5 +1,6 @@
 package com.alrasin.jimi.service
 
+import com.alrasin.jimi.core.JimiLog
 import com.alrasin.jimi.voice.BargeIn
 import com.alrasin.jimi.voice.ScreenAgentInterrupt
 import com.alrasin.jimi.voice.SpeechToText
@@ -43,11 +44,18 @@ class SpeechStopListener(private val stt: SpeechToText) {
     private var chunks = 0
 
     /** Feeds one mic chunk; true when the user said a stop word that is not playback echo. */
-    fun accept(chunk: ShortArray, playbackText: String): Boolean {
+    fun accept(chunk: ShortArray, playbackText: String, echoCanceled: Boolean): Boolean {
         val candidate = session ?: stt.session().also { session = it; chunks = 0 }
         candidate.accept(chunk)
-        val stop = BargeIn.isInterruption(candidate.text) && !BargeIn.isPlaybackEcho(candidate.text, playbackText)
-        if (candidate.done || ++chunks >= 25) close()
+        val text = candidate.text
+        val stop = BargeIn.isInterruption(text, echoCanceled) && !BargeIn.isPlaybackEcho(text, playbackText)
+        if (stop) JimiLog.i("barge-in heard \"$text\"")
+        // Silent tries restart every 2 s; a try with words runs to 4 s so a "stop" at the edge is not cut in half.
+        val limit = if (text.isBlank()) SILENT_CHUNKS else WORD_CHUNKS
+        if (stop || candidate.done || ++chunks >= limit) {
+            if (!stop && text.isNotBlank()) JimiLog.i("barge-in ignored \"$text\"")
+            close()
+        }
         return stop
     }
 
@@ -55,5 +63,10 @@ class SpeechStopListener(private val stt: SpeechToText) {
         session?.close()
         session = null
         chunks = 0
+    }
+
+    private companion object {
+        const val SILENT_CHUNKS = 25
+        const val WORD_CHUNKS = 50
     }
 }

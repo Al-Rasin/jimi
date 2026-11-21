@@ -30,6 +30,11 @@ object WakePhrase {
     /** True when [text] is only the wake phrase ("hey jimmy"): the user wants a new command, not a reply. */
     fun isOnlyWake(text: String): Boolean = text.isNotBlank() && strip(text).isEmpty()
 
+    private val name = Regex("(?<![\\p{L}\\p{N}])(?:$NAMES|jim|jimmys|jamie|gimme|gimmie|jarvis)(?![\\p{L}\\p{N}])", RegexOption.IGNORE_CASE)
+
+    /** True when the wake name is anywhere in [text]: confirms a near-miss wake score (D-098). */
+    fun hasName(text: String): Boolean = name.containsMatchIn(text)
+
     private val wordSplit = Regex(SEPARATOR)
     private val greetings = setOf("hey", "hay", "hi", "hello", "ok", "okay", "a")
 

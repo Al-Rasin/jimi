@@ -844,7 +844,7 @@ class JimiCoreService : LifecycleService() {
                         listOf("hey jimi", "hey jimmy", "hey jarvis").none { BargeIn.isPlaybackEcho(it, playbackText) }
                     var stop = false
                     if (!wake && interruption != null && BargeIn.canRecognizeStop(rec.echoCanceled, TextToSpeech.playbackEnergy)) {
-                        stop = interruption.accept(chunk, playbackText)
+                        stop = interruption.accept(chunk, playbackText, rec.echoCanceled)
                     } else {
                         interruption?.close()
                     }
@@ -911,7 +911,7 @@ class JimiCoreService : LifecycleService() {
                 if (wasBusy) { wasBusy = false; detector.reset() }   // drop audio from before the command
                 val score = detector.process(chunk)
                 _lastScore.value = score
-                if (clips.onChunk(score, threshold, ring, tone) && stt != null) {
+                if (clips.onChunk(score, threshold, ring, tone, stt?.let { s -> { audio -> heardWakeName(s, audio) } }) && stt != null) {
                     commandEpoch = captureEpoch
                     _heard.value = ""
                     _reply.value = ""
@@ -956,6 +956,15 @@ class JimiCoreService : LifecycleService() {
             _phase.value = PHASE_WAKE
         }
     }
+
+    private fun heardWakeName(stt: SpeechToText, audio: ShortArray): Boolean = runCatching {
+        stt.session(stripWake = false).use { check ->
+            check.feed(audio, audio.size)
+            check.feed(ShortArray(NAME_CHECK_TAIL), NAME_CHECK_TAIL)   // flush the last decoder frames
+            JimiLog.i("wake name check heard \"${check.raw}\"")
+            WakePhrase.hasName(check.raw)
+        }
+    }.onFailure { JimiLog.e("wake name check failed", it) }.getOrDefault(false)
 
     private fun newClips() = ClipCollector(this, dao) { missedRequested.also { missedRequested = false } }
 
@@ -1028,6 +1037,7 @@ class JimiCoreService : LifecycleService() {
         private const val VOICE_WORDS = 18
         private const val AUDIO_AHEAD = 3
         private const val PRE_ROLL_SAMPLES = 16_000   // 1 s before the wake: "…jimi turn" → "turn" is kept
+        private const val NAME_CHECK_TAIL = 8_000   // 0.5 s silence after a near-miss clip
         private const val ENROLL_SECONDS = 8
         private const val ENROLL_CHUNKS = ENROLL_SECONDS * WakeWordDetector.SAMPLE_RATE / WakeWordDetector.CHUNK
 

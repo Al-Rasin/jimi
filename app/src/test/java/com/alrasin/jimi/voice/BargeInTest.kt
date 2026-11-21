@@ -8,18 +8,27 @@ import org.junit.Test
 class BargeInTest {
     @Test fun raisesWakeThresholdWithoutLoweringStrictSettings() {
         assertEquals(0.9f, BargeIn.wakeThreshold(0.5f), 0.0001f)
-        assertEquals(0.98f, BargeIn.wakeThreshold(0.8f), 0.0001f)
-        assertEquals(0.98f, BargeIn.wakeThreshold(0.9f), 0.0001f)
+        assertEquals(0.93f, BargeIn.wakeThreshold(0.88f), 0.0001f)
+        assertEquals(0.95f, BargeIn.wakeThreshold(0.9f), 0.0001f)
         assertEquals(0.99f, BargeIn.wakeThreshold(0.99f), 0.0001f)
         assertEquals(1f, BargeIn.wakeThreshold(Float.NaN), 0f)
     }
 
-    @Test fun acceptsOnlyTwoWordInterruptions() {
+    @Test fun acceptsOnlyTwoWordInterruptionsWithoutEchoCanceler() {
         listOf("stop stop", " Jimi, WAIT! ", "\nhey jimi stop.\t", "“wait jimi”", "okay stop", "stop please", "wait stop").forEach {
             assertTrue(it, BargeIn.isInterruption(it))
         }
-        listOf("", "...", "stop", "Wait.", "stoplight", "waiting", "don't stop", "stop the timer", "st.op").forEach {
+        listOf("", "...", "stop", "Wait.", "cancel", "stoplight", "waiting", "don't stop", "stop the timer", "st.op").forEach {
             assertFalse(it, BargeIn.isInterruption(it))
+        }
+    }
+
+    @Test fun acceptsOneWordInterruptionsWithEchoCanceler() {
+        listOf("stop", "Wait.", " Cancel! ", "enough", "shut up", "be quiet", "stop stop").forEach {
+            assertTrue(it, BargeIn.isInterruption(it, echoCanceled = true))
+        }
+        listOf("", "...", "stoplight", "waiting", "don't stop", "stop the timer", "cancel the alarm").forEach {
+            assertFalse(it, BargeIn.isInterruption(it, echoCanceled = true))
         }
     }
 
