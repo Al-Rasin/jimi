@@ -48,6 +48,17 @@ class BargeInTest {
         assertFalse(BargeIn.isPlaybackEcho("stop", ""))
     }
 
+    @Test fun stopMixedWithEchoStillInterrupts() {
+        val playing = "Bangladeshi describes anything or anyone from Bangladesh, a South Asian nation."
+        assertTrue(BargeIn.hasStopOverEcho("anything or anyone stop from bangladesh", playing, echoCanceled = true))
+        assertTrue(BargeIn.hasStopOverEcho("from bangladesh shut up", playing, echoCanceled = true))
+        assertTrue(BargeIn.hasStopOverEcho("jimi stop", playing, echoCanceled = false))
+        assertFalse(BargeIn.hasStopOverEcho("anything or anyone from bangladesh a", playing, echoCanceled = true))
+        assertFalse(BargeIn.hasStopOverEcho("anyone stop from bangladesh", playing, echoCanceled = false))
+        assertFalse(BargeIn.hasStopOverEcho("you can stop the timer", "You can stop the timer now.", echoCanceled = true))
+        assertFalse(BargeIn.hasStopOverEcho("a stoplight", playing, echoCanceled = true))
+    }
+
     @Test fun loudPlaybackRequiresEchoCancellation() {
         assertTrue(BargeIn.canRecognizeStop(false, 0f))
         assertTrue(BargeIn.canRecognizeStop(false, 0.02f))

@@ -31,6 +31,21 @@ object BargeIn {
     fun isInterruption(text: String, echoCanceled: Boolean = false): Boolean =
         interruption.matches(text) || (echoCanceled && soloInterruption.matches(text))
 
+    /**
+     * D-103: the echo canceler leaves Jimi's own voice in the transcript ("it's anything or anyone from bangladesh"),
+     * so a real "stop" arrives mixed with echo and never matches a whole-text rule. With the canceler on, any stop
+     * word that the playing text does not contain counts.
+     */
+    fun hasStopOverEcho(candidate: String, playbackText: String, echoCanceled: Boolean): Boolean {
+        if (isInterruption(candidate, echoCanceled) && !isPlaybackEcho(candidate, playbackText)) return true
+        if (!echoCanceled) return false
+        val heard = " ${wordSeparator.replace(candidate.lowercase(), " ").trim()} "
+        val playing = " ${wordSeparator.replace(playbackText.lowercase(), " ").trim()} "
+        return STOP_PHRASES.any { heard.contains(" $it ") && !playing.contains(" $it ") }
+    }
+
+    private val STOP_PHRASES = listOf("stop", "cancel", "enough", "quiet", "shut up")
+
     fun isPlaybackEcho(candidate: String, playbackText: String): Boolean {
         val phrase = wordSeparator.replace(candidate.lowercase(), " ").trim()
         if (phrase.isEmpty()) return false

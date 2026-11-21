@@ -113,7 +113,8 @@ class PhoneSpeechRecognizer(context: Context) {
                             // D-093: Bangla too, so "tumi ki bangla bujho" comes back in Bangla script, like Assistant's
                             // "additional languages". Google's offline pack is English only, so this only works online.
                             if (online) {
-                                putStringArrayListExtra(EXTRA_ADDITIONAL_LANGUAGES, arrayListOf(BANGLA))
+                                // D-103: Google reads this hidden extra as String[]; an ArrayList was ignored (Bangla came back as English).
+                                putExtra(EXTRA_ADDITIONAL_LANGUAGES, arrayOf(BANGLA))
                                 if (Build.VERSION.SDK_INT >= 34) {
                                     putExtra(RecognizerIntent.EXTRA_ENABLE_LANGUAGE_DETECTION, true)
                                     putExtra(RecognizerIntent.EXTRA_ENABLE_LANGUAGE_SWITCH, RecognizerIntent.LANGUAGE_SWITCH_QUICK_RESPONSE)

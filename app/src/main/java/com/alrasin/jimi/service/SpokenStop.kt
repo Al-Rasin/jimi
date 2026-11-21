@@ -48,7 +48,7 @@ class SpeechStopListener(private val stt: SpeechToText) {
         val candidate = session ?: stt.session().also { session = it; chunks = 0 }
         candidate.accept(chunk)
         val text = candidate.text
-        val stop = BargeIn.isInterruption(text, echoCanceled) && !BargeIn.isPlaybackEcho(text, playbackText)
+        val stop = BargeIn.hasStopOverEcho(text, playbackText, echoCanceled)
         if (stop) JimiLog.i("barge-in heard \"$text\"")
         // Silent tries restart every 2 s; a try with words runs to 4 s so a "stop" at the edge is not cut in half.
         val limit = if (text.isBlank()) SILENT_CHUNKS else WORD_CHUNKS
