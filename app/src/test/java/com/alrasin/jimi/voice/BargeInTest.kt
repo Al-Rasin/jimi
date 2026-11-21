@@ -83,4 +83,13 @@ class BargeInTest {
         assertEquals("don't stop", BargeIn.stripInterruption("don't stop"))
         assertEquals("stop's meaning", BargeIn.stripInterruption("stop's meaning"))
     }
+
+    @Test fun stopClipAcceptsNearMissesNotInPlayback() {
+        assertTrue(BargeIn.isStopClip("Stop", "the city goes back"))
+        assertTrue(BargeIn.isStopClip("Star", "the city goes back"))
+        assertTrue(BargeIn.isStopClip("staries", ""))
+        assertFalse(BargeIn.isStopClip("Star", "a star is born"))
+        assertFalse(BargeIn.isStopClip("study", "the city"))
+        assertFalse(BargeIn.isStopClip("", "the city"))
+    }
 }

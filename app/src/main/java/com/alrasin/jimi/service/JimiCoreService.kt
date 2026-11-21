@@ -36,6 +36,8 @@ import com.alrasin.jimi.voice.BanglaSpeechToText
 import com.alrasin.jimi.voice.NoiseCleaner
 import com.alrasin.jimi.voice.PortableModels
 import com.alrasin.jimi.voice.BargeIn
+import com.alrasin.jimi.voice.EchoCanceller
+import com.alrasin.jimi.voice.PlaybackReference
 import com.alrasin.jimi.voice.SpeakerVerifier
 import com.alrasin.jimi.voice.SpeechToText
 import com.alrasin.jimi.voice.SecondPassSpeechToText
@@ -634,6 +636,10 @@ class JimiCoreService : LifecycleService() {
         var command: SpeechToText.Session? = null
         var commandEpoch = speechEpoch
         val interruption = stt?.let(::SpeechStopListener)
+        val dump = BargeInDump(this)
+        val echo = EchoCanceller.create()
+        val reference = PlaybackReference()
+        val burst = if (echo != null) stt?.let { s -> StopBurstListener(s::transcribe) } else null
         val stopListener = AgentStopListener(stt)
         var commandSource = "voice"
         val commandAudio = ArrayList<ShortArray>()
@@ -642,7 +648,7 @@ class JimiCoreService : LifecycleService() {
         var enrollAudio: ArrayList<ShortArray>? = null
         val chunk = ShortArray(WakeWordDetector.CHUNK)
         var ring = AudioRing(WakeWordDetector.SAMPLE_RATE * RING_SECONDS)
-        val rec = SharedMicrophone(this, WakeWordDetector.SAMPLE_RATE) { available ->
+        val rec = SharedMicrophone(this, WakeWordDetector.SAMPLE_RATE, hardwareEcho = echo == null) { available ->
             _microphoneAvailable.value = available
             if (!speaking) _phase.value = if (available) PHASE_WAKE else PHASE_MIC_BUSY
             Notifications.updateListening(this, if (available) PHASE_WAKE else PHASE_MIC_BUSY)
@@ -837,23 +843,32 @@ class JimiCoreService : LifecycleService() {
                     continue
                 }
                 if (speaking) {
-                    if (!wasSpeaking) detector.reset()
+                    if (!wasSpeaking) { detector.reset(); reference.reset(); burst?.reset() }
                     wasSpeaking = true
                     wasBusy = true
-                    val score = detector.process(chunk)
+                    // Software echo canceler first; it stays converged across replies (only the reference resets).
+                    val far = echo?.let { reference.next() }
+                    val heardChunk = far?.let { echo.process(it, chunk) } ?: chunk
+                    val echoFree = rec.echoCanceled || echo != null
+                    dump.add(chunk, TextToSpeech.playbackEnergy, heardChunk.takeIf { echo != null }, far)
+                    val score = detector.process(heardChunk)
                     _lastScore.value = score
                     val wake = score >= BargeIn.wakeThreshold(threshold) &&
                         listOf("hey jimi", "hey jimmy", "hey jarvis").none { BargeIn.isPlaybackEcho(it, playbackText) }
                     var stop = false
-                    if (!wake && interruption != null && BargeIn.canRecognizeStop(rec.echoCanceled, TextToSpeech.playbackEnergy)) {
-                        stop = interruption.accept(chunk, playbackText, rec.echoCanceled)
+                    if (!wake && burst != null) {
+                        stop = burst.accept(chunk, heardChunk, playbackText) != null
+                    } else if (!wake && interruption != null && BargeIn.canRecognizeStop(echoFree, TextToSpeech.playbackEnergy)) {
+                        stop = interruption.accept(heardChunk, playbackText, echoFree)
                     } else {
                         interruption?.close()
                     }
                     if ((wake || stop) && stt != null) {
+                        dump.flush()
                         interruptSpeech()
                         commandEpoch = speechEpoch
                         interruption?.close()
+                        burst?.reset()
                         // Exclude loudspeaker pre-roll; capture fresh command audio after the interruption.
                         commandSource = "barge_in"
                         commandAudio.clear()
@@ -868,6 +883,7 @@ class JimiCoreService : LifecycleService() {
                 }
                 wasSpeaking = false
                 interruption?.close()
+                dump.flush()
                 val enrolling = enrollAudio
                 if (enrolling != null) {
                     enrolling.add(chunk.copyOf())
@@ -936,9 +952,11 @@ class JimiCoreService : LifecycleService() {
             phoneWarmJob.cancel()
             phone.keepWarm(false)
             interruption?.close()
+            burst?.close()
             stopListener.close()
             command?.close()
             stt?.close()
+            echo?.close()
             // A reply may still be decoding with these native models; wait for it so they aren't freed under it.
             val replyDone = withContext(NonCancellable) {
                 withTimeoutOrNull(REFINE_WAIT_MS) { replyJob?.cancelAndJoin(); true } == true

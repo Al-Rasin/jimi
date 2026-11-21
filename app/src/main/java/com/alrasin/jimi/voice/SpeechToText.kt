@@ -92,6 +92,10 @@ class SpeechToText(context: Context, dir: File? = null, hotwords: Collection<Str
         }
     }
 
+    /** One-shot decode of a short clip (silence padded both sides); used for barge-in "stop" windows. */
+    fun transcribe(audio: ShortArray): String =
+        session(waitStart = MAX_SECONDS, stripWake = false).use { it.feed(audio, audio.size); it.finish() }
+
     inner class Session(
         private val stream: OnlineStream,
         waitStart: Float,
@@ -124,6 +128,18 @@ class SpeechToText(context: Context, dir: File? = null, hotwords: Collection<Str
                 decode()
             }
         }
+
+        /** Flushes the decoder and returns the final text: Kroko often shows a short word ("stop") only after this. */
+        fun finish(): String {
+            if (!done && !finished) {
+                finished = true
+                stream.acceptWaveform(FloatArray(LEAD_SILENCE), SAMPLE_RATE)
+                stream.inputFinished()
+                decode()
+            }
+            return text
+        }
+        private var finished = false
 
         internal fun feed(chunk: ShortArray, count: Int) {
             stream.acceptWaveform(FloatArray(count) { chunk[it] / 32768f }, SAMPLE_RATE)

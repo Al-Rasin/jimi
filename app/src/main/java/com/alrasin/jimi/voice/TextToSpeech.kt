@@ -157,6 +157,7 @@ class TextToSpeech(
         banglaEngine?.close()
     }
 
+
     companion object {
         private const val DIR = "tts"
         private const val NO_BANGLA = "a message in Bangla"
@@ -210,6 +211,7 @@ class TextToSpeech(
         private const val IDLE_MS = 2_000L
         private const val STOP_RELEASE_MS = 300L
         private const val CLIP_TAIL_MS = 60
+        private const val HISTORY_MS = 500
         private val releaser = Executors.newSingleThreadScheduledExecutor { r ->
             Thread(r, "tts-release").apply { isDaemon = true }
         }
@@ -222,6 +224,11 @@ class TextToSpeech(
             @Volatile var lastUse = System.currentTimeMillis()
             /** Frames played; the raw value is an unsigned 32-bit counter. */
             fun head(): Long = track.playbackHeadPosition.toLong() and 0xffffffffL
+            /** Drops pieces that ended over [HISTORY_MS] ago; the echo canceler reads a little behind the head. */
+            fun prune(head: Long) {
+                val keepFrom = head - rate.toLong() * HISTORY_MS / 1000
+                while (segments.firstOrNull()?.let { it.start + it.pcm.size <= keepFrom } == true) segments.removeFirst()
+            }
         }
 
         /** Speech loudness (1 = normal). Bedtime mode lowers it so Jimi whispers at night. */
@@ -235,16 +242,21 @@ class TextToSpeech(
                 }
             }
 
+        /** Debug (barge-in dump): sees each streamed piece as (start frame, samples, rate). */
+        @Volatile var debugTap: ((Long, FloatArray, Int) -> Unit)? = null
+
+        /** Debug: playback head frame of the open stream, or -1. */
+        val playbackHead: Long
+            get() = synchronized(playbackLock) { stream?.let { s -> runCatching { s.head() }.getOrDefault(-1L) } ?: -1L }
+
         /** RMS near the playback head; queued speech must not suppress a quiet microphone window. */
         val playbackEnergy: Float
             get() {
                 synchronized(playbackLock) {
                     val s = stream ?: return 0f
                     val head = runCatching { s.head() }.getOrElse { return 0f }
-                    while (s.segments.isNotEmpty() && s.segments.first().let { it.start + it.pcm.size } <= head) {
-                        s.segments.removeFirst()
-                    }
-                    val seg = s.segments.firstOrNull()?.takeIf { head >= it.start } ?: return 0f
+                    s.prune(head)
+                    val seg = s.segments.firstOrNull { head >= it.start && head < it.start + it.pcm.size } ?: return 0f
                     val from = (head - seg.start).toInt()
                     val to = (from + s.rate / 50).coerceAtMost(seg.pcm.size)
                     var energy = 0.0
@@ -252,6 +264,26 @@ class TextToSpeech(
                     return sqrt(energy / (to - from).coerceAtLeast(1)).toFloat()
                 }
             }
+
+        /** Open stream's identity, rate and played frame count, or null; the echo canceler's playback clock. */
+        fun playbackClock(): PlaybackReference.Clock? = synchronized(playbackLock) {
+            val s = stream ?: return null
+            val head = runCatching { s.head() }.getOrElse { return null }
+            PlaybackReference.Clock(System.identityHashCode(s), s.rate, head)
+        }
+
+        /** Copies frames [from, from + out.size) of stream [id] (0 where nothing was written); false if it changed. */
+        fun copyPlayed(id: Int, from: Long, out: FloatArray): Boolean = synchronized(playbackLock) {
+            out.fill(0f)
+            val s = stream?.takeIf { System.identityHashCode(it) == id } ?: return false
+            val end = from + out.size
+            for (seg in s.segments) {
+                val a = maxOf(from, seg.start)
+                val b = minOf(end, seg.start + seg.pcm.size)
+                if (a < b) System.arraycopy(seg.pcm, (a - seg.start).toInt(), out, (a - from).toInt(), (b - a).toInt())
+            }
+            true
+        }
 
         /** Does not wait for native synthesis or the service's TTS lock. */
         fun stopPlayback() {
@@ -289,10 +321,11 @@ class TextToSpeech(
                 val start = synchronized(playbackLock) {
                     if (!live()) return cancel(epoch, stop)
                     val played = runCatching { s.head() }.getOrDefault(0L)
-                    while (s.segments.firstOrNull()?.let { it.start + it.pcm.size <= played } == true) s.segments.removeFirst()
+                    s.prune(played)
                     s.written.also {
                         s.written += samples.size
                         s.segments.addLast(Segment(it, samples))
+                        debugTap?.invoke(it, samples, s.rate)
                     }
                 }
                 val end = start + samples.size

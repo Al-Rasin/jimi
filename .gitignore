@@ -38,3 +38,4 @@ app/src/main/cpp/llama.cpp/
 
 # screen-model privacy list
 training/screen/private_words.txt
+app/src/main/jniLibs/arm64-v8a/libjimi_aec.so

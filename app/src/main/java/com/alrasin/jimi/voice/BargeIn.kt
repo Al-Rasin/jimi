@@ -46,6 +46,17 @@ object BargeIn {
 
     private val STOP_PHRASES = listOf("stop", "cancel", "enough", "quiet", "shut up")
 
+    // A short clip of "stop" over Jimi's voice often decodes as "star", "stopped", "sto" (D-103).
+    private val stopLike = Regex("^(stop\\w*|sto|star|stars|staries)$")
+
+    /** True when a short clip cut around the user's voice onset holds "stop" (or a near miss) not in the playback. */
+    fun isStopClip(candidate: String, playbackText: String): Boolean {
+        if (hasStopOverEcho(candidate, playbackText, echoCanceled = true)) return true
+        val playing = wordSeparator.replace(playbackText.lowercase(), " ").trim().split(' ').toSet()
+        return wordSeparator.replace(candidate.lowercase(), " ").trim().split(' ')
+            .any { it.matches(stopLike) && it !in playing }
+    }
+
     fun isPlaybackEcho(candidate: String, playbackText: String): Boolean {
         val phrase = wordSeparator.replace(candidate.lowercase(), " ").trim()
         if (phrase.isEmpty()) return false

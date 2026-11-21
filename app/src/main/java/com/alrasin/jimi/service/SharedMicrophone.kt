@@ -19,6 +19,8 @@ import kotlinx.coroutines.ensureActive
 internal class SharedMicrophone(
     private val context: Context,
     private val sampleRate: Int,
+    /** Off when the software echo canceler runs: hardware AEC before it hurts "stop" (D-103). */
+    private val hardwareEcho: Boolean = true,
     private val onAvailability: (Boolean) -> Unit,
 ) : AutoCloseable {
     private var recorder: AudioRecord? = null
@@ -53,7 +55,7 @@ internal class SharedMicrophone(
         recorder = rec
         check(rec.state == AudioRecord.STATE_INITIALIZED) { "Microphone is unavailable" }
         echoCanceled = runCatching {
-            echoCanceler = if (AcousticEchoCanceler.isAvailable()) AcousticEchoCanceler.create(rec.audioSessionId) else null
+            echoCanceler = if (hardwareEcho && AcousticEchoCanceler.isAvailable()) AcousticEchoCanceler.create(rec.audioSessionId) else null
             echoCanceler?.enabled = true
             echoCanceler?.enabled == true
         }.onFailure { JimiLog.e("echo canceler unavailable", it) }.getOrDefault(false)

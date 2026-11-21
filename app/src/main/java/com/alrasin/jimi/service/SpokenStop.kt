@@ -42,17 +42,27 @@ class AgentStopListener(private val stt: SpeechToText?) {
 class SpeechStopListener(private val stt: SpeechToText) {
     private var session: SpeechToText.Session? = null
     private var chunks = 0
+    private var spoke = false
+    private var quiet = 0
 
     /** Feeds one mic chunk; true when the user said a stop word that is not playback echo. */
     fun accept(chunk: ShortArray, playbackText: String, echoCanceled: Boolean): Boolean {
-        val candidate = session ?: stt.session().also { session = it; chunks = 0 }
+        val candidate = session ?: stt.session().also { session = it; chunks = 0; spoke = false; quiet = 0 }
         candidate.accept(chunk)
-        val text = candidate.text
-        val stop = BargeIn.hasStopOverEcho(text, playbackText, echoCanceled)
+        chunks++
+        if (rms(chunk) > SPEECH_RMS) { spoke = true; quiet = 0 } else quiet++
+        var text = candidate.text
+        var stop = BargeIn.hasStopOverEcho(text, playbackText, echoCanceled)
+        // The echo canceler leaves near silence between words, so a short quiet gap marks the end of what was said.
+        // The streaming text often stays blank for a lone "stop" until the decoder is flushed (D-103).
+        val ended = (spoke && quiet >= QUIET_CHUNKS) || candidate.done ||
+            chunks >= if (text.isBlank() && !spoke) SILENT_CHUNKS else WORD_CHUNKS
+        if (!stop && ended && (spoke || text.isNotBlank())) {
+            text = candidate.finish()
+            stop = BargeIn.hasStopOverEcho(text, playbackText, echoCanceled)
+        }
         if (stop) JimiLog.i("barge-in heard \"$text\"")
-        // Silent tries restart every 2 s; a try with words runs to 4 s so a "stop" at the edge is not cut in half.
-        val limit = if (text.isBlank()) SILENT_CHUNKS else WORD_CHUNKS
-        if (stop || candidate.done || ++chunks >= limit) {
+        if (stop || ended) {
             if (!stop && text.isNotBlank()) JimiLog.i("barge-in ignored \"$text\"")
             close()
         }
@@ -66,7 +76,113 @@ class SpeechStopListener(private val stt: SpeechToText) {
     }
 
     private companion object {
-        const val SILENT_CHUNKS = 25
-        const val WORD_CHUNKS = 50
+        const val SILENT_CHUNKS = 25   // 2 s
+        const val WORD_CHUNKS = 50     // 4 s
+        const val QUIET_CHUNKS = 3     // 240 ms
+        const val SPEECH_RMS = 300.0
     }
+}
+
+/**
+ * Barge-in "stop" with the software echo canceler (D-103). The canceler's output is near silent while only Jimi
+ * talks, so a loud burst there marks the user starting to speak; but it also cuts the start of "stop", so the
+ * words are read from the raw mic: a few short clips around the burst, each decoded fresh, off the mic thread.
+ * [decode] turns a clip into text (blank on failure).
+ */
+class StopBurstListener(private val decode: (ShortArray) -> String) : AutoCloseable {
+    private val history = ArrayDeque<ShortArray>()
+    private val worker = java.util.concurrent.Executors.newSingleThreadExecutor()
+    private val heard = java.util.concurrent.atomic.AtomicReference<String?>(null)
+    private val busy = java.util.concurrent.atomic.AtomicBoolean(false)
+    private var quiet = QUIET_BEFORE
+    private var waiting = -1
+    private var generation = 0
+
+    /**
+     * Feeds the raw mic chunk and the same chunk after the echo canceler; returns the heard text once a clip
+     * holds "stop", else null. With [runInline] the clips are decoded on the caller's thread (tests).
+     */
+    fun accept(raw: ShortArray, cleaned: ShortArray, playbackText: String, runInline: Boolean = false): String? {
+        heard.getAndSet(null)?.let { return it }
+        history.addLast(raw.copyOf())
+        while (history.size > HISTORY_CHUNKS) history.removeFirst()
+        if (waiting >= 0) {
+            if (++waiting >= AFTER_CHUNKS) {
+                waiting = -1
+                quiet = 0
+                launch(clips(raw.size), playbackText, runInline)
+                return heard.getAndSet(null)
+            }
+            return null
+        }
+        val loud = rms(cleaned) > ONSET_RMS
+        if (loud && quiet >= QUIET_BEFORE && !busy.get()) waiting = 1 else quiet = if (loud) 0 else quiet + 1
+        return null
+    }
+
+    /** Clips (start before onset, length) cut from the history; the onset chunk is [AFTER_CHUNKS] from the end. */
+    private fun clips(chunkSize: Int): List<ShortArray> {
+        val all = CommandAudio.join(history.toList())
+        val onset = all.size - AFTER_CHUNKS * chunkSize
+        return WINDOWS.map { (pre, len) ->
+            val from = (onset - pre).coerceAtLeast(0)
+            all.copyOfRange(from, (from + len).coerceAtMost(all.size))
+        }
+    }
+
+    private fun launch(clips: List<ShortArray>, playbackText: String, runInline: Boolean) {
+        val gen = generation
+        val job = Runnable {
+            try {
+                for (clip in clips) {
+                    val text = runCatching { decode(clip) }.getOrDefault("")
+                    if (gen != generation) return@Runnable
+                    if (BargeIn.isStopClip(text, playbackText)) {
+                        JimiLog.i("barge-in heard \"$text\"")
+                        heard.set(text)
+                        return@Runnable
+                    }
+                    if (text.isNotBlank()) JimiLog.i("barge-in ignored \"$text\"")
+                }
+            } finally {
+                busy.set(false)
+            }
+        }
+        busy.set(true)
+        if (runInline) job.run() else worker.execute(job)
+    }
+
+    /** Forgets the current reply's audio and any pending result. */
+    fun reset() {
+        generation++
+        history.clear()
+        heard.set(null)
+        waiting = -1
+        quiet = QUIET_BEFORE
+    }
+
+    override fun close() {
+        reset()
+        worker.shutdownNow()
+        // The clip decoder uses the shared STT model: let a running decode end before the model is freed.
+        worker.awaitTermination(2, java.util.concurrent.TimeUnit.SECONDS)
+    }
+
+    private companion object {
+        const val RATE = WakeWordDetector.SAMPLE_RATE
+        const val ONSET_RMS = 1200.0
+        const val QUIET_BEFORE = 3      // chunks below ONSET_RMS before a burst counts as a new onset
+        const val AFTER_CHUNKS = 8      // onset chunk + 7 more (~0.64 s) before cutting clips
+        const val HISTORY_CHUNKS = 16
+        // (start before onset, length) in samples; tried in order, first "stop" wins.
+        val WINDOWS = listOf(
+            RATE / 5 to RATE * 4 / 5, RATE / 10 to RATE * 7 / 10, RATE * 3 / 10 to RATE * 9 / 10, RATE / 5 to RATE / 2,
+        )
+    }
+}
+
+private fun rms(chunk: ShortArray): Double {
+    var sum = 0.0
+    for (s in chunk) sum += s.toDouble() * s
+    return kotlin.math.sqrt(sum / chunk.size.coerceAtLeast(1))
 }
