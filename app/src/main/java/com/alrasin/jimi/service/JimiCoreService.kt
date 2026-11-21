@@ -134,7 +134,6 @@ class JimiCoreService : LifecycleService() {
     @Volatile private var timedCommandEpoch = -1
     @Volatile private var firstReplyReadyAt = 0L
     private var firstAudioEpoch = -1
-    private var fillerIndex = 0
     @Volatile private var followUp = true
     @Volatile private var showPanel = true
     @Volatile private var voiceId = false
@@ -755,8 +754,8 @@ class JimiCoreService : LifecycleService() {
                 val captureEpoch = speechEpoch
                 synchronized(speechState) {
                     if (thinkingCue.take(SystemClock.elapsedRealtime(), speechEpoch, _phase.value == PHASE_THINKING)) {
-                        val filler = FILLERS[fillerIndex++ % FILLERS.size]
-                        if (voice.isCached(filler)) say(filler, speechEpoch)
+                        // A soft tone, not spoken "one sec" words: the user found those robotic (D-095).
+                        tone.thinking()
                     }
                 }
                 if (command != null && commandEpoch != captureEpoch) {

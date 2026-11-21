@@ -36,6 +36,9 @@ object ToolFit {
         "send_sms" to w(messageWords),
         "send_whatsapp" to w(messageWords),
         "call" to w("call|dial|ring|phone"),
+        "answer_call" to w("answer (?:it|this|that|the|call|phone|him|her)|^answer$|pick ?up|accept|receive|calls?|calling|ringing"),
+        "recall_facts" to w("remember|recall|memory|memories|facts?|about me|told you|my name"),
+        "translate" to w("translat\\w*|meaning|means?|say|(?:in|into|to) (?:english|bangla|bengali|hindi|urdu|arabic|spanish|french)"),
     )
 
     fun fits(text: String, call: ToolCall): Boolean {

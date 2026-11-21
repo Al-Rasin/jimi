@@ -89,4 +89,14 @@ class ChatFormatTest {
         assertTrue(p.endsWith("<|im_start|>assistant\n<think>\n\n</think>\n\n"))
         assertTrue(ChatFormat.qwen("sys", emptyList(), "hi").contains("hi /no_think"))
     }
+    @Test fun cleanDropsEmptyAcknowledgements() {
+        assertEquals("Paris.", ChatFormat.clean("Sure thing, I'm on it! Paris."))
+        assertEquals("It is 5 PM.", ChatFormat.clean("I'm on it, Boss! Let me get this done quickly. It is 5 PM."))
+        assertEquals("Done. Here it is.", ChatFormat.clean("Done. One sec, Boss. Here it is."))
+    }
+
+    @Test fun cleanKeepsRealSentencesWithSimilarWords() {
+        assertEquals("Put a lid on it.", ChatFormat.clean("Put a lid on it."))
+        assertEquals("Let me know if you need more.", ChatFormat.clean("Let me know if you need more."))
+    }
 }

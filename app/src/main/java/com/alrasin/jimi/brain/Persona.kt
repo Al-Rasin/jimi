@@ -8,7 +8,7 @@ import kotlin.random.Random
 private val CLEAN_RE = Regex("[^a-z' ]")
 private val SMALL_TALK_RE = Regex("(hi|hello|hey|yo|hii|helo|salam|assalamualaikum|assalamu alaikum)( there| jimi)?")
 private val SMALL_TALK_RE_2 = Regex("good (afternoon|evening)")
-private val SMALL_TALK_RE_3 = Regex("how are you( doing)?|hows it going|how do you do|whats up|sup")
+private val SMALL_TALK_RE_3 = Regex("(how are you( doing)?( today)?|hows it going|how do you do|whats up|sup)( bro| buddy| man| dude)?")
 private val SMALL_TALK_RE_4 = Regex("(who|what) are you|(?:what is|whats|tell me) your name|whats your name|your name|introduce yourself|(tell me |talk )?(more )?about (yourself|you)")
 private val MAKER_RE = Regex("who (made|created|built|programmed|designed|trained) you|who is your (creator|maker|developer|owner)|where (are|do) you (from|come from)")
 private val SMALL_TALK_RE_5 = Regex("(thank you|thanks|thank u|thx|great|good job|nice|well done|awesome|perfect)( very much| so much| a lot)?( jimi)?")
@@ -21,7 +21,7 @@ private val AGE_RE = Regex("(how old are you|whats your age|what is your age|whe
 private val LOVE_RE = Regex("(i love you|love you|i like you)")
 private val COIN_RE = Regex("(flip|toss) (a |the )?coin|heads or tails")
 private val DICE_RE = Regex("roll (a |the )?(dice|die)")
-private val BANGLISH_LANG_RE = Regex("(tumi |apni )?(ki )?bangla (bojho|bujho|bojhen|bujhen|bolte paro|paro|jano)( ki)?( jimi)?")
+private val BANGLISH_LANG_RE = Regex("(tumi |apni )?((?:ki|ke) )?bangla (bojho|bujho|bojhen|bujhen|bolte paro|paro|jano)( ki)?( jimi)?")
 // Also what ML Kit makes of Bangla-script "তুমি কি বাংলা বুঝো" (D-093).
 private val BANGLA_LANG_EN_RE = Regex("(do|can) you (understand|know|speak)( in)? (bangla|bengali)( language)?( jimi)?")
 
@@ -41,6 +41,7 @@ object Persona {
         If $ADDRESS is rude or calls you dumb, stay calm and polite; never agree that you are dumb or useless.
         Phone actions run through tools, not this chat; never pretend you did one here.
         Earlier turns are context; answer only the newest message and never repeat an earlier answer.
+        Just answer; never say "on it", "one sec", "let me" or "sure thing" before or instead of the answer.
     """.trimIndent()
 
     private val MEMORY_QUESTION = Regex(

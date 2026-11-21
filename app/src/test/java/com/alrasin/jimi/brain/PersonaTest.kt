@@ -31,6 +31,8 @@ class PersonaTest {
         assertEquals("Hello Boss. What can I do?", Persona.smallTalk("Hey Jimi", 10))
         assertEquals("Good evening, Boss.", Persona.smallTalk("good evening", 20))
         assertNotNull(Persona.smallTalk("how are you", 10))
+        assertNotNull(Persona.smallTalk("how are you bro", 10))
+        assertNotNull(Persona.smallTalk("tumi ke bangla bojho", 10))
     }
 
     @Test fun goodMorningIsARoutineNotSmallTalk() = assertNull(Persona.smallTalk("good morning", 8))

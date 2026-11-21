@@ -17,6 +17,7 @@ class Chimes : AutoCloseable {
     private val done = prepare(ChimeSynth.done())
     private val error = prepare(ChimeSynth.error())
     private val timeout = prepare(ChimeSynth.timeout())
+    private val thinking = prepare(ChimeSynth.thinking())
     private var current: AudioTrack? = null
 
     fun wake() = play(wake, "wake")
@@ -25,6 +26,7 @@ class Chimes : AutoCloseable {
     fun done() = play(done, "done")
     fun error() = play(error, "error")
     fun timeout() = play(timeout, "timeout")
+    fun thinking() = play(thinking, "thinking")
 
     private fun prepare(pcm: FloatArray): AudioTrack? = runCatching {
         val samples = ShortArray(pcm.size) { (pcm[it].coerceIn(-1f, 1f) * Short.MAX_VALUE).toInt().toShort() }
@@ -60,7 +62,7 @@ class Chimes : AutoCloseable {
     }
 
     override fun close() {
-        listOf(wake, listen, endListening, done, error, timeout).forEach { track ->
+        listOf(wake, listen, endListening, done, error, timeout, thinking).forEach { track ->
             runCatching { track?.release() }
         }
         current = null

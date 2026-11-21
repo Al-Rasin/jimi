@@ -253,9 +253,11 @@ class Assistant @Inject constructor(
                 return Reply("That confirmation expired. Say the request again.", expectAnswer = true)
             }
         }
-        if (input.source == "follow_up" && rule == null && smallTalk == null && followUp == null && ReplyText.isNoise(text)) {
+        // Typed text is meant; spoken "uh huh", "hey siri", "hoga hoga" is stray sound and ends quietly.
+        if ((input.source == "follow_up" || input.source == "voice") && rule == null && smallTalk == null && followUp == null &&
+            ReplyText.isStray(text)) {
             trace("follow_up_noise", ok = false)
-            JimiLog.i("follow-up noise dropped: $text")
+            JimiLog.i("voice noise dropped: $text")
             return Reply("", endConversation = true)
         }
         smallTalk?.let { trace("smalltalk"); return Reply(it) }

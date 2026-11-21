@@ -70,4 +70,13 @@ class RightToolTest {
         assertTrue(ToolFit.fits("get me up 6:30", ToolCall("set_alarm")))
         assertTrue(ToolFit.fits("anything", ToolCall("some_unlisted_tool")))
     }
+
+    @Test fun callMemoryAndTranslateNeedTheirWords() {
+        assertFalse(ToolFit.fits("you give me a wrong answer", ToolCall("answer_call")))
+        assertFalse(ToolFit.fits("what the hell are you saying", ToolCall("recall_facts")))
+        assertFalse(ToolFit.fits("tumi ke bangla bojho", ToolCall("translate")))
+        assertTrue(ToolFit.fits("pick up the call", ToolCall("answer_call")))
+        assertTrue(ToolFit.fits("what do you remember about me", ToolCall("recall_facts")))
+        assertTrue(ToolFit.fits("translate good morning to bangla", ToolCall("translate")))
+    }
 }

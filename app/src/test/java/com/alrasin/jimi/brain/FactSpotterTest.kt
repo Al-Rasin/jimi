@@ -39,4 +39,9 @@ class FactSpotterTest {
         assertEquals("time 10:00, app com.whatsapp, battery 54%, screen: Chats Sara hi ", line.take(65))
         assertEquals(251, line.length)
     }
+
+    @Test fun passingStateIsNotAFact() {
+        assertNull(FactSpotter.spot("my situation is rainy day"))
+        assertNull(FactSpotter.spot("my condition is bad"))
+    }
 }

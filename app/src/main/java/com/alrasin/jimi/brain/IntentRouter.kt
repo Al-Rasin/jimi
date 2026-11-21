@@ -78,6 +78,19 @@ object IntentRouter {
     private val webTools = setOf("web_search", "weather", "news", "currency")
     private val CAPABILITY_TOOLS = setOf("app_abilities", "app_limits", "phone_profile")
     private val capabilityQuestion = Regex("\\bwhat (?:can|could|do) you (?:do|help)\\b")
+    // "you know why screen is blue": a question to chat about, not a memory lookup.
+    private val knowQuestion = Regex("^(?:do |did )?you know (?:why|what|how|who|where|when|which|if|whether)\\b.*")
+    // "you give me a wrong answer ...": a complaint, never a phone action such as answer_call.
+    private val complaint = Regex(
+        "^(?:you (?:give|gave|are giving|got|said|told) me (?:a |the )?(?:wrong|bad|incorrect)|" +
+            "(?:that'?s|that is|its|it'?s|this is) (?:a )?(?:wrong|not right|incorrect|not true)|wrong answer|" +
+            "what the (?:hell|heck)|what are you (?:saying|talking about))\\b.*",
+    )
+    // "yes do it" with nothing waiting (pending confirms are handled before routing): nothing to run.
+    private val bareYes = Regex("^(?:yes|yeah|yep|ok|okay|sure)(?: (?:yes|yeah|yep|ok|okay|sure))* (?:do it|go ahead|please do)(?: please| now)?$")
+    // "tell me all volume", "media phone ring alarm all of volumes": no tool reads volumes, so do not set one.
+    private val volumeAsk = Regex("^(?:tell me|what|whats|what's|show|check|read|how)\\b.*\\bvolumes?\\b.*|.*\\ball\\b.*\\bvolumes?\\b.*|.*\\bvolumes?\\b.*\\ball\\b.*")
+    private val volumeChange = Regex("\\b(?:up|down|set|increase|decrease|raise|lower|louder|quieter|mute|unmute|turn|max|maximum|min|minimum|full|half|percent)\\b|\\d")
     private val launchRequest = Regex("^(?:open|launch|start|run|show)(?: the| my)? (.+?)(?: app| application)?$")
 
     fun isAppLaunchQuestion(text: String): Boolean {
@@ -102,6 +115,12 @@ object IntentRouter {
         if (!namesWiki && (explanation.matches(normalized) || definition.matches(normalized) || creative.matches(normalized))) return Decision(Route.CHAT, 0.96f, "explanation or creative request")
         if (greeting.matches(normalized)) return Decision(Route.CHAT, 0.98f, "conversation")
         if (capabilityQuestion.containsMatchIn(normalized) && ruleCall?.tool !in CAPABILITY_TOOLS) return Decision(Route.CHAT, 0.98f, "capability question")
+        if (ruleCall == null && (knowQuestion.matches(normalized) || complaint.matches(normalized) || bareYes.matches(normalized))) {
+            return Decision(Route.CHAT, 0.96f, "question, complaint or bare yes")
+        }
+        if (ruleCall == null && volumeAsk.matches(normalized) && !volumeChange.containsMatchIn(normalized)) {
+            return Decision(Route.CHAT, 0.9f, "volume question, no reading tool")
+        }
 
         val launchApp = when (ruleCall?.tool) {
             "open_app" -> ruleCall.arg("app")

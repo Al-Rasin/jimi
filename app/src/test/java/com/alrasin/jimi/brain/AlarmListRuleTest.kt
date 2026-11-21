@@ -27,4 +27,9 @@ class AlarmListRuleTest {
         assertEquals("weather", tool("please tell me the weather"))
         assertEquals("weather", tool("i need the weather forecast"))
     }
+
+    @Test fun dayAlarmsListInsteadOfGuessing() {
+        listOf("saturday alarm", "turn off all saturday alarms", "i said turn off all saturday alarms")
+            .forEach { assertEquals(it, "list_alarms", tool(it)) }
+    }
 }

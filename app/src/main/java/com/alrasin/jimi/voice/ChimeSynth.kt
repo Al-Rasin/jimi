@@ -23,6 +23,12 @@ object ChimeSynth {
     /** Nothing heard after a follow-up: one quiet low note. */
     fun timeout(): FloatArray = render(200, Note(494.0, 0, 200, 0.07))
 
+    /** Soft "still working" cue instead of a spoken "one sec" filler (D-095). */
+    fun thinking(): FloatArray = render(320,
+        Note(587.0, 0, 160, 0.06),
+        Note(698.0, 140, 180, 0.06),
+    )
+
     fun listen(): FloatArray = render(170, Note(780.0, 0, 170, 0.13))
 
     fun done(): FloatArray = render(260,

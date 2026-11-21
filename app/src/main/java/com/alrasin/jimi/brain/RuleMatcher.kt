@@ -100,6 +100,10 @@ object RuleMatcher {
         }
         // "let's play a game" is chat, not a video search
         if (t.matches(PLAY_GAME_RE)) return null
+        // "i said whatsapp": a correction naming only an app opens it, not a contact search for "whatsapp".
+        CORRECTION_APP_RE.matchEntire(t)?.let { m ->
+            if (appNameMatches?.invoke(m.groupValues[1]) == true) return match("open ${m.groupValues[1]}", now)
+        }
         for ((re, to) in REWRITES) re.matchEntire(t)?.let {
             val out = re.replace(t, to)
             // A rewrite that maps to itself would recurse forever.
@@ -141,6 +145,7 @@ object RuleMatcher {
 
     private fun re(p: String) = Regex("^(?:$p)$")
 
+    private val CORRECTION_APP_RE = Regex("^(?:no |nope |sorry )?(?:i said|i mean|i meant) ([a-z][a-z ]{1,24})$")
     private val SWITCH_MODE_RE = Regex("^(?:switch|change|go|set it|put it)(?: it| the phone| my phone)? (?:to|into) ((?:the )?(?:\\w+ )?(?:mode|silent|vibrate|vibration))$")
     /** Other wordings of phrases the rules already know, said again in the known form. */
     private val REWRITES = listOf(

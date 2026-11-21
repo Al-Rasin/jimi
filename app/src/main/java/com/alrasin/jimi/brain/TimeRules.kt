@@ -24,6 +24,9 @@ internal object TimeRules {
 
     fun time(t: String, now: LocalDateTime): ToolCall? {
         if (isAlarmQuestion(t)) return call("list_alarms")
+        // "saturday alarm", "turn off all saturday alarms": Clock tools can't pick alarms by day, so list them
+        // and let the user name the time; never offer to cancel some other alarm.
+        if (t.matches(DAY_ALARM_RE)) return call("list_alarms")
         // timer
         if (t.matches(TIMER_LEFT_RE)) return call("timer_left")
         if (t.matches(TIMER_PAUSE_RE)) return call("pause_timer", "state" to "pause")
@@ -225,6 +228,11 @@ internal object TimeRules {
         return call("cancel_alarm", "time" to "%02d:%02d".format(at.hour, at.minute))
     }
 }
+
+private val DAY_ALARM_RE = Regex(
+    "^(?:(?:cancel|stop|delete|turn off|switch off|remove|clear|disable|show|list|check|read|tell me)(?: me)? )?" +
+        "(?:(?:the|my|all|of|on|for|every) )*(?:monday|tuesday|wednesday|thursday|friday|saturday|sunday)s? alarms?$",
+)
 
 private val ALARM_QUESTION_RE = Regex(
     "^(?:(?:check |see |tell me )?(?:how many|whats|what|which|list|show|tell me|read|check)(?: me)?(?: (?:are|is|all|of|the|my|next))* alarms?\\b.*" +

@@ -284,4 +284,34 @@ class IntentRouterTest {
         }
         assertEquals(IntentRouter.Route.CHAT, IntentRouter.classify("tell me about black holes").route)
     }
+
+    @Test fun questionsComplaintsAndBareYesAreChat() = assertRoutes(
+        IntentRouter.Route.CHAT,
+        listOf(
+            "you give me a wrong answer there is nothing happening like that",
+            "you know why screen is blue",
+            "what the hell are you saying",
+            "yes do it",
+            "tell me all volume",
+            "media phone ring alarm all of volumes",
+        ),
+    )
+
+    @Test fun volumeChangesStayTools() {
+        listOf("volume up", "set volume to 50").forEach { s ->
+            val d = IntentRouter.classify(s, RuleMatcher.match(s))
+            assertFalse(s, d.route == IntentRouter.Route.CHAT && d.isConfident)
+        }
+    }
+
+    @Test fun iSaidAppOpensTheApp() {
+        val previous = RuleMatcher.appNameMatches
+        try {
+            RuleMatcher.appNameMatches = { it == "whatsapp" }
+            val call = RuleMatcher.match("i said whatsapp")
+            assertEquals("open_app", call?.tool)
+        } finally {
+            RuleMatcher.appNameMatches = previous
+        }
+    }
 }

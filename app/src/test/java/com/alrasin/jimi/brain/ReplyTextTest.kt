@@ -37,4 +37,9 @@ class ReplyTextTest {
             assertFalse(s, pkg.containsMatchIn(s))
         }
     }
+
+    @Test fun straySoundsAndOtherWakeWords() {
+        listOf("hoga hoga", "uh huh", "hey siri", "hey judy", "hey jim uh huh").forEach { assertTrue(it, ReplyText.isStray(it)) }
+        listOf("hello hello", "open camera", "mom", "stop stop").forEach { assertFalse(it, ReplyText.isStray(it)) }
+    }
 }

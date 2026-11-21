@@ -25,6 +25,8 @@ object FactSpotter {
     private val PASSING_SUBJECT = setOf(
         "phone", "battery", "screen", "internet", "wifi", "data", "net", "head", "stomach", "back", "mood", "day",
         "question", "problem", "plan", "alarm", "timer", "call", "message", "order", "food", "tea", "coffee",
+        // "my situation is rainy day": a passing state, not a fact to keep.
+        "situation", "condition", "state", "status", "feeling", "luck", "weather", "life",
     )
 
     /** Words that make "I have a …" / "I'm a …" a passing state. */

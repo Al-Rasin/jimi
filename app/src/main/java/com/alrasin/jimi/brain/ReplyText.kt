@@ -18,6 +18,20 @@ object ReplyText {
         return words.size <= 4 && words.all { it in FILLER }
     }
 
+    private val OTHER_WAKE = Regex("^(?:hey|hi|ok|okay) (?:siri|judy|google|alexa|bixby|cortana|jim)(?: (?:uh|huh|hmm|um|uh huh))*$")
+    private val KEEP_REPEATED = setOf("hello", "hey", "help", "stop", "bye", "yes", "no", "jimi", "jimmy")
+
+    /**
+     * Spoken stray sound, not a request: filler ("uh huh"), another assistant's wake ("hey siri", "hey judy"),
+     * or one word said again ("hoga hoga"). Voice turns only; callers check rules and small talk first.
+     */
+    fun isStray(text: String): Boolean {
+        val t = Persona.clean(text)
+        if (isNoise(t) || OTHER_WAKE.matches(t)) return true
+        val words = t.split(' ').filter { it.isNotBlank() }
+        return words.size in 2..3 && words.distinct().size == 1 && words[0].length >= 3 && words[0] !in KEEP_REPEATED
+    }
+
     /** Replaces package names (com.whatsapp, miui.home) with the app label, or "that app". */
     fun withoutPackages(text: String, label: (String) -> String? = { null }): String =
         PACKAGE.replace(text) { label(it.value)?.takeIf { l -> l.isNotBlank() && !PACKAGE.matches(l) } ?: "that app" }

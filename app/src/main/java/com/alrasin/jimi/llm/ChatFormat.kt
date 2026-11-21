@@ -111,7 +111,14 @@ object ChatFormat {
     fun clean(text: String) = text.replace(CLEAN_RE, "")
         .replace(CLEAN_RE_2, " ")
         .replace(CLEAN_RE_3, " ")
-        .replace(CLEAN_RE_4, "").replace(TextNorm.SPACES, " ").trim()
+        .replace(CLEAN_RE_4, "").replace(EMPTY_ACK_RE, "").replace(TextNorm.SPACES, " ").trim()
+
+    /** "Sure thing, I'm on it!" / "One sec, Boss." say nothing and sound robotic (D-095); the answer follows. */
+    private val EMPTY_ACK_RE = Regex(
+        "(?i)(?:^|(?<=[.!?]\\s))(?:(?:sure(?: thing)?|okay|ok|alright|got it|of course)[,!. ]+)?" +
+            "(?:i'?m on it|on it|one sec(?:ond)?|just a sec(?:ond)?|let me (?:get this done|do (?:that|this|it))(?: quickly)?)" +
+            "(?:,? boss)?(?:[.!]+\\s*|$)",
+    )
 
     /** An answer that hit the length limit ends mid-sentence; keep it up to its last full sentence, if it has one. */
     fun dropCutTail(text: String): String {
