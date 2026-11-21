@@ -1,6 +1,8 @@
 package com.alrasin.jimi.service
 
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class ClipCollectorBarTest {
@@ -18,5 +20,13 @@ class ClipCollectorBarTest {
 
     @Test fun withoutSpeechToTextTheSliderAloneDecides() {
         assertEquals(0.66f, ClipCollector.instantBar(0.66f, canCheck = false), 0f)
+    }
+
+    @Test fun doubtedHighScoreGoesToTheNameCheck() {
+        // D-100: the verifier blocks an instant wake only when the name can still be checked.
+        assertTrue(ClipCollector.wakesNow(0.95f, 0.88f, verified = true, canCheck = true))
+        assertFalse(ClipCollector.wakesNow(0.95f, 0.88f, verified = false, canCheck = true))
+        assertTrue(ClipCollector.wakesNow(0.95f, 0.88f, verified = false, canCheck = false))
+        assertFalse(ClipCollector.wakesNow(0.80f, 0.88f, verified = true, canCheck = true))
     }
 }

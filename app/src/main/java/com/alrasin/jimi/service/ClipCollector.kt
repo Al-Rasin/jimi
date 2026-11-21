@@ -34,10 +34,13 @@ class ClipCollector(
      * "Hey Jimi" calls often scored 0.78–0.91, below the bar. Null when a wake must not start now.
      * With a check available, a low slider wakes at once only from [SURE_SCORE]; scores between the slider and it
      * must say the name too (D-099): at 0.66, TV talk scored 0.66–0.81, as high as the user's real calls.
+     * [verified]: false when the wake verifier (D-100) doubts a high score; with a check available such a score
+     * goes through the name check instead of waking at once.
      */
     suspend fun onChunk(
         score: Float, thr: Float, ring: AudioRing, tone: Chimes,
         confirm: (suspend (ShortArray) -> Boolean)? = null,
+        verified: Boolean = true,
     ): Boolean {
         val now = System.currentTimeMillis()
         if (takeMissed()) {
@@ -46,12 +49,13 @@ class ClipCollector(
         }
         val instant = instantBar(thr, canCheck = confirm != null)
         val checkFrom = checkBar(thr)
-        if (score >= instant && now - lastWakeMs > WAKE_COOLDOWN_MS) {
+        val wakesNow = wakesNow(score, instant, verified, canCheck = confirm != null)
+        if (wakesNow && now - lastWakeMs > WAKE_COOLDOWN_MS) {
             startWake(now, score, ring.last(CLIP_SAMPLES))
             return true
         }
         // A near miss worth checking skips the save cooldown: a retry right after a miss must get its chance too.
-        if (pendingKind == null && score >= NEAR_MIN && score < instant && now - lastWakeMs > WAKE_COOLDOWN_MS &&
+        if (pendingKind == null && score >= NEAR_MIN && !wakesNow && now - lastWakeMs > WAKE_COOLDOWN_MS &&
             (now - lastNearMs > NEAR_COOLDOWN_MS || score >= checkFrom)
         ) {
             pendingKind = WakeEvent.VERDICT_NEAR
@@ -62,7 +66,7 @@ class ClipCollector(
         val kind = pendingKind ?: return false
         if (kind == WakeEvent.VERDICT_NEAR && score > pendingPeak) pendingChunks = AFTER_CHUNKS   // keep ~0.5 s after the peak
         pendingPeak = maxOf(pendingPeak, score)
-        if (kind == WakeEvent.VERDICT_NEAR && pendingPeak >= instant) {
+        if (kind == WakeEvent.VERDICT_NEAR && pendingPeak >= instant && confirm == null) {
             pendingKind = null   // turned into a real wake; next chunk handles it
             return false
         }
@@ -116,6 +120,9 @@ class ClipCollector(
     internal companion object {
         fun instantBar(thr: Float, canCheck: Boolean): Float = if (canCheck) maxOf(thr, SURE_SCORE) else thr
         fun checkBar(thr: Float): Float = minOf(thr, CHECK_MIN)
+        /** A doubted score (D-100 verifier) waits for the name check when one is available. */
+        fun wakesNow(score: Float, instant: Float, verified: Boolean, canCheck: Boolean) =
+            score >= instant && (verified || !canCheck)
 
         private const val CLIP_SAMPLES = 40_000       // 2.5 s per wake clip
         private const val MISSED_SECONDS = 3

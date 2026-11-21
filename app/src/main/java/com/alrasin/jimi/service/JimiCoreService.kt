@@ -54,6 +54,7 @@ import com.alrasin.jimi.voice.SpeechText
 import com.alrasin.jimi.voice.TextToSpeech
 import com.alrasin.jimi.voice.WakeFeedback as WakeFeedbackSignal
 import com.alrasin.jimi.voice.WakeModels
+import com.alrasin.jimi.voice.WakeVerifier
 import com.alrasin.jimi.voice.WakeWordDetector
 import dagger.hilt.android.AndroidEntryPoint
 import kotlinx.coroutines.CancellationException
@@ -606,6 +607,7 @@ class JimiCoreService : LifecycleService() {
         JimiLog.i("wake model: ${models.wakeName}")
         _modelName.value = models.wakeName
         val detector = WakeWordDetector(models.mel, models.embedding, models.wake)
+        val verifier = WakeVerifier.load(this)
         val vocabulary = SttVocabularyLoader(this).load()
         val currentVocabulary = AtomicReference(vocabulary)
         val vocabularyJob = lifecycleScope.launch(Dispatchers.IO) {
@@ -911,7 +913,8 @@ class JimiCoreService : LifecycleService() {
                 if (wasBusy) { wasBusy = false; detector.reset() }   // drop audio from before the command
                 val score = detector.process(chunk)
                 _lastScore.value = score
-                if (clips.onChunk(score, threshold, ring, tone, stt?.let { s -> { audio -> heardWakeName(s, audio) } }) && stt != null) {
+                val verified = wakeVerified(verifier, detector, score, threshold)
+                if (clips.onChunk(score, threshold, ring, tone, stt?.let { s -> { audio -> heardWakeName(s, audio) } }, verified) && stt != null) {
                     commandEpoch = captureEpoch
                     _heard.value = ""
                     _reply.value = ""
@@ -955,6 +958,15 @@ class JimiCoreService : LifecycleService() {
             _microphoneAvailable.value = false
             _phase.value = PHASE_WAKE
         }
+    }
+
+    /** D-100: a score that would wake at once must also pass the verifier; checked only then (cheap). */
+    private fun wakeVerified(verifier: WakeVerifier?, detector: WakeWordDetector, score: Float, threshold: Float): Boolean {
+        if (verifier == null || score < ClipCollector.instantBar(threshold, canCheck = true)) return true
+        val v = verifier.score(detector.peakWindow())
+        val ok = v >= WakeVerifier.PASS
+        JimiLog.i("wake verifier ${"%.2f".format(v)} at score ${"%.2f".format(score)}${if (ok) "" else " -> name check"}")
+        return ok
     }
 
     private fun heardWakeName(stt: SpeechToText, audio: ShortArray): Boolean = runCatching {
