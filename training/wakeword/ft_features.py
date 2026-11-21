@@ -1,9 +1,11 @@
 """Turns fine-tune clips into openWakeWord features ([16, 96] windows) for ft_train.py.
 
-Inputs (git-ignored): models/wakeword/ft/{pos,neg} (ft_generate.py), models/wakeword/user/{pos,neg}
-(real phone mic recordings), models/wakeword/feedback/{near,missed} (clips saved by the app).
+Inputs (git-ignored): models/wakeword/ft/{pos,neg,neg_bn} (ft_generate.py), models/wakeword/user/{pos,neg}
+(real phone mic recordings), models/wakeword/feedback/{near,false,hit,missed} (app wake clips, sorted by
+what was said: near = no wake word, false = woke without it, hit/missed = had it).
 Output: models/wakeword/ft/features.npz
 """
+import itertools
 import random
 import wave
 from pathlib import Path
@@ -75,37 +77,48 @@ def main():
     feats = AudioFeatures(melspec_model_path=str(ASSETS / "melspectrogram.onnx"),
                           embedding_model_path=str(ASSETS / "embedding_model.onnx"))
 
-    def embed(clips):
-        return feats.embed_clips(np.stack(clips), batch_size=64).astype(np.float16)
+    def embed(clips, chunk=256):
+        """clips may be a generator: only `chunk` raw clips are held in memory at once (8 GB Mac)."""
+        parts, buf = [], []
+        for c in clips:
+            buf.append(c)
+            if len(buf) == chunk:
+                parts.append(feats.embed_clips(np.stack(buf), batch_size=64).astype(np.float16))
+                buf = []
+        if buf:
+            parts.append(feats.embed_clips(np.stack(buf), batch_size=64).astype(np.float16))
+        return np.concatenate(parts) if parts else np.zeros((0, 28, 96), np.float16)
 
     syn_pos_tr, syn_pos_te = split((WW / "ft/pos").glob("*.wav"), 0.1)
     syn_neg_tr, syn_neg_te = split((WW / "ft/neg").glob("*.wav"), 0.1)
-    usr_pos_tr, usr_pos_te = split((WW / "user/pos").glob("*.wav"), 0.3)
-    usr_neg_tr, usr_neg_te = split((WW / "user/neg").glob("*.wav"), 0.3)
-    pool = [load(p) for p in usr_neg_tr]
+    bn_neg_tr, bn_neg_te = split((WW / "ft/neg_bn").glob("*.wav"), 0.1)
+    # Real phone mic: recorded "hey jimi" + app wake clips that hold it (hit, missed).
+    real_pos = [p for d in ("user/pos", "feedback/hit", "feedback/missed") for p in (WW / d).glob("*.wav")]
+    usr_pos_tr, usr_pos_te = split(real_pos, 0.3)
+    # Real phone mic talk/sound that is not the wake word: room recordings and near-wakes.
+    usr_neg_tr, usr_neg_te = split([p for d in ("user/neg", "feedback/near") for p in (WW / d).glob("*.wav")], 0.3)
+    false_tr, false_te = split((WW / "feedback/false").glob("*.wav"), 0.3)   # real false wakes
+    pool = [load(p) for p in usr_neg_tr + false_tr]
     out = {}
 
     # Train positives: synthetic once, each real recording 30 times with different mixing.
-    pos = [place_end(load(p), POS_LEN, pool) for p in syn_pos_tr]
-    pos += [place_end(load(p), POS_LEN, pool) for p in usr_pos_tr for _ in range(30)]
+    pos = itertools.chain((place_end(load(p), POS_LEN, pool) for p in syn_pos_tr),
+                          (place_end(load(p), POS_LEN, pool) for p in usr_pos_tr for _ in range(30)))
     out["pos_train"] = embed(pos)[:, -16:]
-    # Train negatives: every window of look-alike phrases and real room talk.
-    neg = [place_any(load(p), NEG_LEN, pool) for p in syn_neg_tr]
-    neg += [place_any(load(p), NEG_LEN, pool) for p in usr_neg_tr for _ in range(5)]
+    # Train negatives: every window of look-alike phrases and real room talk; real false wakes most often.
+    neg = itertools.chain((place_any(load(p), NEG_LEN, pool) for p in syn_neg_tr + bn_neg_tr),
+                          (place_any(load(p), NEG_LEN, pool) for p in usr_neg_tr for _ in range(5)),
+                          (place_any(load(p), NEG_LEN, pool) for p in false_tr for _ in range(30)))
     e = embed(neg)
     out["neg_train"] = np.lib.stride_tricks.sliding_window_view(e, 16, axis=1).transpose(0, 1, 3, 2).reshape(-1, 16, 96)
 
-    # Test sets: full streams, scored as "max over all windows" per clip.
+    # Test sets (never trained on): full streams, scored as "max over all windows" per clip.
     out["t_syn_pos"] = embed([place_end(load(p), POS_LEN, pool) for p in syn_pos_te])
     out["t_syn_neg"] = embed([place_any(load(p), NEG_LEN, pool) for p in syn_neg_te])
+    out["t_bn_neg"] = embed([place_any(load(p), NEG_LEN, pool) for p in bn_neg_te])
     out["t_usr_pos"] = embed([pad_raw(load(p), 4 * SR) for p in usr_pos_te])
     out["t_usr_neg"] = embed([pad_raw(load(p), NEG_LEN) for p in usr_neg_te])
-    near = sorted((WW / "feedback/near").glob("*.wav"))
-    if near:
-        out["t_near"] = embed([pad_raw(load(p), NEG_LEN) for p in near])
-    missed = sorted((WW / "feedback/missed").glob("*.wav"))
-    if missed:
-        out["t_missed"] = embed([pad_raw(load(p), 4 * SR) for p in missed])
+    out["t_false"] = embed([pad_raw(load(p), NEG_LEN) for p in false_te])
     for k, v in out.items():
         print(k, v.shape)
     np.savez(WW / "ft/features.npz", **out)

@@ -18,6 +18,7 @@ from train_fast import Net, fp_per_hour, scores  # noqa: E402
 
 WW = Path(__file__).resolve().parents[2] / "models/wakeword"
 OLD = WW / "app-assets/wakeword/hey_jimi.onnx"
+CUR = WW / "ft/hey_jimi_ft_final.onnx"   # model now on the phone
 TH = 0.95   # app threshold
 
 
@@ -63,6 +64,8 @@ def main():
     print(f"pos {len(pos)}  neg {len(neg)}  acav {len(acav)}")
 
     report("old", load_onnx(OLD), d, val)
+    if CUR.exists():
+        report("cur", load_onnx(CUR), d, val)
     model = load_onnx(OLD).train()
     opt = torch.optim.AdamW(model.parameters(), lr=a.lr, weight_decay=1e-4)
     sched = torch.optim.lr_scheduler.CosineAnnealingLR(opt, a.steps)

@@ -23,10 +23,24 @@ NEG = [
     "I will call you later", "where are you going", "give me the remote", "hey man how are you",
 ]
 
+# Romanized Bangla talk read by English voices: most real false wakes on the phone were Bangla speech.
+NEG_BN = [
+    "ami jabo na", "tumi kemon acho", "ki koro", "eta ki", "jinish ta dao", "jemon khushi", "jibon", "jomi",
+    "hey bhai", "ha ji", "e ji mi", "hai jami", "ji ami", "jhimjhim", "jhimi", "chini dao", "ki je bolo",
+    "amar jama", "jamai", "jinish", "jete hobe", "eije shuno", "ei jimmi na", "hoy ni", "accha thik ache",
+    "kal ke jabo", "bhat khabo", "pani dao", "ki holo", "amake dao", "jani na", "jodi jai", "aj ke",
+    "shei jinish", "chhele ta", "meye ta", "ei je dekho", "aye jao", "ki khobor", "abar bolo",
+    "Allah hafez", "inshallah", "mashallah", "assalamu alaikum", "jhamela", "gimmick", "chimni",
+]
+
 if __name__ == "__main__":
     n_pos = int(sys.argv[1]) if len(sys.argv) > 1 else 3000
     n_neg = int(sys.argv[2]) if len(sys.argv) > 2 else 3000
+    n_bn = int(sys.argv[3]) if len(sys.argv) > 3 else 0
     if n_pos:
         generate_samples(POS, ROOT / "pos", n_pos, length_scales=(0.8, 1.0, 1.2, 1.4))
-    generate_samples(NEG, ROOT / "neg", n_neg, length_scales=(0.8, 1.0, 1.2, 1.4))
+    if n_neg:
+        generate_samples(NEG, ROOT / "neg", n_neg, length_scales=(0.8, 1.0, 1.2, 1.4))
+    if n_bn:
+        generate_samples(NEG_BN, ROOT / "neg_bn", n_bn, length_scales=(0.8, 1.0, 1.2, 1.4))
     print("done")
