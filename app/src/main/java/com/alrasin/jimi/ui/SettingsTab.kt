@@ -99,6 +99,7 @@ internal fun SettingsTab(vm: AppViewModel, home: HomeViewModel, onSetup: () -> U
     var args by remember { mutableStateOf("{\"what\":\"battery\"}") }
 
     val voice by vm.voice.collectAsStateWithLifecycle()
+    val wakeThreshold by home.threshold.collectAsStateWithLifecycle()
     var page by rememberSaveable { mutableStateOf("") }
     // pages opened from Advanced go back to Advanced
     val close = { page = if (page in ADVANCED_PAGES) "advanced" else "" }
@@ -250,6 +251,14 @@ internal fun SettingsTab(vm: AppViewModel, home: HomeViewModel, onSetup: () -> U
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
             PageTitle("Settings")
+            RowsCard("Wake word") {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text("Sensitivity", Modifier.weight(1f), style = MaterialTheme.typography.bodyMedium)
+                    Text("%.2f".format(wakeThreshold), style = MaterialTheme.typography.bodySmall)
+                }
+                JimiSlider(wakeThreshold, { home.setThreshold(it) }, 0.2f..0.95f)
+                Hint("Left = wakes easier. Right = fewer false wakes.")
+            }
             RowsCard("Talking") {
                 ToggleRow("Spoken wake reply", spokenWake) { vm.setSpokenWake(it) }
                 ToggleRow("Keep listening after answer", followUp) { vm.setFollowUp(it) }
