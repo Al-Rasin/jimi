@@ -17,7 +17,7 @@ from sklearn.preprocessing import StandardScaler
 
 import eval_real as e
 
-PHASES = (0, 320, 640, 960)   # samples; app PHASE_STEP = 2 mel frames = 320 samples
+PHASES = (0, 320, 640, 960)   # samples; app (D-102) uses 0/640 only; extra offsets = more training windows
 C = 0.001                     # eval_real: 0.0005..0.01 gave the same results
 
 

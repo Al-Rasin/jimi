@@ -14,9 +14,11 @@ import java.nio.FloatBuffer
  * embedding(last 76 mel frames) → 96-dim feature; wake model(last 16 features) → score.
  *
  * [phases] (D-100): the score swings with where the 80 ms grid falls in the word: one real "Hey Jimmy" scored
- * 0.00 or 0.99 after a 10 ms shift. Each phase runs embedding + wake model on mel frames shifted 2 frames
- * (20 ms) back, with its own feature history; the best phase wins. Mel is shared, so cost grows only by the
- * small embedding/wake runs.
+ * 0.00 or 0.99 after a 10 ms shift. Each phase runs embedding + wake model on mel frames shifted 4 frames
+ * (40 ms) back, with its own feature history; the best phase wins. Mel is shared, so cost grows only by the
+ * small embedding/wake runs. D-102: 4 phases cost 55–73 ms per 80 ms chunk on the phone (parallel threads did
+ * not help); 2 phases at 0/40 ms keep most of the gain (training/wakeword/phase_eval.py: real calls @0.88
+ * 40% → 54%, 4 phases 59%) at half the CPU.
  */
 class WakeWordDetector(
     melModel: ByteArray,
@@ -142,8 +144,8 @@ class WakeWordDetector(
         private const val EMB_WINDOW = 76
         const val EMB_DIM = 96
         const val FEATURE_WINDOW = 16
-        const val PHASES = 4
-        private const val PHASE_STEP = 2            // mel frames (20 ms) between phases
+        const val PHASES = 2
+        private const val PHASE_STEP = 4            // mel frames (40 ms) between phases
         private const val TIMING_CALLS = 500
     }
 }
