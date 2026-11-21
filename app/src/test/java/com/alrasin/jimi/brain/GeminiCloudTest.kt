@@ -8,6 +8,7 @@ import com.alrasin.jimi.core.ToolCall
 import com.alrasin.jimi.core.ToolContext
 import com.alrasin.jimi.core.ToolResult
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -55,6 +56,14 @@ class GeminiCloudTest {
     @Test fun toolCallParsesValidCallInsideFence() {
         val call = CloudBrain.parseToolCall("```json\n{\"tool\":\"set_alarm\",\"args\":{\"time\":\"7 am\",\"x\":\"1\"}}\n```", tools)
         assertEquals(ToolCall("set_alarm", mapOf("time" to "7 am")), call)
+    }
+
+    @Test fun brokenReplyOnlyFallsBackLocallyWhenItNamesARealTool() {
+        // D-099: plain text or a cut-off "none" goes straight to chat; a real tool with bad args may still go local.
+        assertFalse(CloudBrain.namesRealTool("Sure, the capital of France is Paris.", tools))
+        assertFalse(CloudBrain.namesRealTool("{\"tool\":\"none\",\"say\":\"It is a long sto", tools))
+        assertFalse(CloudBrain.namesRealTool("{\"tool\":\"fly_drone\"}", tools))
+        assertTrue(CloudBrain.namesRealTool("{\"tool\": \"set_alarm\", \"args\":{}}", tools))
     }
 
     @Test fun toolCallNoneMeansChat() {

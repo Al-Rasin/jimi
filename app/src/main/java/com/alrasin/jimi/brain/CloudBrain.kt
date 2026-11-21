@@ -235,7 +235,14 @@ class CloudBrain @Inject constructor(
             .onFailure { JimiLog.e("cloud tool pick failed, using local", it) }
             .getOrNull() ?: return null
         val call = parseToolCall(out, registry.all)
-        JimiLog.i("cloud (${p.name}) tool ${System.currentTimeMillis() - t0} ms: ${call?.tool ?: "invalid"}")
+        val ms = System.currentTimeMillis() - t0
+        if (call == null && !namesRealTool(out, registry.all)) {
+            // Broken reply that is plain text or a cut-off "none": treat as talk so chat answers now,
+            // instead of loading the slow local tool model just to hear "chat" (~7 s, D-099).
+            JimiLog.i("cloud (${p.name}) tool $ms ms: invalid → talk (${out.length} chars, json=${'{' in out})")
+            return NONE
+        }
+        JimiLog.i("cloud (${p.name}) tool $ms ms: ${call?.tool ?: "invalid (${out.length} chars)"}")
         return call
     }
 
@@ -393,6 +400,12 @@ class CloudBrain @Inject constructor(
                 tool.args.all { a -> a.choices == null || call.arg(a.name) == null || call.arg(a.name) in a.choices }
             return call.takeIf { ok }?.copy(args = call.args.filterKeys { k -> tool.args.any { it.name == k } })
         }
+
+        private val TOOL_NAME = Regex("\"tool\"\\s*:\\s*\"([A-Za-z0-9_]+)")
+
+        /** True when the reply asks for a known phone tool (other than none), even if its args are broken. */
+        internal fun namesRealTool(out: String, tools: List<Tool>): Boolean =
+            TOOL_NAME.findAll(out).any { m -> m.groupValues[1] != NONE.tool && tools.any { it.name == m.groupValues[1] } }
 
         private val ASK = Regex("^(?:think hard(?: about)?|ask (?:claude|the cloud)(?: about)?)\\b,?\\s*", RegexOption.IGNORE_CASE)
     }
